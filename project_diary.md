@@ -11,4 +11,4 @@
 ## 11/16/2026
 * Created a light developemnt schedule doc with cladue, noting major check points and smaller check points during development.
 * Imported phaser + ts + vite template
-* Added project diary for book keeping.
+* Added project diary for book keeping. Attached design and schedule doc.
