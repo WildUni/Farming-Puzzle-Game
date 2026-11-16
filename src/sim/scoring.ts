@@ -1,6 +1,6 @@
-import { run_data } from "./custom_types"
+import { RunData } from "./types"
 
-function calc_score(data: run_data): number {
+function calc_score(data: RunData): number {
     return data.points + data.orders_completed * 10
 }
 

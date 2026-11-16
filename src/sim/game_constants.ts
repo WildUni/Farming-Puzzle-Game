@@ -1,11 +1,12 @@
 //Game Loop
 const TICKS_PER_SECOND = 10
-
+const TIMED_MODE_TIMELIMIT = 300 //in seconds
+const TIMED_MODE_TICKS = TICKS_PER_SECOND * TIMED_MODE_TIMELIMIT
 
 //Player
 const START_PLOTS = 4
 export {
     TICKS_PER_SECOND,
-
+    TIMED_MODE_TICKS, 
     START_PLOTS
 }
