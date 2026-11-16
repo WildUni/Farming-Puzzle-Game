@@ -12,3 +12,7 @@
 * Created a light developemnt schedule doc with cladue, noting major check points and smaller check points during development.
 * Imported phaser + ts + vite template
 * Added project diary for book keeping. Attached design and schedule doc.
+* Added initial collection of crops to data under crops.json file
+* Added mulberry rng step function for procedural generation + tests
+* Declared custom types for sim folder.
+* Added create game function.

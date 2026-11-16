@@ -3,12 +3,12 @@ import createGame from "./main";
 import { START_PLOTS } from "./game_constants";
 import type { GameConfig } from "./types";
 
-const config: GameConfig = { gameMode: "classic", allowPowerUps: false };
+const config: GameConfig = { mode: "survival", allowPowerUps: false };
 
 describe("createGame", () => {
     it("starts with a fresh state", () => {
         const g = createGame(1, config);
-        expect(g.mode).toBe("classic");
+        expect(g.mode).toBe("survival");
         expect(g.tick).toBe(0);
         expect(g.score).toBe(0);
         expect(g.status).toBe("running");

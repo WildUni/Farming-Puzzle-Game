@@ -4,7 +4,7 @@ import { START_PLOTS } from "./game_constants";
 
 function createGame(seed: RNGSeed, config: GameConfig): GameState {
     return {
-        mode: config.gameMode,
+        mode: config.mode,
         status: "running",
         tick: 0,
         rngState: seedRNG(seed),
