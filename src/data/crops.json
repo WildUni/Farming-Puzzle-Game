@@ -1,0 +1,20 @@
+[
+    {
+        "id": "garlic",
+        "growTicks": 80,
+        "yield": 2,
+        "value": 2
+    },
+    {
+        "id": "carrot",
+        "growTicks": 150,
+        "yield": 2,
+        "value": 8
+    },
+    {
+        "id": "pumpkin",
+        "growTicks": 250,
+        "yield": 5,
+        "value": 12
+    }
+]
