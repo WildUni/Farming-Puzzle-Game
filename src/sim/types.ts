@@ -7,32 +7,49 @@ type RunData = {
     points: number
 }
 
+// A plot stores the tick it was planted on, not a countdown, so step()
+// doesn't need to touch every plot each tick.
+// Growth progress = (tick - plantedAt) / crop.growTicks.
+type Plot =
+    | { state: "empty" }
+    | { state: "growing", cropId: string, plantedAt: number }
+    | { state: "ready", cropId: string };
+
 type Order = {
-    required: Map<string, number>,
+    id: number,
+    required: Record<string, number>,   // cropId -> amount
     value: number,
-    ticks: number
+    expiresAt: number                    // tick when the order fails
 }
+
+type GameStatus = "running" | "ended";
 
 type GameState = {
     mode: string,
+    status: GameStatus,
     tick: number,
     rngState: RNGState,
-    plots: number,
-    inventory: Map<string, number>,
+    plots: Plot[],
+    inventory: Record<string, number>,  // cropId -> amount held
     orders: Order[],
-    score: number
+    nextOrderId: number,
+    score: number,
+    ordersCompleted: number,
+    ordersFailed: number
 }
 
 type GameConfig = {
     gameMode: string,
     allowPowerUps: boolean,
 }
+
 export type {
     RunData,
     GameState,
+    GameStatus,
     GameConfig,
     Order,
+    Plot,
     RNGState,
     RNGSeed,
-
 }

@@ -26,4 +26,18 @@ describe("mulberry RNG", () => {
     it("normalizes negative seeds to uint32", () => {
         expect(seedRNG(-1)).toBe(4294967295);
     });
+
+    it("same seed gives the same first 100 numbers", () => {
+        let seed1 = seedRNG(42);
+        let seed2 = seedRNG(42);
+        for (let i = 0; i < 100; i++) {
+            let [value1, newSeed1] = nextInt(seed1)
+            let [value2, newSeed2] = nextInt(seed2)
+            expect(value1).toBe(value2)
+            expect(newSeed1).toBe(newSeed2)
+            seed1 = newSeed1
+            seed2 = newSeed2
+        }
+
+    })
 });

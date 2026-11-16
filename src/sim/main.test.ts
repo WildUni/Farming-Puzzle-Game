@@ -11,9 +11,14 @@ describe("createGame", () => {
         expect(g.mode).toBe("classic");
         expect(g.tick).toBe(0);
         expect(g.score).toBe(0);
-        expect(g.plots).toBe(START_PLOTS);
+        expect(g.status).toBe("running");
+        expect(g.plots).toHaveLength(START_PLOTS);
+        expect(g.plots.every((p) => p.state === "empty")).toBe(true);
         expect(g.orders).toEqual([]);
-        expect(g.inventory.size).toBe(0);
+        expect(g.inventory).toEqual({});
+        expect(g.nextOrderId).toBe(0);
+        expect(g.ordersCompleted).toBe(0);
+        expect(g.ordersFailed).toBe(0);
     });
 
     it("is reproducible from the same seed", () => {

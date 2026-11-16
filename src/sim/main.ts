@@ -1,17 +1,20 @@
-import { RNGSeed, GameConfig, GameState, Order} from "./types";
+import { RNGSeed, GameConfig, GameState, Plot } from "./types";
 import { seedRNG } from "./mulberry";
 import { START_PLOTS } from "./game_constants";
-function createGame(seed:RNGSeed, config:GameConfig): GameState{
-    
-    
+
+function createGame(seed: RNGSeed, config: GameConfig): GameState {
     return {
         mode: config.gameMode,
+        status: "running",
         tick: 0,
         rngState: seedRNG(seed),
-        plots: START_PLOTS,
-        inventory: new Map<string, number>(),
-        orders: new Array<Order>(),
-        score: 0
+        plots: Array.from({ length: START_PLOTS }, (): Plot => ({ state: "empty" })),
+        inventory: {},
+        orders: [],
+        nextOrderId: 0,
+        score: 0,
+        ordersCompleted: 0,
+        ordersFailed: 0
     }
 }
 
