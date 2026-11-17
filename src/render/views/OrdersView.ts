@@ -1,16 +1,25 @@
 // Order cards stacked down from the top-left corner, one per open order.
 // Reports clicks by order id. A card is outlined when there are enough crops to fill it.
+// A countdown bar along the bottom shrinks with the time left and turns red in the last quarter.
 import { GameObjects, Scene } from "phaser"
 import type { GameState } from "../../sim/types"
 import { canFulfill } from "../../sim/orders"
-import { orderText } from "../format"
+import { orderText, orderTimeFraction, isOrderUrgent } from "../format"
 import { MARGIN, COLORS, TEXT } from "../theme"
 
 const CARD_W = 300
-const CARD_H = 90
+const CARD_H = 100
 const CARD_GAP = 10
+const BAR_PAD = 10
+const BAR_H = 10
+const BAR_W = CARD_W - BAR_PAD * 2
 
-type Card = { box: GameObjects.Rectangle; label: GameObjects.Text }
+type Card = {
+    box: GameObjects.Rectangle
+    label: GameObjects.Text
+    track: GameObjects.Rectangle // countdown bar background
+    bar: GameObjects.Rectangle // countdown bar, shrinks as time runs out
+}
 
 export class OrdersView {
     private scene: Scene
@@ -31,10 +40,14 @@ export class OrdersView {
         this.cards.forEach((card, i) => {
             const order = state.orders[i]
             const visible = order !== undefined
-            card.box.setVisible(visible)
-            card.label.setVisible(visible)
+            for (const part of [card.box, card.label, card.track, card.bar])
+                part.setVisible(visible)
             if (!visible) return
             card.label.setText(orderText(order, state))
+            card.bar.width = BAR_W * orderTimeFraction(order, state.tick)
+            card.bar.setFillStyle(
+                isOrderUrgent(order, state.tick) ? COLORS.barUrgent : COLORS.barFill
+            )
             if (canFulfill(order, state.inventory)) card.box.setStrokeStyle(4, COLORS.ready)
             else card.box.setStrokeStyle(2, COLORS.cardStroke)
         })
@@ -53,6 +66,13 @@ export class OrdersView {
                 if (id !== undefined) this.onClick(id)
             })
         const label = this.scene.add.text(MARGIN + 10, y + 8, "", TEXT.body)
-        return { box, label }
+        const barY = y + CARD_H - BAR_PAD - BAR_H
+        const track = this.scene.add
+            .rectangle(MARGIN + BAR_PAD, barY, BAR_W, BAR_H, COLORS.barTrack)
+            .setOrigin(0)
+        const bar = this.scene.add
+            .rectangle(MARGIN + BAR_PAD, barY, BAR_W, BAR_H, COLORS.barFill)
+            .setOrigin(0)
+        return { box, label, track, bar }
     }
 }

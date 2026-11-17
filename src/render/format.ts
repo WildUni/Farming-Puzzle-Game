@@ -1,6 +1,6 @@
 // Text shown on screen, built from plain state. No Phaser imports so it can be unit tested.
 import type { GameState, Order, Plot, Crop, CropTable } from "../sim/types"
-import { TICKS_PER_SECOND, TIMED_MODE_TICKS } from "../sim/game_constants"
+import { TICKS_PER_SECOND, TIMED_MODE_TICKS, ORDER_TICKS } from "../sim/game_constants"
 import { progress } from "../sim/plot"
 import { timeLeft } from "../sim/orders"
 
@@ -59,3 +59,32 @@ function cropButtonText(crop: Crop): string {
 }
 
 export { formatClock, timerText, plotText, orderText, statRows, cropButtonText }
+
+// Share of an order's time still left, from 1 (just opened) to 0 (last tick).
+function orderTimeFraction(order: Order, now: number): number {
+    return Math.min(1, timeLeft(order, now) / ORDER_TICKS)
+}
+
+// True in the last quarter of an order's time, when its countdown bar turns red.
+function isOrderUrgent(order: Order, now: number): boolean {
+    return orderTimeFraction(order, now) <= 0.25
+}
+
+const MAX_SEED = 2 ** 32 - 1
+
+// Seed typed on the landing page. Blank means "pick one at random" (undefined);
+// anything other than a whole number from 0 to MAX_SEED is rejected (null).
+function parseSeed(text: string): number | undefined | null {
+    const trimmed = text.trim()
+    if (trimmed === "") return undefined
+    if (!/^\d+$/.test(trimmed)) return null
+    const seed = Number(trimmed)
+    return seed <= MAX_SEED ? seed : null
+}
+
+// Line shown in the debug overlay.
+function debugText(state: GameState, seed: number, paused: boolean): string {
+    return `tick ${state.tick}  seed ${seed}${paused ? "  PAUSED" : ""}\nR restart  L log  P pause`
+}
+
+export { orderTimeFraction, isOrderUrgent, parseSeed, debugText, MAX_SEED }

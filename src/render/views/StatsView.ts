@@ -22,6 +22,11 @@ export class StatsView {
         this.grid = scene.add.graphics()
     }
 
+    // Y coordinate just below the table, for laying out what goes under it.
+    get bottom(): number {
+        return MARGIN + this.rows.length * ROW_H
+    }
+
     update(state: GameState): void {
         const rows = statRows(state, this.crops)
         if (this.rows.length !== rows.length) this.build(rows.length)

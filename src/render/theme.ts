@@ -1,4 +1,5 @@
 // Visual constants shared by the views: spacing, colors and text styles.
+import type { GameObjects, Scene } from "phaser"
 import type { Plot } from "../sim/types"
 
 type TextStyle = Phaser.Types.GameObjects.Text.TextStyle
@@ -19,10 +20,14 @@ const COLORS = {
     plotStroke: 0x2e1f0e,
     highlight: 0xffffff,
     button: 0x4e7d2a,
-    buttonHover: 0x659c38
+    buttonHover: 0x659c38,
+    barTrack: 0x3b2a14, // empty part of a progress or countdown bar
+    barFill: 0x7fd34e, // growth and countdown bar
+    barUrgent: 0xd8342c, // countdown bar in an order's last quarter
+    shade: 0x000000 // dims the board while paused
 }
 
-const TEXT: Record<"body" | "label" | "title", TextStyle> = {
+const TEXT: Record<"body" | "label" | "title" | "debug", TextStyle> = {
     body: { fontFamily: "Arial", fontSize: 16, color: "#222222" },
     label: {
         fontFamily: "Arial",
@@ -38,7 +43,21 @@ const TEXT: Record<"body" | "label" | "title", TextStyle> = {
         color: "#ffffff",
         stroke: "#000000",
         strokeThickness: 3
+    },
+    debug: {
+        fontFamily: "monospace",
+        fontSize: 16,
+        color: "#ffffff",
+        backgroundColor: "#000000aa",
+        padding: { x: 6, y: 4 }
     }
 }
 
-export { MARGIN, COLORS, TEXT }
+// Background image scaled to cover the whole canvas, keeping its aspect ratio.
+function addBackground(scene: Scene): GameObjects.Image {
+    const { width, height } = scene.scale
+    const bg = scene.add.image(width / 2, height / 2, "background")
+    return bg.setScale(Math.max(width / bg.width, height / bg.height))
+}
+
+export { MARGIN, COLORS, TEXT, addBackground }

@@ -1,44 +1,56 @@
-import { Scene } from "phaser"
+import { Scene, GameObjects } from "phaser"
 import type { Action, CropTable, GameState, LogEntry } from "../../sim/types"
 import { createGame, applyAction, step } from "../../sim/main"
-import { buildCropTable } from "../../sim/plot"
 import { TICKS_PER_SECOND } from "../../sim/game_constants"
-import { COLORS } from "../theme"
+import { debugText } from "../format"
+import { COLORS, MARGIN, TEXT } from "../theme"
 import { OrdersView } from "../views/OrdersView"
 import { StatsView } from "../views/StatsView"
 import { PlotsView } from "../views/PlotsView"
 import { PlantPicker } from "../views/PlantPicker"
-import cropList from "../../data/crops.json"
+import { PauseView } from "../views/PauseView"
 
 const MS_PER_TICK = 1000 / TICKS_PER_SECOND
 const MAX_CATCH_UP_TICKS = 5 // a background tab doesn't jump ahead when it comes back
+const GAP = 12
+
+type GameData = { seed: number }
 
 // Owns one run: holds the GameState, advances it on a fixed tick, turns clicks into
 // actions, and hands each new state to the views.
 export class Game extends Scene {
     private crops: CropTable
+    private seed: number
     private state: GameState
     private log: LogEntry[]
     private elapsed: number
+    private paused: boolean
     private pickerPlot: number | null // plot the plant picker is open for
 
     private orders: OrdersView
     private stats: StatsView
     private plots: PlotsView
     private picker: PlantPicker
+    private pause: PauseView
+    private debug: GameObjects.Text
 
     constructor() {
         super("Game")
     }
 
+    // The seed comes from the landing page, or from the restart key.
+    init(data: Partial<GameData>) {
+        this.seed = data.seed ?? 0
+    }
+
     create() {
         this.cameras.main.setBackgroundColor(COLORS.background)
 
-        this.crops = buildCropTable(cropList)
-        const seed = Math.floor(Math.random() * 2 ** 32)
-        this.state = createGame(seed, { mode: "timed", allowPowerUps: false })
+        this.crops = this.registry.get("crops") as CropTable
+        this.state = createGame(this.seed, { mode: "timed", allowPowerUps: false })
         this.log = []
         this.elapsed = 0
+        this.paused = false
         this.pickerPlot = null
 
         this.orders = new OrdersView(this, (id) => this.onOrderClick(id))
@@ -50,12 +62,27 @@ export class Game extends Scene {
             (cropId) => this.onCropPick(cropId),
             () => this.closePicker()
         )
+        this.stats.update(this.state) // builds the table so its height is known
+        this.pause = new PauseView(this, this.scale.width - MARGIN, this.stats.bottom + GAP, () =>
+            this.togglePause()
+        )
+        this.debug = this.add
+            .text(MARGIN, this.scale.height - MARGIN, "", TEXT.debug)
+            .setOrigin(0, 1)
+            .setDepth(1000)
+
+        const keys = this.input.keyboard!
+        keys.on("keydown-P", () => this.togglePause())
+        keys.on("keydown-ESC", () => this.togglePause())
+        keys.on("keydown-R", () => this.scene.restart({ seed: this.seed }))
+        keys.on("keydown-L", () => this.printLog())
+
         this.render()
     }
 
-    // Fixed-tick loop: step() once per MS_PER_TICK of real time.
+    // Fixed-tick loop: step() once per MS_PER_TICK of real time. Paused, the counter stops.
     update(_time: number, delta: number) {
-        if (this.state.status === "ended") return
+        if (this.paused || this.state.status === "ended") return
 
         this.elapsed = Math.min(this.elapsed + delta, MAX_CATCH_UP_TICKS * MS_PER_TICK)
         while (this.elapsed >= MS_PER_TICK && this.state.status === "running") {
@@ -70,10 +97,26 @@ export class Game extends Scene {
         this.orders.update(this.state)
         this.stats.update(this.state)
         this.plots.update(this.state, this.pickerPlot)
+        this.pause.update(this.paused)
+        this.debug.setText(debugText(this.state, this.seed, this.paused))
+    }
+
+    private togglePause(): void {
+        if (this.state.status === "ended") return
+        this.paused = !this.paused
+        if (this.paused) this.closePicker()
+        this.render()
+    }
+
+    // Prints what's needed to replay this run: the seed and every logged action.
+    private printLog(): void {
+        console.log(`Action log (seed ${this.seed}, tick ${this.state.tick}):`)
+        console.log(JSON.stringify({ seed: this.seed, log: this.log }))
     }
 
     // Every player move goes through here so it is checked by the sim and logged for replay.
     private act(action: Action): boolean {
+        if (this.paused) return false
         const next = applyAction(this.state, action, this.crops)
         if (next === null) return false
         this.log.push({ tick: this.state.tick, action })
@@ -84,7 +127,7 @@ export class Game extends Scene {
 
     // Empty plot: open the plant picker. Ready plot: harvest it. Growing plot: nothing.
     private onPlotClick(plot: number): void {
-        if (this.state.status === "ended") return
+        if (this.paused || this.state.status === "ended") return
         switch (this.state.plots[plot].state) {
             case "empty":
                 this.pickerPlot = plot

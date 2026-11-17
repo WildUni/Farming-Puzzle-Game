@@ -10,7 +10,8 @@ const BUTTON_H = 64
 const BUTTON_GAP = 12
 const PAD = 14
 const TITLE_H = 30
-const DEPTH = 100 // above everything else in the scene
+const DEPTH = 100 // above the board
+const BOTTOM_CLEARANCE = 70 // keeps the panel clear of the debug overlay
 
 export class PlantPicker {
     private root: GameObjects.Container
@@ -62,7 +63,7 @@ export class PlantPicker {
         })
 
         this.root = scene.add
-            .container((width - panelW) / 2, height - MARGIN - panelH, [
+            .container((width - panelW) / 2, height - MARGIN - BOTTOM_CLEARANCE - panelH, [
                 panel,
                 this.title,
                 ...buttons

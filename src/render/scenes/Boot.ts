@@ -1,4 +1,6 @@
 import { Scene } from "phaser"
+import { buildCropTable } from "../../sim/plot"
+import cropList from "../../data/crops.json"
 
 export class Boot extends Scene {
     constructor() {
@@ -6,13 +8,13 @@ export class Boot extends Scene {
     }
 
     preload() {
-        //  The Boot Scene is typically used to load in any assets you require for your Preloader, such as a game logo or background.
-        //  The smaller the file size of the assets, the better, as the Boot Scene itself has no preloader.
-
         this.load.image("background", "assets/bg.png")
     }
 
+    // Loads the game config once and shares it through the registry, so every scene
+    // reads the same crop table.
     create() {
+        this.registry.set("crops", buildCropTable(cropList))
         this.scene.start("Preloader")
     }
 }
