@@ -22,3 +22,4 @@
 * Implemented a simple order modules: uniformed selection of one crop type, rng amt required dependent on max and min constants, expires after some tick.
 * Implemented applyAction function that creates a copy of the current state with the action taken applied. Any unsupported behavior returns null. 
 * Created custom type for supported actions. 
+* Change expiration to be at the end of the expiration tick instead of at the beginnng.

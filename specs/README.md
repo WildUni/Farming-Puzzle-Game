@@ -6,7 +6,7 @@ One spec per module in `src/sim/`. Each spec says what the module is for, what i
 | --- | --- | --- |
 | `src/sim/types.ts` | [types.md](types.md) | Shared types for the simulation |
 | `src/sim/game_constants.ts` | [game_constants.md](game_constants.md) | Tuning numbers (tick rate, time limits, starting plots) |
-| `src/sim/main.ts` | [main.md](main.md) | Whole-game functions: creating a game (later `applyAction`, `step`) |
+| `src/sim/main.ts` | [main.md](main.md) | Whole-game functions: `createGame`, `applyAction`, `step` (later `replay`) |
 | `src/sim/mulberry.ts` | [mulberry.md](mulberry.md) | Seeded random number generator |
 | `src/sim/plot.ts` | [plot.md](plot.md) | Rules for a single plot, plus the crop table |
 | `src/sim/orders.ts` | [orders.md](orders.md) | Rules for a single order: creating, filling, expiring |

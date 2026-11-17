@@ -11,6 +11,7 @@ const ORDER_TIMELIMIT = 60 //in seconds
 const ORDER_TICKS = TICKS_PER_SECOND * ORDER_TIMELIMIT
 const ORDER_MIN_AMOUNT = 2
 const ORDER_MAX_AMOUNT = 6
+const MAX_OPEN_ORDERS = 2 //step keeps this many orders open
 
 export {
     TICKS_PER_SECOND,
@@ -18,5 +19,6 @@ export {
     START_PLOTS,
     ORDER_TICKS,
     ORDER_MIN_AMOUNT,
-    ORDER_MAX_AMOUNT
+    ORDER_MAX_AMOUNT,
+    MAX_OPEN_ORDERS
 }

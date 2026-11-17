@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import createGame, { applyAction } from "./main";
+import { createGame, applyAction, step } from "./main";
 import { buildCropTable, updateGrowth } from "./plot";
-import { START_PLOTS } from "./game_constants";
+import { createOrder } from "./orders";
+import { START_PLOTS, MAX_OPEN_ORDERS, ORDER_TICKS, TIMED_MODE_TICKS } from "./game_constants";
 import type { Action, Crop, GameConfig, GameState, Order } from "./types";
 
 const config: GameConfig = { mode: "survival", allowPowerUps: false };
@@ -224,5 +225,181 @@ describe("applyAction: full flow", () => {
         expect(state.score).toBe(32);
         expect(state.ordersCompleted).toBe(1);
         expect(state.plots.every((p) => p.state === "empty")).toBe(true);
+    });
+});
+
+// Calls step n times.
+function stepN(state: GameState, n: number): GameState {
+    for (let i = 0; i < n; i++) state = step(state, crops);
+    return state;
+}
+
+describe("step: tick and rules", () => {
+    it("increases tick by 1", () => {
+        const state = makeState({ tick: 41 });
+        expect(step(state, crops).tick).toBe(42);
+    });
+
+    it("never changes the state passed in", () => {
+        const state = makeState({
+            plots: [{ state: "growing", cropId: "garlic", plantedAt: 0 }],
+            orders: [makeOrder({ expiresAt: 0 }), makeOrder({ id: 1, expiresAt: 900 })],
+            nextOrderId: 2,
+            tick: 79,
+        });
+        const before = structuredClone(state);
+        step(state, crops);
+        expect(state).toEqual(before);
+    });
+
+    it("leaves inventory, score and ordersCompleted alone", () => {
+        const state = makeState({ inventory: { carrot: 3 }, score: 50, ordersCompleted: 2 });
+        const next = stepN(state, 700);
+        expect(next.inventory).toEqual({ carrot: 3 });
+        expect(next.score).toBe(50);
+        expect(next.ordersCompleted).toBe(2);
+    });
+
+    it("returns the state unchanged once the game has ended", () => {
+        const state = makeState({ status: "ended", tick: 10 });
+        expect(step(state, crops)).toBe(state);
+    });
+
+    it("gives an equal state from the same seed after many steps", () => {
+        const a = stepN(createGame(9, config), 2000);
+        const b = stepN(createGame(9, config), 2000);
+        expect(a).toEqual(b);
+        expect(a.ordersFailed).toBeGreaterThan(0);
+    });
+});
+
+describe("step: growth", () => {
+    it("makes a crop ready exactly growTicks after planting", () => {
+        let state = makeState({ tick: 10 });
+        state = apply(state, { type: "plant", plot: 0, cropId: "garlic" });
+        state = stepN(state, crops.garlic.growTicks - 1);
+        expect(state.plots[0].state).toBe("growing");
+        state = step(state, crops);
+        expect(state.tick).toBe(10 + crops.garlic.growTicks);
+        expect(state.plots[0]).toEqual({ state: "ready", cropId: "garlic" });
+    });
+
+    it("leaves empty and ready plots alone", () => {
+        const plots: GameState["plots"] = [{ state: "empty" }, { state: "ready", cropId: "pumpkin" }];
+        const next = step(makeState({ plots }), crops);
+        expect(next.plots).toEqual(plots);
+    });
+});
+
+describe("step: orders", () => {
+    it("fills up to MAX_OPEN_ORDERS orders on the first step", () => {
+        const state = createGame(3, config);
+        const next = step(state, crops);
+
+        // Build the expected orders the same way step should.
+        let rng = state.rngState;
+        const expected: Order[] = [];
+        for (let id = 0; id < MAX_OPEN_ORDERS; id++) {
+            const [order, after] = createOrder(id, 1, rng, crops);
+            expected.push(order);
+            rng = after;
+        }
+
+        expect(next.orders).toEqual(expected);
+        expect(next.orders.every((o) => o.expiresAt === 1 + ORDER_TICKS)).toBe(true);
+        expect(next.nextOrderId).toBe(MAX_OPEN_ORDERS);
+        expect(next.rngState).toBe(rng);
+    });
+
+    it("never opens more than MAX_OPEN_ORDERS orders", () => {
+        let state = createGame(5, config);
+        for (let i = 0; i < 2000; i++) {
+            state = step(state, crops);
+            expect(state.orders.length).toBeLessThanOrEqual(MAX_OPEN_ORDERS);
+        }
+    });
+
+    it("keeps an order open on its expiresAt tick and fails it on the tick after", () => {
+        const order = makeOrder({ id: 0, expiresAt: 60 });
+        const other = makeOrder({ id: 1, expiresAt: 900 });
+        let state = makeState({ tick: 59, orders: [order, other], nextOrderId: 2 });
+
+        state = step(state, crops); // tick 60
+        expect(state.orders.map((o) => o.id)).toEqual([0, 1]);
+        expect(state.ordersFailed).toBe(0);
+
+        state = step(state, crops); // tick 61
+        expect(state.ordersFailed).toBe(1);
+        expect(state.orders.find((o) => o.id === 0)).toBeUndefined();
+    });
+
+    it("replaces a failed order on the same step and keeps the others in order", () => {
+        const a = makeOrder({ id: 0, expiresAt: 900 });
+        const b = makeOrder({ id: 1, expiresAt: 60 });
+        const state = makeState({ tick: 60, orders: [a, b], nextOrderId: 2 });
+        const next = step(state, crops);
+        expect(next.orders).toHaveLength(MAX_OPEN_ORDERS);
+        expect(next.orders[0]).toEqual(a);
+        expect(next.orders[1].id).toBe(2);
+        expect(next.orders[1].expiresAt).toBe(61 + ORDER_TICKS);
+        expect(next.nextOrderId).toBe(3);
+    });
+
+    it("replaces a delivered order on the next step", () => {
+        let state = step(createGame(4, config), crops);
+        const target = state.orders[0];
+        state = { ...state, inventory: { ...target.required } };
+        state = apply(state, { type: "deliver", orderId: target.id });
+        expect(state.orders).toHaveLength(MAX_OPEN_ORDERS - 1);
+
+        state = step(state, crops);
+        expect(state.orders).toHaveLength(MAX_OPEN_ORDERS);
+        expect(state.orders[state.orders.length - 1].id).toBe(MAX_OPEN_ORDERS);
+        expect(state.ordersFailed).toBe(0);
+    });
+});
+
+describe("step: end of run", () => {
+    const timed: GameConfig = { mode: "timed", allowPowerUps: false };
+
+    it("ends a Timed run on tick TIMED_MODE_TICKS", () => {
+        let state = stepN(createGame(2, timed), TIMED_MODE_TICKS - 1);
+        expect(state.status).toBe("running");
+
+        const before = state;
+        state = step(state, crops);
+        expect(state.tick).toBe(TIMED_MODE_TICKS);
+        expect(state.status).toBe("ended");
+        // No new orders on the ending step.
+        expect(state.nextOrderId).toBe(before.nextOrderId);
+        expect(state.rngState).toBe(before.rngState);
+    });
+
+    it("changes nothing after a Timed run ends, and refuses actions", () => {
+        const ended = stepN(createGame(2, timed), TIMED_MODE_TICKS);
+        expect(step(ended, crops)).toBe(ended);
+        expect(applyAction(ended, { type: "plant", plot: 0, cropId: "garlic" }, crops)).toBeNull();
+    });
+
+    it("does not end a Survival run by time", () => {
+        const state = stepN(createGame(2, config), TIMED_MODE_TICKS + 10);
+        expect(state.status).toBe("running");
+    });
+});
+
+describe("step with applyAction", () => {
+    it("allows harvesting on the same tick step makes a crop ready", () => {
+        let state = apply(makeState(), { type: "plant", plot: 0, cropId: "garlic" });
+        state = stepN(state, crops.garlic.growTicks);
+        state = apply(state, { type: "harvest", plot: 0 });
+        expect(state.inventory).toEqual({ garlic: crops.garlic.yield });
+    });
+
+    it("allows delivery on the expiresAt tick, but not after the next step", () => {
+        const order = makeOrder({ id: 0, expiresAt: 60 });
+        const state = step(makeState({ tick: 59, orders: [order], inventory: { carrot: 3 }, nextOrderId: 1 }), crops);
+        expect(state.tick).toBe(60);
+        expect(applyAction(state, { type: "deliver", orderId: 0 }, crops)).not.toBeNull();
+        expect(applyAction(step(state, crops), { type: "deliver", orderId: 0 }, crops)).toBeNull();
     });
 });

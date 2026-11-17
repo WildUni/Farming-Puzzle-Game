@@ -4,7 +4,7 @@ Whole-game functions. This module coordinates the other modules: it owns `GameSt
 
 ## Exports
 
-### `createGame(seed: RNGSeed, config: GameConfig): GameState` (default export)
+### `createGame(seed: RNGSeed, config: GameConfig): GameState`
 
 Returns a fresh state for a new run.
 
@@ -62,6 +62,32 @@ Returns a **new** state, or `null` if the move is not allowed. A `null` result m
 - Removes the order from `orders` (other orders keep their order), stores the new inventory, adds `order.value` to `score`, and adds 1 to `ordersCompleted`.
 - Does not create a new order. That is `step`'s job.
 
+### `step(state: GameState, crops: CropTable): GameState`
+
+Moves the game forward one tick. This is the only way time passes in a run.
+
+| Argument | Type | Meaning |
+| --- | --- | --- |
+| `state` | `GameState` | The current state. Never changed |
+| `crops` | `CropTable` | Crop stats, for growth times and for picking new orders |
+
+Returns a **new** state. The steps run in this order, each one using the result of the one before:
+
+1. **Tick:** `tick` becomes `state.tick + 1`. Every later step uses this new tick.
+2. **Growth:** every plot is passed through `updateGrowth(plot, tick, crops)`. A crop planted on tick *p* becomes `'ready'` on tick *p + growTicks*. Empty and ready plots don't change.
+3. **Failed orders:** every order where `isExpired(order, tick)` (`tick > expiresAt`) is removed, and `ordersFailed` goes up by 1 for each. The other orders keep their order in the list.
+4. **End of run:** if the mode's end condition is met, `status` becomes `'ended'` and `step` stops here. No new orders are created.
+   - **Timed:** `tick >= TIMED_MODE_TICKS`. Ticks `0` to `TIMED_MODE_TICKS − 1` are playable.
+   - **Survival** and **Puzzle:** no end condition yet (see Open items).
+5. **New orders:** while fewer than `MAX_OPEN_ORDERS` orders are open, create one with `createOrder(nextOrderId, tick, rngState, crops)`, add it to the **end** of `orders`, store the returned RNG state, and add 1 to `nextOrderId`. This also creates the first orders, on tick 1, and refills a slot the tick after an order is delivered or failed.
+
+**Rules**
+- Once `status` is `'ended'`, returns `state` unchanged.
+- Never changes `state` or anything inside it.
+- Never changes `inventory`, `score` or `ordersCompleted`. Those only change through `applyAction`.
+- `rngState` changes only when orders are created, by exactly two draws per order.
+- Deterministic: the same arguments always give an equal result, so the same seed and the same actions always give the same run.
+
 ## Tests (`main.test.ts`)
 
 **`createGame`**
@@ -94,18 +120,33 @@ Returns a **new** state, or `null` if the move is not allowed. A `null` result m
 **Full flow**
 - Plant, wait for growth with `updateGrowth`, harvest, and deliver: the order is filled.
 
+**`step`: tick and rules**
+- Increases `tick` by 1.
+- Never changes the state passed in.
+- Leaves `inventory`, `score` and `ordersCompleted` alone.
+- Returns the state unchanged once `status` is `'ended'`.
+- The same seed gives an equal state after many steps.
+
+**`step`: growth**
+- A planted crop is still growing on tick `plantedAt + growTicks − 1` and ready on `plantedAt + growTicks`.
+- Empty and ready plots don't change.
+
+**`step`: orders**
+- The first step fills up to `MAX_OPEN_ORDERS` orders, with ids from 0, `expiresAt = tick + ORDER_TICKS`, and `nextOrderId` and `rngState` advanced to match `createOrder`.
+- Never opens more than `MAX_OPEN_ORDERS` orders.
+- An order is still open on its `expiresAt` tick and fails on the tick after: it is removed and `ordersFailed` goes up by 1.
+- A failed order is replaced on the same step with a new id, and the remaining orders keep their order.
+- A delivered order is replaced on the next step.
+
+**`step`: end of run**
+- Timed ends on tick `TIMED_MODE_TICKS` and creates no new orders on that step. After that, `step` changes nothing and `applyAction` returns `null`.
+- Survival doesn't end by time.
+
+**`step` with `applyAction`**
+- A crop can be harvested on the same tick `step` makes it ready.
+- An order can be delivered on its `expiresAt` tick, but after the next `step` it is gone.
+
 ## Planned
-
-### `step(state, crops): GameState`
-
-Moves the game forward one tick:
-1. Increase `tick` by 1.
-2. Call `updateGrowth` on every plot.
-3. Fail orders where `isExpired` (`tick > expiresAt`) and increase `ordersFailed`.
-4. Create the next order when one closes, using `nextOrderId` and `rngState`.
-5. Set `status` to `'ended'` when the mode's end condition is met (time up in Timed, no lives in Survival).
-
-Does nothing once `status` is `'ended'`.
 
 ### `replay(seed, config, log, crops): GameState`
 
@@ -116,3 +157,6 @@ Runs `createGame`, then applies each logged action on its tick while stepping fo
 - [ ] Consider renaming to `game.ts` as it grows.
 - [ ] Add the time bonus to `deliver`'s score once the scoring rule reads `GameState` (see [scoring.md](scoring.md)).
 - [ ] Planting costs (seeds or coins) once Survival's economy is built.
+- [ ] Survival end condition (no lives left) once `lives` is in `GameState`. Failing an order should probably cost a life.
+- [ ] Puzzle end condition (the level's order filled or failed) once puzzle levels exist.
+- [ ] Open more orders at once as Survival difficulty rises, and in Timed rush waves, instead of a fixed `MAX_OPEN_ORDERS`.

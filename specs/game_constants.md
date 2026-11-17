@@ -12,6 +12,7 @@ Tuning numbers that are the same for every run. Changing one should never requir
 | `ORDER_TICKS` | `600` | Time limit for a new order (`TICKS_PER_SECOND × 60 s`) |
 | `ORDER_MIN_AMOUNT` | `2` | Smallest amount an order asks for |
 | `ORDER_MAX_AMOUNT` | `6` | Largest amount an order asks for |
+| `MAX_OPEN_ORDERS` | `2` | `step` keeps this many orders open, creating new ones as orders close |
 
 `TIMED_MODE_TIMELIMIT` (300 seconds) and `ORDER_TIMELIMIT` (60 seconds) are used to calculate the tick values but are not exported.
 
@@ -22,6 +23,5 @@ Tuning numbers that are the same for every run. Changing one should never requir
 
 ## Open items
 
-- [ ] How many orders can be open at once.
 - [ ] Base points per filled order and the bonus for time left (see [scoring.md](scoring.md)).
 - [ ] Survival constants: starting lives, starting life price, how difficulty rises.
