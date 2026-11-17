@@ -44,15 +44,18 @@ We have provided a default project structure to get you started. This is as foll
 
 We have provided a default project structure to get you started:
 
-| Path               | Description                                           |
-| ------------------ | ----------------------------------------------------- |
-| `index.html`       | A basic HTML page to contain the game.                |
-| `public/assets`    | Game sprites, audio, etc. Served directly at runtime. |
-| `public/style.css` | Global layout styles.                                 |
-| `src/main.ts`      | Application bootstrap.                                |
-| `src/game`         | Folder containing the game code.                      |
-| `src/game/main.ts` | Game entry point: configures and starts the game.     |
-| `src/game/scenes`  | Folder with all Phaser game scenes.                   |
+| Path                 | Description                                           |
+| -------------------- | ----------------------------------------------------- |
+| `index.html`         | A basic HTML page to contain the game.                |
+| `public/assets`      | Game sprites, audio, etc. Served directly at runtime. |
+| `public/style.css`   | Global layout styles.                                 |
+| `src/main.ts`        | Application bootstrap.                                |
+| `src/sim`            | Game rules. Plain TypeScript, no Phaser.              |
+| `src/render`         | Everything Phaser: config, scenes and views.          |
+| `src/render/main.ts` | Phaser config: configures and starts the game.        |
+| `src/render/scenes`  | Phaser scenes. `Game` runs the tick loop and input.   |
+| `src/render/views`   | Draw one part of the screen from a `GameState`.       |
+| `src/data`           | JSON config, such as the crop list.                   |
 
 ## Handling Assets
 

@@ -12,12 +12,23 @@ export default tseslint.config(
         languageOptions: { globals: { process: "readonly" } }
     },
     {
-        // src/sim holds the game rules and must stay free of Phaser (see notes/Build Plan.md).
-        files: ["src/sim/**/*.ts"],
+        // Only src/render may use Phaser. src/sim must run in plain Node, and
+        // src/render/format.ts stays Phaser-free so it can be unit tested.
+        files: ["src/**/*.ts"],
+        ignores: ["src/render/**"],
         rules: {
             "no-restricted-imports": [
                 "error",
-                { paths: [{ name: "phaser", message: "src/sim must not import Phaser." }] }
+                { paths: [{ name: "phaser", message: "Only src/render may import Phaser." }] }
+            ]
+        }
+    },
+    {
+        files: ["src/render/format.ts"],
+        rules: {
+            "no-restricted-imports": [
+                "error",
+                { paths: [{ name: "phaser", message: "format.ts must stay Phaser-free." }] }
             ]
         }
     }
