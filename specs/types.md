@@ -97,7 +97,7 @@ One player move, passed to `applyAction` (see [main.md](main.md)).
 type LogEntry = { tick: number, action: Action }
 ```
 
-One line of the action log: the move and the tick it was made on. Used by `replay`.
+One line of the action log: the move and the tick it was made on. Used by `replay` (see [verification.md](verification.md)).
 
 ### `GameConfig`
 

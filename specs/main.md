@@ -146,11 +146,7 @@ Returns a **new** state. The steps run in this order, each one using the result 
 - A crop can be harvested on the same tick `step` makes it ready.
 - An order can be delivered on its `expiresAt` tick, but after the next `step` it is gone.
 
-## Planned
-
-### `replay(seed, config, log, crops): GameState`
-
-Runs `createGame`, then applies each logged action on its tick while stepping forward. Replaying a run's log must give a state equal to the original run's final state.
+`replay`, which rebuilds a run from its seed and action log, lives in `verification.ts` (see [verification.md](verification.md)).
 
 ## Open items
 
