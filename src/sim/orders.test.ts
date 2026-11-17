@@ -128,9 +128,10 @@ describe("fulfill", () => {
 });
 
 describe("isExpired and timeLeft", () => {
-    it("is open until expiresAt and expired from then on", () => {
+    it("is open through expiresAt and expired from the tick after", () => {
         expect(isExpired(garlicOrder, 599)).toBe(false);
-        expect(isExpired(garlicOrder, 600)).toBe(true);
+        expect(isExpired(garlicOrder, 600)).toBe(false);
+        expect(isExpired(garlicOrder, 601)).toBe(true);
         expect(isExpired(garlicOrder, 700)).toBe(true);
     });
 

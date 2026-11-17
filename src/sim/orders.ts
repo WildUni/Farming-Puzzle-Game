@@ -47,10 +47,12 @@ function fulfill(order: Order, inventory: Inventory): Inventory | null {
     return result
 }
 
+// expiresAt is the last tick the order can be filled, so it fails on the tick after.
 function isExpired(order: Order, now: number): boolean {
-    return now >= order.expiresAt
+    return now > order.expiresAt
 }
 
+// Ticks left after the current one. 0 on the last tick the order can still be filled.
 function timeLeft(order: Order, now: number): number {
     return Math.max(0, order.expiresAt - now)
 }

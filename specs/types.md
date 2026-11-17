@@ -47,7 +47,7 @@ type Order = { id: number, required: Record<string, number>, value: number, expi
 - `id`: unique within a run, taken from `GameState.nextOrderId`. Actions name orders by id, not by position in the list.
 - `required`: crop id → amount needed.
 - `value`: score awarded when the order is filled.
-- `expiresAt`: the tick the order fails on.
+- `expiresAt`: the last tick the order can be filled. It fails on tick `expiresAt + 1`.
 
 ### `GameState`
 

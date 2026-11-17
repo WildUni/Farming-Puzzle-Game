@@ -7,8 +7,8 @@ Rules for a single order: creating one at random, checking whether the inventory
 ## Order lifecycle
 
 ```
-createOrder --> open --fulfill (before expiresAt)--> completed (removed by main.ts)
-                     \--isExpired (tick reaches expiresAt)--> failed (removed by main.ts)
+createOrder --> open --fulfill (on or before expiresAt)--> completed (removed by main.ts)
+                     \--isExpired (tick passes expiresAt)--> failed (removed by main.ts)
 ```
 
 ## Constants (in `game_constants.ts`)
@@ -60,11 +60,12 @@ Rules:
 
 ### `isExpired(order, now): boolean`
 
-- `true` when `now >= order.expiresAt`. An order is still open on tick `expiresAt − 1` and has failed on tick `expiresAt`.
+- `true` when `now > order.expiresAt`. `expiresAt` is the **last** tick the order can be filled: it is still open on tick `expiresAt` and has failed on tick `expiresAt + 1`.
 
 ### `timeLeft(order, now): number`
 
-- Ticks until the order fails: `order.expiresAt − now`, never below 0.
+- Ticks left after the current one: `order.expiresAt − now`, never below 0.
+- It is 0 on tick `expiresAt`, the last tick the order can still be filled. Use `isExpired`, not `timeLeft === 0`, to check whether an order has failed.
 - Used by the order card's countdown bar and by the time bonus in scoring.
 
 ## Tests (`orders.test.ts`)
@@ -91,7 +92,7 @@ Rules:
 - Never changes the inventory passed in.
 
 **`isExpired` / `timeLeft`**
-- Open on `expiresAt − 1`, expired on `expiresAt` and after.
+- Open on `expiresAt − 1` and on `expiresAt`, expired on `expiresAt + 1` and after.
 - `timeLeft` counts down to 0 and stays at 0.
 
 ## Open items

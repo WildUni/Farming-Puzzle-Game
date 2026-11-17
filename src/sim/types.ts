@@ -28,7 +28,7 @@ type Order = {
     id: number,
     required: Record<string, number>,   // cropId -> amount
     value: number,
-    expiresAt: number                    // tick when the order fails
+    expiresAt: number                    // last tick the order can be filled; fails on the tick after
 }
 
 type GameState = {

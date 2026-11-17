@@ -190,11 +190,14 @@ describe("applyAction: deliver", () => {
         expect(applyAction(once, { type: "deliver", orderId: 0 }, crops)).toBeNull();
     });
 
-    it("returns null for an expired order still in the list", () => {
-        const order = makeOrder({ expiresAt: 600 });
+    it("allows delivery on the expiration tick and refuses it the tick after", () => {
+        const order = makeOrder({ expiresAt: 60 });
         const state = makeState({ orders: [order], inventory: { carrot: 3 } });
-        expect(applyAction({ ...state, tick: 599 }, { type: "deliver", orderId: 0 }, crops)).not.toBeNull();
-        expect(applyAction({ ...state, tick: 600 }, { type: "deliver", orderId: 0 }, crops)).toBeNull();
+        const deliver: Action = { type: "deliver", orderId: 0 };
+        expect(applyAction({ ...state, tick: 59 }, deliver, crops)).not.toBeNull();
+        expect(applyAction({ ...state, tick: 60 }, deliver, crops)).not.toBeNull();
+        expect(applyAction({ ...state, tick: 61 }, deliver, crops)).toBeNull();
+        expect(applyAction({ ...state, tick: 100 }, deliver, crops)).toBeNull();
     });
 });
 
