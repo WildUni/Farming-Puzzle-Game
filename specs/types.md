@@ -68,6 +68,37 @@ Everything that changes during a run. If `step` or `replay` would give a differe
 
 **Not in `GameState`:** crop stats, constants, `GameConfig`, the action log, anything that can be worked out (time left, growth progress), and anything only the screen needs (open menus, animations, pause).
 
+### `Inventory`
+
+```ts
+type Inventory = Record<string, number>   // cropId -> amount held
+```
+
+Used for `GameState.inventory` and by `orders.ts`. Missing ids mean 0, and amounts that drop to 0 are removed.
+
+### `Action`
+
+```ts
+type Action =
+  | { type: 'plant',   plot: number, cropId: string }
+  | { type: 'harvest', plot: number }
+  | { type: 'deliver', orderId: number }
+```
+
+One player move, passed to `applyAction` (see [main.md](main.md)).
+
+- `plot` is an index into `GameState.plots`.
+- `orderId` is an `Order.id`, not a position in the list, so it stays correct when other orders are removed.
+- Plain data only, so actions can be stored in the log and saved as JSON.
+
+### `LogEntry`
+
+```ts
+type LogEntry = { tick: number, action: Action }
+```
+
+One line of the action log: the move and the tick it was made on. Used by `replay`.
+
 ### `GameConfig`
 
 ```ts
@@ -87,6 +118,5 @@ Input to `calcScore` (see [scoring.md](scoring.md)).
 ## Open items
 
 - [ ] `RunData` repeats information already in `GameState` (`ordersCompleted`, `tick`, `score`) and uses snake_case while the rest uses camelCase. Decide whether scoring should read `GameState` directly.
-- [ ] Add an `Action` type: plant (plot, crop), harvest (plot), deliver (order).
 - [ ] Add Survival fields (`lives`, `coins`, `lifePrice`) when Survival rules are built.
 - [ ] Add plot modifiers (fertilizer, weeds, blocked) as a `modifiers` list when needed. Growth would then need a stored `progress` field instead of `plantedAt`.

@@ -1,8 +1,6 @@
-import type { Order, CropTable, RNGState } from "./types"
+import type { Order, CropTable, RNGState, Inventory } from "./types"
 import { nextInt } from "./mulberry"
 import { ORDER_TICKS, ORDER_MIN_AMOUNT, ORDER_MAX_AMOUNT } from "./game_constants"
-
-type Inventory = Record<string, number>  // cropId -> amount held
 
 // Whole number from min to max inclusive, plus the next RNG state.
 // TODO: move to mulberry.ts as nextInt(state, min, max) once nextInt is renamed.

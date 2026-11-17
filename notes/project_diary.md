@@ -16,3 +16,9 @@
 * Added mulberry rng step function for procedural generation + tests
 * Declared custom types for sim folder.
 * Added create game function.
+
+## 11/17/2026
+* Created a specs folder containing a specs file for each module
+* Implemented a simple order modules: uniformed selection of one crop type, rng amt required dependent on max and min constants, expires after some tick.
+* Implemented applyAction function that creates a copy of the current state with the action taken applied. Any unsupported behavior returns null. 
+* Created custom type for supported actions. 

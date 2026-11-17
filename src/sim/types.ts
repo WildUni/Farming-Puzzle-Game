@@ -17,6 +17,8 @@ type Crop = {
 
 type CropTable = Record<string, Crop>;  // cropId -> Crop
 
+type Inventory = Record<string, number>;  // cropId -> amount held, missing means 0
+
 type Plot =
     | { state: "empty" }
     | { state: "growing", cropId: string, plantedAt: number }
@@ -35,7 +37,7 @@ type GameState = {
     tick: number,
     rngState: RNGState,
     plots: Plot[],
-    inventory: Record<string, number>,  // cropId -> amount held
+    inventory: Inventory,
     orders: Order[],
     nextOrderId: number,
     score: number,
@@ -43,6 +45,12 @@ type GameState = {
     ordersFailed: number
 }
 
+type Action =
+    | { type: "plant", plot: number, cropId: string }
+    | { type: "harvest", plot: number }
+    | { type: "deliver", orderId: number };
+
+type LogEntry = { tick: number, action: Action };
 
 type GameConfig = {
     mode: GameMode,
@@ -62,5 +70,8 @@ export type {
     RNGState,
     RNGSeed,
     Crop,
-    CropTable
+    CropTable,
+    Inventory,
+    Action,
+    LogEntry
 }
