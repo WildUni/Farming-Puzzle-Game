@@ -1,16 +1,15 @@
-import type { RNGSeed, GameConfig, GameState, LogEntry, CropTable } from "./types";
-import { createGame, applyAction, step } from "./main";
+import type { RNGSeed, GameConfig, GameState, LogEntry, CropTable } from "./types"
+import { createGame, applyAction, step } from "./main"
 
 type ReplayError =
-    | "bad-tick"        // an entry's tick is not a whole number from 0 to finalTick
-    | "out-of-order"    // an entry's tick is lower than the one before it
-    | "after-end"       // an entry is on a tick after the run ended
-    | "refused"         // applyAction rejected an entry
-    | "bad-final-tick"; // finalTick is invalid, or the run ended before it
+    | "bad-tick" // an entry's tick is not a whole number from 0 to finalTick
+    | "out-of-order" // an entry's tick is lower than the one before it
+    | "after-end" // an entry is on a tick after the run ended
+    | "refused" // applyAction rejected an entry
+    | "bad-final-tick" // finalTick is invalid, or the run ended before it
 
 type ReplayResult =
-    | { ok: true, state: GameState }
-    | { ok: false, error: ReplayError, entry: number | null };  // entry: index in log
+    { ok: true; state: GameState } | { ok: false; error: ReplayError; entry: number | null } // entry: index in log
 
 // Steps until state.tick reaches target. Returns null if the run ends first.
 function stepUntil(state: GameState, target: number, crops: CropTable): GameState | null {

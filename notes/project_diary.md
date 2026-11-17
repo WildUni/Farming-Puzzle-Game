@@ -23,3 +23,4 @@
 * Implemented applyAction function that creates a copy of the current state with the action taken applied. Any unsupported behavior returns null. 
 * Created custom type for supported actions. 
 * Change expiration to be at the end of the expiration tick instead of at the beginnng.
+* Added a replay function that takes in an action log and replays the run, then returns an object denoting if any mismatches occurred.

@@ -1,8 +1,8 @@
-import { RNGSeed, GameConfig, GameState, Plot, Action, CropTable } from "./types";
-import { seedRNG } from "./mulberry";
-import { START_PLOTS, MAX_OPEN_ORDERS, TIMED_MODE_TICKS } from "./game_constants";
-import { plant, harvest, updateGrowth } from "./plot";
-import { createOrder, fulfill, isExpired } from "./orders";
+import { RNGSeed, GameConfig, GameState, Plot, Action, CropTable } from "./types"
+import { seedRNG } from "./mulberry"
+import { START_PLOTS, MAX_OPEN_ORDERS, TIMED_MODE_TICKS } from "./game_constants"
+import { plant, harvest, updateGrowth } from "./plot"
+import { createOrder, fulfill, isExpired } from "./orders"
 
 function createGame(seed: RNGSeed, config: GameConfig): GameState {
     return {
@@ -77,9 +77,12 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
 // True when the run should end on this tick. Survival and Puzzle have no end rule yet.
 function isRunOver(state: GameState): boolean {
     switch (state.mode) {
-        case "timed": return state.tick >= TIMED_MODE_TICKS
-        case "survival": return false
-        case "puzzle": return false
+        case "timed":
+            return state.tick >= TIMED_MODE_TICKS
+        case "survival":
+            return false
+        case "puzzle":
+            return false
     }
 }
 

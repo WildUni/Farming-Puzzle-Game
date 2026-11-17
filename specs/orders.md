@@ -13,11 +13,11 @@ createOrder --> open --fulfill (on or before expiresAt)--> completed (removed by
 
 ## Constants (in `game_constants.ts`)
 
-| Constant | Value | Meaning |
-| --- | --- | --- |
-| `ORDER_TICKS` | `600` | Time limit for a new order (60 s × `TICKS_PER_SECOND`) |
-| `ORDER_MIN_AMOUNT` | `2` | Smallest amount an order asks for |
-| `ORDER_MAX_AMOUNT` | `6` | Largest amount an order asks for |
+| Constant           | Value | Meaning                                                |
+| ------------------ | ----- | ------------------------------------------------------ |
+| `ORDER_TICKS`      | `600` | Time limit for a new order (60 s × `TICKS_PER_SECOND`) |
+| `ORDER_MIN_AMOUNT` | `2`   | Smallest amount an order asks for                      |
+| `ORDER_MAX_AMOUNT` | `6`   | Largest amount an order asks for                       |
 
 These are starting values for tuning. With them, every order can be filled with one round of planting on a single plot or less, even for pumpkins (250 ticks).
 
@@ -25,20 +25,21 @@ These are starting values for tuning. With them, every order can be filled with 
 
 ### `createOrder(id, now, rng, crops): [Order, RNGState]`
 
-| Argument | Type | Meaning |
-| --- | --- | --- |
-| `id` | `number` | The order's id. `main.ts` passes `GameState.nextOrderId` |
-| `now` | `number` | Current tick |
-| `rng` | `RNGState` | Current generator state |
-| `crops` | `CropTable` | Crops that orders can ask for |
+| Argument | Type        | Meaning                                                  |
+| -------- | ----------- | -------------------------------------------------------- |
+| `id`     | `number`    | The order's id. `main.ts` passes `GameState.nextOrderId` |
+| `now`    | `number`    | Current tick                                             |
+| `rng`    | `RNGState`  | Current generator state                                  |
+| `crops`  | `CropTable` | Crops that orders can ask for                            |
 
 Returns the new order and the new RNG state, which the caller must store back into `GameState.rngState`.
 
 Rules:
+
 1. An order asks for **one crop type**. Orders with several crops come later.
-2. **Crop:** chosen from the crop table's ids **sorted alphabetically**, using the first random draw: `ids[floor(v × ids.length)]`. Sorting means the result doesn't depend on the order of crops in `crops.json`.
-3. **Amount:** a whole number from `ORDER_MIN_AMOUNT` to `ORDER_MAX_AMOUNT` inclusive, using the second random draw: `min + floor(v × (max − min + 1))`.
-4. **Exactly two draws.** The returned state is the input state advanced twice with `nextInt`.
+2. **Crop:** chosen from the crop table's ids **sorted alphabetically**, using the first random draw: `pick(rng, ids)`. Sorting means the result doesn't depend on the order of crops in `crops.json`.
+3. **Amount:** a whole number from `ORDER_MIN_AMOUNT` to `ORDER_MAX_AMOUNT` inclusive, using the second random draw: `randomInt(state, ORDER_MIN_AMOUNT, ORDER_MAX_AMOUNT)`.
+4. **Exactly two draws.** The returned state is the input state advanced twice with `nextValue`.
 5. **Value:** `amount × crop.value`.
 6. **Expiry:** `expiresAt = now + ORDER_TICKS`.
 7. **Deterministic:** the same arguments always give an equal result.
@@ -71,6 +72,7 @@ Rules:
 ## Tests (`orders.test.ts`)
 
 **`createOrder`**
+
 - Uses the given id, and `expiresAt` is `now + ORDER_TICKS`.
 - Asks for exactly one crop, which exists in the crop table.
 - Amount is always in range, and value is always `amount × crop.value` (checked over many seeds).
@@ -81,17 +83,20 @@ Rules:
 - Throws for an empty crop table.
 
 **`canFulfill`**
+
 - `true` with exactly enough and with more than enough.
 - `false` when short, and when the crop is missing from the inventory.
 - Checks every crop in an order that asks for several.
 
 **`fulfill`**
+
 - Subtracts the required amounts and keeps other crops.
 - Removes crops that drop to 0.
 - Returns `null` when short.
 - Never changes the inventory passed in.
 
 **`isExpired` / `timeLeft`**
+
 - Open on `expiresAt − 1` and on `expiresAt`, expired on `expiresAt + 1` and after.
 - `timeLeft` counts down to 0 and stays at 0.
 
@@ -101,4 +106,4 @@ Rules:
 - [ ] Ask only for crops the player brought into the run (from the design doc). That only needs `main.ts` to pass a smaller crop table.
 - [ ] Scale the time limit with difficulty, the crop's growth time or the amount asked for.
 - [ ] Rush orders and picky customers (events from the design doc).
-- [ ] Replace the local integer helper with `nextInt(state, min, max)` in `mulberry.ts` once that exists (see [mulberry.md](mulberry.md)).
+- [x] Use `pick` and `randomInt` from `mulberry.ts` instead of a local helper (see [mulberry.md](mulberry.md)).

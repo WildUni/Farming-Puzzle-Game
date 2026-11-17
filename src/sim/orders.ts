@@ -1,13 +1,6 @@
 import type { Order, CropTable, RNGState, Inventory } from "./types"
-import { nextInt } from "./mulberry"
+import { pick, randomInt } from "./mulberry"
 import { ORDER_TICKS, ORDER_MIN_AMOUNT, ORDER_MAX_AMOUNT } from "./game_constants"
-
-// Whole number from min to max inclusive, plus the next RNG state.
-// TODO: move to mulberry.ts as nextInt(state, min, max) once nextInt is renamed.
-function randomInt(rng: RNGState, min: number, max: number): [number, RNGState] {
-    const [v, next] = nextInt(rng)
-    return [min + Math.floor(v * (max - min + 1)), next]
-}
 
 // Creates a random single-crop order. Uses exactly two random draws:
 // the first picks the crop, the second picks the amount.
@@ -15,8 +8,7 @@ function createOrder(id: number, now: number, rng: RNGState, crops: CropTable): 
     const ids = Object.keys(crops).sort()
     if (ids.length === 0) throw new Error("createOrder: crop table is empty")
 
-    const [index, afterCrop] = randomInt(rng, 0, ids.length - 1)
-    const cropId = ids[index]
+    const [cropId, afterCrop] = pick(rng, ids)
     const [amount, afterAmount] = randomInt(afterCrop, ORDER_MIN_AMOUNT, ORDER_MAX_AMOUNT)
 
     const order: Order = {
@@ -57,10 +49,4 @@ function timeLeft(order: Order, now: number): number {
     return Math.max(0, order.expiresAt - now)
 }
 
-export {
-    createOrder,
-    canFulfill,
-    fulfill,
-    isExpired,
-    timeLeft
-}
+export { createOrder, canFulfill, fulfill, isExpired, timeLeft }

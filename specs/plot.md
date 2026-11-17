@@ -30,11 +30,11 @@ Turns the list in `src/data/crops.json` into a table keyed by crop id. Run it on
 
 Growth progress from 0 to 1, for progress bars and for `updateGrowth`.
 
-| Plot state | Result |
-| --- | --- |
-| `empty` | `0` |
-| `growing` | `(now - plantedAt) / growTicks`, capped at `1` |
-| `ready` | `1` |
+| Plot state | Result                                         |
+| ---------- | ---------------------------------------------- |
+| `empty`    | `0`                                            |
+| `growing`  | `(now - plantedAt) / growTicks`, capped at `1` |
+| `ready`    | `1`                                            |
 
 ### `updateGrowth(plot, now, crops): Plot`
 

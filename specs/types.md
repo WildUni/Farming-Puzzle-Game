@@ -6,18 +6,18 @@ Shared types for the simulation. Contains only types, so it is exported with `ex
 
 ### Basic values
 
-| Type | Definition | Meaning |
-| --- | --- | --- |
-| `RNGSeed` | `number` | The seed a run starts from |
-| `RNGState` | `number` | The generator's current position, stored in `GameState` |
-| `GameMode` | `'survival' \| 'timed' \| 'puzzle'` | Which mode the run is in |
-| `GameStatus` | `'running' \| 'ended'` | Whether `step` should keep advancing the game |
+| Type         | Definition                          | Meaning                                                 |
+| ------------ | ----------------------------------- | ------------------------------------------------------- |
+| `RNGSeed`    | `number`                            | The seed a run starts from                              |
+| `RNGState`   | `number`                            | The generator's current position, stored in `GameState` |
+| `GameMode`   | `'survival' \| 'timed' \| 'puzzle'` | Which mode the run is in                                |
+| `GameStatus` | `'running' \| 'ended'`              | Whether `step` should keep advancing the game           |
 
 ### `Crop` and `CropTable`
 
 ```ts
-type Crop = { id: string, growTicks: number, yield: number, value: number }
-type CropTable = Record<string, Crop>   // cropId -> Crop
+type Crop = { id: string; growTicks: number; yield: number; value: number }
+type CropTable = Record<string, Crop> // cropId -> Crop
 ```
 
 - `growTicks`: ticks from planting until the crop is ready.
@@ -30,9 +30,9 @@ type CropTable = Record<string, Crop>   // cropId -> Crop
 
 ```ts
 type Plot =
-  | { state: 'empty' }
-  | { state: 'growing', cropId: string, plantedAt: number }
-  | { state: 'ready',   cropId: string }
+    | { state: "empty" }
+    | { state: "growing"; cropId: string; plantedAt: number }
+    | { state: "ready"; cropId: string }
 ```
 
 - `plantedAt` is the tick the crop was planted on. The ready tick is worked out as `plantedAt + growTicks`, not stored.
@@ -41,7 +41,7 @@ type Plot =
 ### `Order`
 
 ```ts
-type Order = { id: number, required: Record<string, number>, value: number, expiresAt: number }
+type Order = { id: number; required: Record<string, number>; value: number; expiresAt: number }
 ```
 
 - `id`: unique within a run, taken from `GameState.nextOrderId`. Actions name orders by id, not by position in the list.
@@ -53,25 +53,25 @@ type Order = { id: number, required: Record<string, number>, value: number, expi
 
 Everything that changes during a run. If `step` or `replay` would give a different result without a value, it belongs here.
 
-| Field | Meaning |
-| --- | --- |
-| `mode` | The run's `GameMode` |
-| `status` | `'running'` until the run ends |
-| `tick` | Current tick, starting at 0 |
-| `rngState` | Generator state. Every random draw reads it and stores the new state back |
-| `plots` | One `Plot` per plot |
-| `inventory` | Crop id → amount held. Missing ids mean 0 |
-| `orders` | Open orders |
-| `nextOrderId` | Id for the next order created |
-| `score` | Points so far |
-| `ordersCompleted`, `ordersFailed` | Run counters |
+| Field                             | Meaning                                                                   |
+| --------------------------------- | ------------------------------------------------------------------------- |
+| `mode`                            | The run's `GameMode`                                                      |
+| `status`                          | `'running'` until the run ends                                            |
+| `tick`                            | Current tick, starting at 0                                               |
+| `rngState`                        | Generator state. Every random draw reads it and stores the new state back |
+| `plots`                           | One `Plot` per plot                                                       |
+| `inventory`                       | Crop id → amount held. Missing ids mean 0                                 |
+| `orders`                          | Open orders                                                               |
+| `nextOrderId`                     | Id for the next order created                                             |
+| `score`                           | Points so far                                                             |
+| `ordersCompleted`, `ordersFailed` | Run counters                                                              |
 
 **Not in `GameState`:** crop stats, constants, `GameConfig`, the action log, anything that can be worked out (time left, growth progress), and anything only the screen needs (open menus, animations, pause).
 
 ### `Inventory`
 
 ```ts
-type Inventory = Record<string, number>   // cropId -> amount held
+type Inventory = Record<string, number> // cropId -> amount held
 ```
 
 Used for `GameState.inventory` and by `orders.ts`. Missing ids mean 0, and amounts that drop to 0 are removed.
@@ -80,9 +80,9 @@ Used for `GameState.inventory` and by `orders.ts`. Missing ids mean 0, and amoun
 
 ```ts
 type Action =
-  | { type: 'plant',   plot: number, cropId: string }
-  | { type: 'harvest', plot: number }
-  | { type: 'deliver', orderId: number }
+    | { type: "plant"; plot: number; cropId: string }
+    | { type: "harvest"; plot: number }
+    | { type: "deliver"; orderId: number }
 ```
 
 One player move, passed to `applyAction` (see [main.md](main.md)).
@@ -94,7 +94,7 @@ One player move, passed to `applyAction` (see [main.md](main.md)).
 ### `LogEntry`
 
 ```ts
-type LogEntry = { tick: number, action: Action }
+type LogEntry = { tick: number; action: Action }
 ```
 
 One line of the action log: the move and the tick it was made on. Used by `replay` (see [verification.md](verification.md)).
@@ -102,7 +102,7 @@ One line of the action log: the move and the tick it was made on. Used by `repla
 ### `GameConfig`
 
 ```ts
-type GameConfig = { mode: GameMode, allowPowerUps: boolean }
+type GameConfig = { mode: GameMode; allowPowerUps: boolean }
 ```
 
 Settings chosen before a run. Fixed for the whole run.
@@ -110,7 +110,7 @@ Settings chosen before a run. Fixed for the whole run.
 ### `RunData`
 
 ```ts
-type RunData = { time_left: number, orders_completed: number, points: number }
+type RunData = { time_left: number; orders_completed: number; points: number }
 ```
 
 Input to `calcScore` (see [scoring.md](scoring.md)).

@@ -21,31 +21,30 @@ The game loop on the client must follow these steps, and `replay` does the same:
 3. `state = step(state, crops)` to move to the next tick, then go back to 2.
 4. The run stops on `finalTick`: when the run ends (`status` becomes `'ended'`), or when the player quits.
 
-So actions on tick *t* always run **after** the `step` that reached tick *t*, and actions on tick 0 run before any `step`.
+So actions on tick _t_ always run **after** the `step` that reached tick _t_, and actions on tick 0 run before any `step`.
 
 ## Exports
 
 ### `replay(seed, config, log, finalTick, crops): ReplayResult`
 
-| Argument | Type | Meaning |
-| --- | --- | --- |
-| `seed` | `RNGSeed` | The seed the run started from |
-| `config` | `GameConfig` | The run's settings |
-| `log` | `LogEntry[]` | Every accepted action, in the order it was made |
-| `finalTick` | `number` | The tick the run stopped on |
-| `crops` | `CropTable` | The crop table the run used |
+| Argument    | Type         | Meaning                                         |
+| ----------- | ------------ | ----------------------------------------------- |
+| `seed`      | `RNGSeed`    | The seed the run started from                   |
+| `config`    | `GameConfig` | The run's settings                              |
+| `log`       | `LogEntry[]` | Every accepted action, in the order it was made |
+| `finalTick` | `number`     | The tick the run stopped on                     |
+| `crops`     | `CropTable`  | The crop table the run used                     |
 
 ```ts
 type ReplayError =
-  | 'bad-tick'        // an entry's tick is not a whole number from 0 to finalTick
-  | 'out-of-order'    // an entry's tick is lower than the one before it
-  | 'after-end'       // an entry is on a tick after the run ended
-  | 'refused'         // applyAction rejected an entry
-  | 'bad-final-tick'  // finalTick is not a whole number >= 0, or the run ended before it
+    | "bad-tick" // an entry's tick is not a whole number from 0 to finalTick
+    | "out-of-order" // an entry's tick is lower than the one before it
+    | "after-end" // an entry is on a tick after the run ended
+    | "refused" // applyAction rejected an entry
+    | "bad-final-tick" // finalTick is not a whole number >= 0, or the run ended before it
 
 type ReplayResult =
-  | { ok: true,  state: GameState }
-  | { ok: false, error: ReplayError, entry: number | null }   // entry: index in log, or null
+    { ok: true; state: GameState } | { ok: false; error: ReplayError; entry: number | null } // entry: index in log, or null
 ```
 
 Steps:
@@ -53,10 +52,10 @@ Steps:
 1. Check `finalTick` is a whole number `>= 0`, otherwise `bad-final-tick` with `entry: null`.
 2. Start from `createGame(seed, config)`.
 3. For each log entry, in log order:
-   1. Its tick must be a whole number from `0` to `finalTick`, otherwise `bad-tick`.
-   2. Its tick must not be lower than the current `state.tick`, otherwise `out-of-order`. Several entries may share a tick.
-   3. `step` until `state.tick` equals the entry's tick. If the run ends before that tick is reached, `after-end`.
-   4. Apply the action. If `applyAction` returns `null` (or anything that is not a state), `refused`.
+    1. Its tick must be a whole number from `0` to `finalTick`, otherwise `bad-tick`.
+    2. Its tick must not be lower than the current `state.tick`, otherwise `out-of-order`. Several entries may share a tick.
+    3. `step` until `state.tick` equals the entry's tick. If the run ends before that tick is reached, `after-end`.
+    4. Apply the action. If `applyAction` returns `null` (or anything that is not a state), `refused`.
 4. `step` until `state.tick` equals `finalTick`. If the run ends before `finalTick`, `bad-final-tick` with `entry: null`.
 5. Return `{ ok: true, state }`.
 
@@ -71,6 +70,7 @@ Rules:
 ## Tests (`verification.test.ts`)
 
 **Matches the original run**
+
 - An empty log gives the same state as stepping `createGame` to `finalTick`.
 - A scripted player (harvest every ready plot, deliver every order it can, plant every empty plot for the first open order) gives a final state equal to replaying its log, over several seeds and in both Survival and Timed.
 - A weaker scripted player that only plants garlic lets orders fail, and its runs also replay equal.
@@ -79,6 +79,7 @@ Rules:
 - The same arguments give equal results, and the log is not changed.
 
 **Rejects bad logs**
+
 - `refused`: an action that can't be applied (harvesting an empty plot), and an action that is fine on another tick but not on the logged one. The reported `entry` is the index of the bad entry.
 - `refused`: an unknown action type.
 - `out-of-order`: an entry with a lower tick than the one before.
