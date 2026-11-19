@@ -1,5 +1,5 @@
 // Text shown on screen, built from plain state. No Phaser imports so it can be unit tested.
-import type { GameState, Order, Plot, Crop, CropTable } from "../sim/types"
+import type { GameMode, GameState, Order, Plot, Crop, CropTable } from "../sim/types"
 import { TICKS_PER_SECOND, TIMED_MODE_TICKS } from "../sim/game_constants"
 import { progress } from "../sim/plot"
 import { timeLeft } from "../sim/orders"
@@ -19,13 +19,50 @@ function buyLifeText(state: GameState): string {
 }
 
 // Summary on the game-over panel. Levels are shown counted from 1.
+// Survival lists how long the run lasted; Timed always lasts the same time, so it
+// lists the failed orders instead.
 function gameOverText(state: GameState): string {
-    return [
-        `Score ${state.score}`,
-        `Orders filled ${state.ordersCompleted}`,
-        `Time survived ${formatClock(state.tick)}`,
-        `Level reached ${levelFor(state.ordersCompleted) + 1}`
-    ].join("\n")
+    const lines = [`Score ${state.score}`, `Orders filled ${state.ordersCompleted}`]
+    if (state.mode === "survival") {
+        lines.push(
+            `Time survived ${formatClock(state.tick)}`,
+            `Level reached ${levelFor(state.ordersCompleted) + 1}`
+        )
+    } else {
+        lines.push(`Orders failed ${state.ordersFailed}`)
+    }
+    return lines.join("\n")
+}
+
+// Title on the end-of-run panel: Survival ends when lives run out, Timed when the clock does.
+function gameOverTitle(state: GameState): string {
+    return state.mode === "timed" ? "Time's up" : "Game over"
+}
+
+// Modes the menu offers, in order. Puzzle joins once it has levels.
+const PLAYABLE_MODES: GameMode[] = ["survival", "timed"]
+
+function modeName(mode: GameMode): string {
+    switch (mode) {
+        case "survival":
+            return "Survival"
+        case "timed":
+            return "Timed"
+        case "puzzle":
+            return "Puzzle"
+    }
+}
+
+// Mode-picker button: the name, then a one-line description.
+function modeButtonText(mode: GameMode): string {
+    switch (mode) {
+        case "survival":
+            return "Survival\nLast as long as you can"
+        case "timed":
+            return `Timed\nBest score in ${formatClock(TIMED_MODE_TICKS)}`
+        case "puzzle":
+            return "Puzzle\nSolve handmade levels"
+    }
 }
 
 // Whole ticks as m:ss, rounding partial seconds up so 0:00 only shows at the very end.
@@ -75,7 +112,8 @@ function statRows(state: GameState, crops: CropTable): [string, string][] {
               ]
             : []
     return [
-        ["Time", timerText(state)],
+        ["Mode", modeName(state.mode)],
+        [state.mode === "timed" ? "Time left" : "Time", timerText(state)],
         ["Score", String(state.score)],
         ...survival,
         ["Filled", String(state.ordersCompleted)],
@@ -117,8 +155,10 @@ function parseSeed(text: string): number | undefined | null {
 
 // Line shown in the debug overlay.
 function debugText(state: GameState, seed: number, paused: boolean): string {
-    return `tick ${state.tick}  seed ${seed}${paused ? "  PAUSED" : ""}\nR restart  L log  P pause`
+    const pause = paused ? "  PAUSED" : ""
+    return `tick ${state.tick}  seed ${seed}  ${state.mode}${pause}\nR restart  L log  P pause`
 }
 
 export { orderTimeFraction, isOrderUrgent, parseSeed, debugText, MAX_SEED }
-export { heartsText, buyLifeText, gameOverText }
+export { heartsText, buyLifeText, gameOverText, gameOverTitle }
+export { PLAYABLE_MODES, modeName, modeButtonText }

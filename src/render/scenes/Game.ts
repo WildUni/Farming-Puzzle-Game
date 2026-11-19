@@ -43,7 +43,7 @@ export class Game extends Scene {
         super("Game")
     }
 
-    // The seed comes from the landing page, or from a restart. Survival until mode select exists.
+    // The seed and mode come from the mode select, or from a restart.
     init(data: Partial<GameData>) {
         this.seed = data.seed ?? 0
         this.mode = data.mode ?? "survival"
@@ -78,7 +78,11 @@ export class Game extends Scene {
             this.pause.bottom + GAP,
             () => this.act({ type: "buyLife" })
         )
-        this.gameOver = new GameOverView(this, () => this.restartNewSeed())
+        this.gameOver = new GameOverView(
+            this,
+            () => this.restartNewSeed(),
+            () => this.scene.start("MainMenu", { mode: this.mode })
+        )
         this.debug = this.add
             .text(MARGIN, this.scale.height - MARGIN, "", TEXT.debug)
             .setOrigin(0, 1)

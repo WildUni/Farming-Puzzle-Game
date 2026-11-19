@@ -13,6 +13,10 @@ import {
     heartsText,
     buyLifeText,
     gameOverText,
+    gameOverTitle,
+    modeName,
+    modeButtonText,
+    PLAYABLE_MODES,
     MAX_SEED
 } from "./format"
 import { createGame } from "../sim/main"
@@ -78,11 +82,32 @@ describe("orderText", () => {
     })
 })
 
+describe("PLAYABLE_MODES, modeName and modeButtonText", () => {
+    it("offers Survival then Timed", () => {
+        expect(PLAYABLE_MODES).toEqual(["survival", "timed"])
+    })
+
+    it("names every mode", () => {
+        expect(modeName("survival")).toBe("Survival")
+        expect(modeName("timed")).toBe("Timed")
+        expect(modeName("puzzle")).toBe("Puzzle")
+    })
+
+    it("describes each playable mode on a second line", () => {
+        expect(modeButtonText("survival")).toBe("Survival\nLast as long as you can")
+        expect(modeButtonText("timed")).toBe(
+            `Timed\nBest score in ${formatClock(TIMED_MODE_TICKS)}`
+        )
+        expect(modeButtonText("timed")).toBe("Timed\nBest score in 5:00")
+    })
+})
+
 describe("statRows", () => {
-    it("lists timer, score, order counts and every crop sorted", () => {
+    it("shows Timed's countdown, score, order counts and every crop sorted", () => {
         const state = { ...game("timed"), score: 12, ordersCompleted: 2, ordersFailed: 1 }
         expect(statRows({ ...state, inventory: { garlic: 5 } }, crops)).toEqual([
-            ["Time", "5:00"],
+            ["Mode", "Timed"],
+            ["Time left", "5:00"],
             ["Score", "12"],
             ["Filled", "2"],
             ["Failed", "1"],
@@ -101,6 +126,7 @@ describe("statRows", () => {
             coins: 9
         }
         expect(statRows(state, crops)).toEqual([
+            ["Mode", "Survival"],
             ["Time", "1:00"],
             ["Score", "30"],
             ["Level", "2"],
@@ -111,6 +137,12 @@ describe("statRows", () => {
             ["carrot", "0"],
             ["garlic", "0"]
         ])
+    })
+
+    it("leaves Survival-only rows out of Timed, even with coins or lives set", () => {
+        const state = { ...game("timed"), lives: 2, coins: 9, ordersCompleted: 40 }
+        const labels = statRows(state, crops).map(([label]) => label)
+        for (const row of ["Level", "Lives", "Coins"]) expect(labels).not.toContain(row)
     })
 })
 
@@ -131,8 +163,26 @@ describe("buyLifeText", () => {
     })
 })
 
+describe("gameOverTitle", () => {
+    it("says Game over in Survival and Time's up in Timed", () => {
+        expect(gameOverTitle(game("survival"))).toBe("Game over")
+        expect(gameOverTitle(game("timed"))).toBe("Time's up")
+    })
+})
+
 describe("gameOverText", () => {
-    it("shows score, orders filled, time survived and level reached", () => {
+    it("shows score and order counts in Timed", () => {
+        const state = {
+            ...game("timed"),
+            tick: TIMED_MODE_TICKS,
+            score: 340,
+            ordersCompleted: 12,
+            ordersFailed: 3
+        }
+        expect(gameOverText(state)).toBe("Score 340\nOrders filled 12\nOrders failed 3")
+    })
+
+    it("shows score, orders filled, time survived and level reached in Survival", () => {
         const state = { ...game("survival"), tick: 3050, score: 120, ordersCompleted: 7 }
         expect(gameOverText(state)).toBe(
             `Score 120\nOrders filled 7\nTime survived 5:05\nLevel reached ${levelFor(7) + 1}`
@@ -197,9 +247,9 @@ describe("parseSeed", () => {
 })
 
 describe("debugText", () => {
-    it("shows tick and seed, and marks a paused game", () => {
-        const state = game("timed")
-        expect(debugText(state, 7, false)).toContain("tick 0  seed 7\n")
-        expect(debugText(state, 7, true)).toContain("PAUSED")
+    it("shows tick, seed and mode, and marks a paused game", () => {
+        expect(debugText(game("timed"), 7, false)).toContain("tick 0  seed 7  timed\n")
+        expect(debugText(game("survival"), 7, false)).toContain("tick 0  seed 7  survival\n")
+        expect(debugText(game("timed"), 7, true)).toContain("PAUSED")
     })
 })

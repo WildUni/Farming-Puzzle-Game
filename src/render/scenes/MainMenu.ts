@@ -1,19 +1,34 @@
-// Landing page: logo, a seed field and a Play button. A blank seed picks one at random.
+// Landing page: logo, a seed field, a mode picker and a Play button.
+// A blank seed picks one at random. See specs/ui.md.
 import { Scene, GameObjects } from "phaser"
-import { parseSeed, MAX_SEED } from "../format"
+import type { GameMode } from "../../sim/types"
+import { parseSeed, MAX_SEED, PLAYABLE_MODES, modeButtonText } from "../format"
 import { COLORS, TEXT, addBackground } from "../theme"
 
 const FIELD_W = 360
 const FIELD_H = 64
 const BUTTON_W = 240
 const BUTTON_H = 80
+const MODE_W = 280
+const MODE_H = 110
+const MODE_GAP = 24
+
+type MenuData = { mode: GameMode }
+type ModeButton = { mode: GameMode; box: GameObjects.Rectangle }
 
 export class MainMenu extends Scene {
     private seedField: HTMLInputElement
     private error: GameObjects.Text
+    private mode: GameMode
+    private modeButtons: ModeButton[]
 
     constructor() {
         super("MainMenu")
+    }
+
+    // Coming back from a run selects the mode that was just played.
+    init(data: Partial<MenuData>) {
+        this.mode = data.mode ?? "survival"
     }
 
     create() {
@@ -59,16 +74,41 @@ export class MainMenu extends Scene {
             })
             .setOrigin(0.5)
 
+        this.add.text(centerX, centerY + 60, "Mode", TEXT.title).setOrigin(0.5)
+        const rowW = PLAYABLE_MODES.length * MODE_W + (PLAYABLE_MODES.length - 1) * MODE_GAP
+        this.modeButtons = PLAYABLE_MODES.map((mode, i) => {
+            const x = centerX - rowW / 2 + MODE_W / 2 + i * (MODE_W + MODE_GAP)
+            const y = centerY + 150
+            const box = this.add
+                .rectangle(x, y, MODE_W, MODE_H, COLORS.button)
+                .setInteractive({ useHandCursor: true })
+                .on("pointerdown", () => this.selectMode(mode))
+            this.add
+                .text(x, y, modeButtonText(mode), { ...TEXT.label, fontSize: 22 })
+                .setOrigin(0.5)
+            return { mode, box }
+        })
+        this.selectMode(this.mode)
+
+        const playY = centerY + 300
         const button = this.add
-            .rectangle(centerX, centerY + 100, BUTTON_W, BUTTON_H, COLORS.button)
+            .rectangle(centerX, playY, BUTTON_W, BUTTON_H, COLORS.button)
             .setStrokeStyle(3, COLORS.cardStroke)
             .setInteractive({ useHandCursor: true })
             .on("pointerover", () => button.setFillStyle(COLORS.buttonHover))
             .on("pointerout", () => button.setFillStyle(COLORS.button))
             .on("pointerdown", () => this.play())
-        this.add
-            .text(centerX, centerY + 100, "Play", { ...TEXT.label, fontSize: 36 })
-            .setOrigin(0.5)
+        this.add.text(centerX, playY, "Play", { ...TEXT.label, fontSize: 36 }).setOrigin(0.5)
+    }
+
+    // Selecting a mode only highlights it; Play starts the run.
+    private selectMode(mode: GameMode): void {
+        this.mode = mode
+        for (const b of this.modeButtons) {
+            const selected = b.mode === mode
+            b.box.setFillStyle(selected ? COLORS.button : COLORS.buttonDisabled)
+            b.box.setStrokeStyle(selected ? 5 : 2, selected ? COLORS.highlight : COLORS.cardStroke)
+        }
     }
 
     private play(): void {
@@ -78,6 +118,6 @@ export class MainMenu extends Scene {
             return
         }
         const seed = parsed ?? Math.floor(Math.random() * (MAX_SEED + 1))
-        this.scene.start("Game", { seed })
+        this.scene.start("Game", { seed, mode: this.mode })
     }
 }

@@ -14,6 +14,8 @@ One spec per module in `src/sim/`. Each spec says what the module is for, what i
 | `src/sim/scoring.ts`        | [scoring.md](scoring.md)               | Score calculation                                               |
 | `src/sim/verification.ts`   | [verification.md](verification.md)     | Replays a run from its seed and action log, for checking scores |
 
+Screens are specified in [ui.md](ui.md): mode select, the stats each mode shows, and the end-of-run panel.
+
 ## Rules for every sim module
 
 - **No Phaser or browser imports.** `src/sim/` must run in plain Node so the tests and a server-side replay can use it.
