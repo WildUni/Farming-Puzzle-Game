@@ -2,8 +2,13 @@ import { describe, it, expect } from "vitest"
 import { createOrder, canFulfill, fulfill, isExpired, timeLeft } from "./orders"
 import { buildCropTable } from "./plot"
 import { seedRNG, nextValue } from "./mulberry"
-import { ORDER_TICKS, ORDER_MIN_AMOUNT, ORDER_MAX_AMOUNT } from "./game_constants"
-import type { Crop, Order } from "./types"
+import {
+    ORDER_TICKS,
+    ORDER_MIN_AMOUNT,
+    ORDER_MAX_AMOUNT,
+    DEFAULT_ORDER_RULES
+} from "./game_constants"
+import type { Crop, Order, OrderRules } from "./types"
 
 const cropList: Crop[] = [
     { id: "garlic", growTicks: 80, yield: 2, value: 2 },
@@ -82,10 +87,65 @@ describe("createOrder", () => {
     it("throws for an empty crop table", () => {
         expect(() => createOrder(0, 0, seedRNG(1), {})).toThrow()
     })
+
+    it("records its time limit", () => {
+        const [order] = createOrder(0, 100, seedRNG(1), crops)
+        expect(order.timeLimit).toBe(ORDER_TICKS)
+    })
 })
 
-const garlicOrder: Order = { id: 0, required: { garlic: 3 }, value: 6, expiresAt: 600 }
-const mixedOrder: Order = { id: 1, required: { garlic: 2, carrot: 1 }, value: 12, expiresAt: 600 }
+describe("createOrder with rules", () => {
+    const rules: OrderRules = { maxOpenOrders: 3, orderTicks: 250, minAmount: 7, maxAmount: 9 }
+
+    it("uses the rules' time limit", () => {
+        const [order] = createOrder(0, 100, seedRNG(1), crops, rules)
+        expect(order.expiresAt).toBe(350)
+        expect(order.timeLimit).toBe(250)
+    })
+
+    it("keeps the amount in the rules' range and reaches every value", () => {
+        const seen = new Set<number>()
+        for (const seed of SEEDS) {
+            const [order] = createOrder(0, 0, seedRNG(seed), crops, rules)
+            const [cropId, amount] = Object.entries(order.required)[0]
+            expect(amount).toBeGreaterThanOrEqual(7)
+            expect(amount).toBeLessThanOrEqual(9)
+            expect(order.value).toBe(amount * crops[cropId].value)
+            seen.add(amount)
+        }
+        expect([...seen].sort()).toEqual([7, 8, 9])
+    })
+
+    it("still uses exactly two draws", () => {
+        const start = seedRNG(42)
+        const [, afterOne] = nextValue(start)
+        const [, afterTwo] = nextValue(afterOne)
+        expect(createOrder(0, 0, start, crops, rules)[1]).toBe(afterTwo)
+    })
+
+    it("defaults to DEFAULT_ORDER_RULES", () => {
+        for (const seed of SEEDS.slice(0, 20)) {
+            expect(createOrder(1, 5, seedRNG(seed), crops)).toEqual(
+                createOrder(1, 5, seedRNG(seed), crops, DEFAULT_ORDER_RULES)
+            )
+        }
+    })
+})
+
+const garlicOrder: Order = {
+    id: 0,
+    required: { garlic: 3 },
+    value: 6,
+    expiresAt: 600,
+    timeLimit: 600
+}
+const mixedOrder: Order = {
+    id: 1,
+    required: { garlic: 2, carrot: 1 },
+    value: 12,
+    expiresAt: 600,
+    timeLimit: 600
+}
 
 describe("canFulfill", () => {
     it("is true with exactly enough or more", () => {

@@ -10,10 +10,14 @@ import {
     isOrderUrgent,
     parseSeed,
     debugText,
+    heartsText,
+    buyLifeText,
+    gameOverText,
     MAX_SEED
 } from "./format"
 import { createGame } from "../sim/main"
 import { buildCropTable } from "../sim/plot"
+import { lifePrice, levelFor, DIFFICULTY } from "../sim/difficulty"
 import { TIMED_MODE_TICKS, ORDER_TICKS } from "../sim/game_constants"
 import type { GameState, Order } from "../sim/types"
 
@@ -62,7 +66,13 @@ describe("plotText", () => {
 
 describe("orderText", () => {
     it("shows crops needed, amount held, value and time left", () => {
-        const order: Order = { id: 3, required: { garlic: 4 }, value: 8, expiresAt: 600 }
+        const order: Order = {
+            id: 3,
+            required: { garlic: 4 },
+            value: 8,
+            expiresAt: 600,
+            timeLimit: 600
+        }
         const state = { ...game("timed"), tick: 100, inventory: { garlic: 2 } }
         expect(orderText(order, state)).toBe("Order #3\ngarlic x4  (have 2)\nvalue 8   0:50")
     })
@@ -80,6 +90,54 @@ describe("statRows", () => {
             ["garlic", "5"]
         ])
     })
+
+    it("adds level, lives and coins in Survival", () => {
+        const state = {
+            ...game("survival"),
+            tick: 600,
+            score: 30,
+            ordersCompleted: DIFFICULTY.ordersPerLevel,
+            lives: 2,
+            coins: 9
+        }
+        expect(statRows(state, crops)).toEqual([
+            ["Time", "1:00"],
+            ["Score", "30"],
+            ["Level", "2"],
+            ["Lives", "♥♥"],
+            ["Coins", "9"],
+            ["Filled", String(DIFFICULTY.ordersPerLevel)],
+            ["Failed", "0"],
+            ["carrot", "0"],
+            ["garlic", "0"]
+        ])
+    })
+})
+
+describe("heartsText", () => {
+    it("shows one heart per life up to 5, then a count", () => {
+        expect(heartsText(0)).toBe("none")
+        expect(heartsText(1)).toBe("♥")
+        expect(heartsText(3)).toBe("♥♥♥")
+        expect(heartsText(5)).toBe("♥♥♥♥♥")
+        expect(heartsText(7)).toBe("♥ x7")
+    })
+})
+
+describe("buyLifeText", () => {
+    it("shows the next life's price", () => {
+        const state = { ...game("survival"), livesBought: 2 }
+        expect(buyLifeText(state)).toBe(`Buy life\n${lifePrice(2)} coins`)
+    })
+})
+
+describe("gameOverText", () => {
+    it("shows score, orders filled, time survived and level reached", () => {
+        const state = { ...game("survival"), tick: 3050, score: 120, ordersCompleted: 7 }
+        expect(gameOverText(state)).toBe(
+            `Score 120\nOrders filled 7\nTime survived 5:05\nLevel reached ${levelFor(7) + 1}`
+        )
+    })
 })
 
 describe("cropButtonText", () => {
@@ -89,12 +147,27 @@ describe("cropButtonText", () => {
 })
 
 describe("orderTimeFraction and isOrderUrgent", () => {
-    const order: Order = { id: 0, required: { garlic: 2 }, value: 4, expiresAt: ORDER_TICKS }
+    const order: Order = {
+        id: 0,
+        required: { garlic: 2 },
+        value: 4,
+        expiresAt: ORDER_TICKS,
+        timeLimit: ORDER_TICKS
+    }
 
     it("runs from 1 when the order opens to 0 on its last tick", () => {
         expect(orderTimeFraction(order, 0)).toBe(1)
         expect(orderTimeFraction(order, ORDER_TICKS / 2)).toBe(0.5)
         expect(orderTimeFraction(order, ORDER_TICKS)).toBe(0)
+    })
+
+    it("measures against the order's own time limit", () => {
+        const long: Order = { ...order, expiresAt: 100 + 900, timeLimit: 900 }
+        expect(orderTimeFraction(long, 100)).toBe(1)
+        expect(orderTimeFraction(long, 550)).toBe(0.5)
+        const short: Order = { ...order, expiresAt: 200, timeLimit: 200 }
+        expect(orderTimeFraction(short, 0)).toBe(1)
+        expect(isOrderUrgent(short, 150)).toBe(true)
     })
 
     it("is urgent only in the last quarter", () => {

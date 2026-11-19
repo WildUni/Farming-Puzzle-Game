@@ -1,8 +1,32 @@
 // Text shown on screen, built from plain state. No Phaser imports so it can be unit tested.
 import type { GameState, Order, Plot, Crop, CropTable } from "../sim/types"
-import { TICKS_PER_SECOND, TIMED_MODE_TICKS, ORDER_TICKS } from "../sim/game_constants"
+import { TICKS_PER_SECOND, TIMED_MODE_TICKS } from "../sim/game_constants"
 import { progress } from "../sim/plot"
 import { timeLeft } from "../sim/orders"
+import { levelFor, lifePrice } from "../sim/difficulty"
+
+const MAX_HEARTS = 5 // more lives than this show as a count
+
+// Lives as hearts: one per life up to MAX_HEARTS, then "♥ xN".
+function heartsText(lives: number): string {
+    if (lives <= 0) return "none"
+    return lives <= MAX_HEARTS ? "♥".repeat(lives) : `♥ x${lives}`
+}
+
+// Label on the buy-life button, with the next life's price.
+function buyLifeText(state: GameState): string {
+    return `Buy life\n${lifePrice(state.livesBought)} coins`
+}
+
+// Summary on the game-over panel. Levels are shown counted from 1.
+function gameOverText(state: GameState): string {
+    return [
+        `Score ${state.score}`,
+        `Orders filled ${state.ordersCompleted}`,
+        `Time survived ${formatClock(state.tick)}`,
+        `Level reached ${levelFor(state.ordersCompleted) + 1}`
+    ].join("\n")
+}
 
 // Whole ticks as m:ss, rounding partial seconds up so 0:00 only shows at the very end.
 function formatClock(ticks: number): string {
@@ -42,9 +66,18 @@ function orderText(order: Order, state: GameState): string {
 
 // Rows for the stats table, in display order. Inventory lists every crop, even at 0.
 function statRows(state: GameState, crops: CropTable): [string, string][] {
+    const survival: [string, string][] =
+        state.mode === "survival"
+            ? [
+                  ["Level", String(levelFor(state.ordersCompleted) + 1)],
+                  ["Lives", heartsText(state.lives)],
+                  ["Coins", String(state.coins)]
+              ]
+            : []
     return [
         ["Time", timerText(state)],
         ["Score", String(state.score)],
+        ...survival,
         ["Filled", String(state.ordersCompleted)],
         ["Failed", String(state.ordersFailed)],
         ...Object.keys(crops)
@@ -60,9 +93,9 @@ function cropButtonText(crop: Crop): string {
 
 export { formatClock, timerText, plotText, orderText, statRows, cropButtonText }
 
-// Share of an order's time still left, from 1 (just opened) to 0 (last tick).
+// Share of an order's own time limit still left, from 1 (just opened) to 0 (last tick).
 function orderTimeFraction(order: Order, now: number): number {
-    return Math.min(1, timeLeft(order, now) / ORDER_TICKS)
+    return Math.min(1, timeLeft(order, now) / order.timeLimit)
 }
 
 // True in the last quarter of an order's time, when its countdown bar turns red.
@@ -88,3 +121,4 @@ function debugText(state: GameState, seed: number, paused: boolean): string {
 }
 
 export { orderTimeFraction, isOrderUrgent, parseSeed, debugText, MAX_SEED }
+export { heartsText, buyLifeText, gameOverText }

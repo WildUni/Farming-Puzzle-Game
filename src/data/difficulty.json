@@ -1,0 +1,15 @@
+{
+    "startLives": 3,
+    "coinsPerOrder": 4,
+    "lifePrice": { "base": 10, "growth": 1.5 },
+    "ordersPerLevel": 5,
+    "levels": [
+        { "orderTimeMultiplier": 1.5, "maxOpenOrders": 1, "minAmount": 2, "maxAmount": 4 },
+        { "orderTimeMultiplier": 1.25, "maxOpenOrders": 2, "minAmount": 2, "maxAmount": 5 },
+        { "orderTimeMultiplier": 1.0, "maxOpenOrders": 2, "minAmount": 3, "maxAmount": 6 },
+        { "orderTimeMultiplier": 0.85, "maxOpenOrders": 3, "minAmount": 3, "maxAmount": 7 },
+        { "orderTimeMultiplier": 0.7, "maxOpenOrders": 3, "minAmount": 4, "maxAmount": 8 },
+        { "orderTimeMultiplier": 0.55, "maxOpenOrders": 3, "minAmount": 5, "maxAmount": 9 },
+        { "orderTimeMultiplier": 0.45, "maxOpenOrders": 4, "minAmount": 6, "maxAmount": 10 }
+    ]
+}

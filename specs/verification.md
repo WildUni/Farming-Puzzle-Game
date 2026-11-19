@@ -75,6 +75,8 @@ Rules:
 - A scripted player (harvest every ready plot, deliver every order it can, plant every empty plot for the first open order) gives a final state equal to replaying its log, over several seeds and in both Survival and Timed.
 - A weaker scripted player that only plants garlic lets orders fail, and its runs also replay equal.
 - A full Timed run ends with `status: 'ended'` and replays equal.
+- A full Survival run, played until lives run out by a player that also buys lives whenever it can, ends with `status: 'ended'`, has `buyLife` entries in its log, and replays equal.
+- `after-end`: an action logged after a Survival run ran out of lives.
 - Actions on tick 0, and several actions on the same tick, replay correctly.
 - The same arguments give equal results, and the log is not changed.
 

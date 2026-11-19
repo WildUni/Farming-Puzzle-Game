@@ -29,6 +29,15 @@ type Order = {
     required: Record<string, number> // cropId -> amount
     value: number
     expiresAt: number // last tick the order can be filled; fails on the tick after
+    timeLimit: number // ticks the order was given when created
+}
+
+// How step creates orders at the current difficulty.
+type OrderRules = {
+    maxOpenOrders: number
+    orderTicks: number
+    minAmount: number
+    maxAmount: number
 }
 
 type GameState = {
@@ -43,12 +52,16 @@ type GameState = {
     score: number
     ordersCompleted: number
     ordersFailed: number
+    lives: number // Survival only; the run ends at 0
+    coins: number // in-run coins, reset every run
+    livesBought: number // sets the next life's price
 }
 
 type Action =
     | { type: "plant"; plot: number; cropId: string }
     | { type: "harvest"; plot: number }
     | { type: "deliver"; orderId: number }
+    | { type: "buyLife" }
 
 type LogEntry = { tick: number; action: Action }
 
@@ -59,10 +72,12 @@ type GameConfig = {
 
 export type {
     RunData,
+    GameMode,
     GameState,
     GameStatus,
     GameConfig,
     Order,
+    OrderRules,
     Plot,
     RNGState,
     RNGSeed,

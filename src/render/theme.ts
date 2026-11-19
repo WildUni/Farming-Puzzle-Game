@@ -21,6 +21,7 @@ const COLORS = {
     highlight: 0xffffff,
     button: 0x4e7d2a,
     buttonHover: 0x659c38,
+    buttonDisabled: 0x7a7a6e, // a button that can't be used right now
     barTrack: 0x3b2a14, // empty part of a progress or countdown bar
     barFill: 0x7fd34e, // growth and countdown bar
     barUrgent: 0xd8342c, // countdown bar in an order's last quarter

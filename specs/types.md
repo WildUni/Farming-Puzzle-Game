@@ -41,13 +41,33 @@ type Plot =
 ### `Order`
 
 ```ts
-type Order = { id: number; required: Record<string, number>; value: number; expiresAt: number }
+type Order = {
+    id: number
+    required: Record<string, number>
+    value: number
+    expiresAt: number
+    timeLimit: number
+}
 ```
 
 - `id`: unique within a run, taken from `GameState.nextOrderId`. Actions name orders by id, not by position in the list.
 - `required`: crop id → amount needed.
 - `value`: score awarded when the order is filled.
 - `expiresAt`: the last tick the order can be filled. It fails on tick `expiresAt + 1`.
+- `timeLimit`: the ticks the order was given when created (`expiresAt − createdTick`). Time limits change with the Survival level, so the countdown bar reads this instead of `ORDER_TICKS`.
+
+### `OrderRules`
+
+```ts
+type OrderRules = {
+    maxOpenOrders: number
+    orderTicks: number
+    minAmount: number
+    maxAmount: number
+}
+```
+
+How `step` creates orders at the current difficulty: how many it keeps open, each new order's time limit, and the range for its amount. Timed uses the fixed `DEFAULT_ORDER_RULES`; Survival reads them from the current level (see [difficulty.md](difficulty.md)).
 
 ### `GameState`
 
@@ -65,6 +85,11 @@ Everything that changes during a run. If `step` or `replay` would give a differe
 | `nextOrderId`                     | Id for the next order created                                             |
 | `score`                           | Points so far                                                             |
 | `ordersCompleted`, `ordersFailed` | Run counters                                                              |
+| `lives`                           | Lives left (Survival). The run ends at 0. Always 0 in other modes         |
+| `coins`                           | In-run coins, earned by filling orders in Survival. Reset every run       |
+| `livesBought`                     | Lives bought this run. Sets the next life's price                         |
+
+The Survival level and the next life's price are worked out from `ordersCompleted` and `livesBought` (see [difficulty.md](difficulty.md)), so they are not stored.
 
 **Not in `GameState`:** crop stats, constants, `GameConfig`, the action log, anything that can be worked out (time left, growth progress), and anything only the screen needs (open menus, animations, pause).
 
@@ -83,6 +108,7 @@ type Action =
     | { type: "plant"; plot: number; cropId: string }
     | { type: "harvest"; plot: number }
     | { type: "deliver"; orderId: number }
+    | { type: "buyLife" }
 ```
 
 One player move, passed to `applyAction` (see [main.md](main.md)).
@@ -118,5 +144,5 @@ Input to `calcScore` (see [scoring.md](scoring.md)).
 ## Open items
 
 - [ ] `RunData` repeats information already in `GameState` (`ordersCompleted`, `tick`, `score`) and uses snake_case while the rest uses camelCase. Decide whether scoring should read `GameState` directly.
-- [ ] Add Survival fields (`lives`, `coins`, `lifePrice`) when Survival rules are built.
+- [x] Add Survival fields (`lives`, `coins`, `livesBought`). The life price is derived from `livesBought` instead of stored.
 - [ ] Add plot modifiers (fertilizer, weeds, blocked) as a `modifiers` list when needed. Growth would then need a stored `progress` field instead of `plantedAt`.

@@ -8,6 +8,7 @@ One spec per module in `src/sim/`. Each spec says what the module is for, what i
 | `src/sim/game_constants.ts` | [game_constants.md](game_constants.md) | Tuning numbers (tick rate, time limits, starting plots)         |
 | `src/sim/main.ts`           | [main.md](main.md)                     | Whole-game functions: `createGame`, `applyAction`, `step`       |
 | `src/sim/mulberry.ts`       | [mulberry.md](mulberry.md)             | Seeded random number generator                                  |
+| `src/sim/difficulty.ts`     | [difficulty.md](difficulty.md)         | Survival lives, coins, life prices and difficulty levels        |
 | `src/sim/plot.ts`           | [plot.md](plot.md)                     | Rules for a single plot, plus the crop table                    |
 | `src/sim/orders.ts`         | [orders.md](orders.md)                 | Rules for a single order: creating, filling, expiring           |
 | `src/sim/scoring.ts`        | [scoring.md](scoring.md)               | Score calculation                                               |

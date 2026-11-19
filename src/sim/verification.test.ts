@@ -36,6 +36,11 @@ function garlicOnly(state: GameState): Action[] {
     return botMoves(state).map((a): Action => (a.type === "plant" ? { ...a, cropId: "garlic" } : a))
 }
 
+// Like botMoves, but first buys a life whenever it can afford one.
+function buyer(state: GameState): Action[] {
+    return [{ type: "buyLife" }, ...botMoves(state)]
+}
+
 // Plays a run the way the client game loop does (see specs/verification.md)
 // and returns the final state with the log of accepted actions.
 function play(
@@ -107,6 +112,17 @@ describe("replay: matches the original run", () => {
         expect(state.tick).toBe(TIMED_MODE_TICKS)
         expect(replayState(7, timed, log, TIMED_MODE_TICKS, crops)).toEqual(state)
     })
+
+    it.each([1, 2, 3])(
+        "replays a full Survival run that runs out of lives, with lives bought (seed %i)",
+        (seed) => {
+            const { state, log } = play(seed, survival, 100_000, buyer)
+            expect(state.status).toBe("ended")
+            expect(state.lives).toBe(0)
+            expect(log.some((e) => e.action.type === "buyLife")).toBe(true)
+            expect(replayState(seed, survival, log, state.tick, crops)).toEqual(state)
+        }
+    )
 
     it("replays actions on tick 0 and several actions on one tick", () => {
         const log: LogEntry[] = [
@@ -208,6 +224,28 @@ describe("replay: rejects bad logs", () => {
             ok: false,
             error: "after-end",
             entry: 0
+        })
+    })
+
+    it("rejects an action after a Survival run ran out of lives", () => {
+        // Nobody plays, so orders fail until the lives are gone.
+        let ended = createGame(1, survival)
+        while (ended.status === "running") ended = step(ended, crops)
+        const end = ended.tick
+        expect(replay(1, survival, [], end, crops).ok).toBe(true)
+
+        const log: LogEntry[] = [
+            { tick: end, action: { type: "plant", plot: 0, cropId: "garlic" } }
+        ]
+        expect(replay(1, survival, log, end, crops)).toEqual({
+            ok: false,
+            error: "after-end",
+            entry: 0
+        })
+        expect(replay(1, survival, [], end + 1, crops)).toEqual({
+            ok: false,
+            error: "bad-final-tick",
+            entry: null
         })
     })
 

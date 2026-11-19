@@ -1,21 +1,29 @@
-import type { Order, CropTable, RNGState, Inventory } from "./types"
+import type { Order, OrderRules, CropTable, RNGState, Inventory } from "./types"
 import { pick, randomInt } from "./mulberry"
-import { ORDER_TICKS, ORDER_MIN_AMOUNT, ORDER_MAX_AMOUNT } from "./game_constants"
+import { DEFAULT_ORDER_RULES } from "./game_constants"
 
 // Creates a random single-crop order. Uses exactly two random draws:
 // the first picks the crop, the second picks the amount.
-function createOrder(id: number, now: number, rng: RNGState, crops: CropTable): [Order, RNGState] {
+// `rules` sets the time limit and amount range (maxOpenOrders is step's concern).
+function createOrder(
+    id: number,
+    now: number,
+    rng: RNGState,
+    crops: CropTable,
+    rules: OrderRules = DEFAULT_ORDER_RULES
+): [Order, RNGState] {
     const ids = Object.keys(crops).sort()
     if (ids.length === 0) throw new Error("createOrder: crop table is empty")
 
     const [cropId, afterCrop] = pick(rng, ids)
-    const [amount, afterAmount] = randomInt(afterCrop, ORDER_MIN_AMOUNT, ORDER_MAX_AMOUNT)
+    const [amount, afterAmount] = randomInt(afterCrop, rules.minAmount, rules.maxAmount)
 
     const order: Order = {
         id,
         required: { [cropId]: amount },
         value: amount * crops[cropId].value,
-        expiresAt: now + ORDER_TICKS
+        expiresAt: now + rules.orderTicks,
+        timeLimit: rules.orderTicks
     }
     return [order, afterAmount]
 }

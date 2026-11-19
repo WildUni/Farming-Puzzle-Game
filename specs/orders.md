@@ -23,14 +23,15 @@ These are starting values for tuning. With them, every order can be filled with 
 
 ## Exports
 
-### `createOrder(id, now, rng, crops): [Order, RNGState]`
+### `createOrder(id, now, rng, crops, rules?): [Order, RNGState]`
 
-| Argument | Type        | Meaning                                                  |
-| -------- | ----------- | -------------------------------------------------------- |
-| `id`     | `number`    | The order's id. `main.ts` passes `GameState.nextOrderId` |
-| `now`    | `number`    | Current tick                                             |
-| `rng`    | `RNGState`  | Current generator state                                  |
-| `crops`  | `CropTable` | Crops that orders can ask for                            |
+| Argument | Type         | Meaning                                                                    |
+| -------- | ------------ | -------------------------------------------------------------------------- |
+| `id`     | `number`     | The order's id. `main.ts` passes `GameState.nextOrderId`                   |
+| `now`    | `number`     | Current tick                                                               |
+| `rng`    | `RNGState`   | Current generator state                                                    |
+| `crops`  | `CropTable`  | Crops that orders can ask for                                              |
+| `rules`  | `OrderRules` | Time limit and amount range. Defaults to `DEFAULT_ORDER_RULES` (constants) |
 
 Returns the new order and the new RNG state, which the caller must store back into `GameState.rngState`.
 
@@ -38,10 +39,10 @@ Rules:
 
 1. An order asks for **one crop type**. Orders with several crops come later.
 2. **Crop:** chosen from the crop table's ids **sorted alphabetically**, using the first random draw: `pick(rng, ids)`. Sorting means the result doesn't depend on the order of crops in `crops.json`.
-3. **Amount:** a whole number from `ORDER_MIN_AMOUNT` to `ORDER_MAX_AMOUNT` inclusive, using the second random draw: `randomInt(state, ORDER_MIN_AMOUNT, ORDER_MAX_AMOUNT)`.
-4. **Exactly two draws.** The returned state is the input state advanced twice with `nextValue`.
+3. **Amount:** a whole number from `rules.minAmount` to `rules.maxAmount` inclusive, using the second random draw: `randomInt(state, rules.minAmount, rules.maxAmount)`.
+4. **Exactly two draws.** The returned state is the input state advanced twice with `nextValue`, whatever the rules.
 5. **Value:** `amount × crop.value`.
-6. **Expiry:** `expiresAt = now + ORDER_TICKS`.
+6. **Expiry:** `expiresAt = now + rules.orderTicks`, and `timeLimit = rules.orderTicks`. `rules.maxOpenOrders` is not used here.
 7. **Deterministic:** the same arguments always give an equal result.
 8. **Empty crop table:** throws an `Error`. This is a setup mistake, not a player move, so it doesn't return `null`.
 
@@ -81,6 +82,8 @@ Rules:
 - The returned RNG state equals the input state advanced twice.
 - Gives the same order whatever order the crop list is in.
 - Throws for an empty crop table.
+- With custom rules: `expiresAt = now + rules.orderTicks`, `timeLimit = rules.orderTicks`, the amount stays in the rules' range, and still exactly two draws are used.
+- Without rules, gives the same order as passing `DEFAULT_ORDER_RULES`.
 
 **`canFulfill`**
 
@@ -104,6 +107,7 @@ Rules:
 
 - [ ] Orders with several crop types, possibly once the player has more crops unlocked.
 - [ ] Ask only for crops the player brought into the run (from the design doc). That only needs `main.ts` to pass a smaller crop table.
-- [ ] Scale the time limit with difficulty, the crop's growth time or the amount asked for.
+- [x] Scale the time limit and amount with difficulty (`rules`, from [difficulty.md](difficulty.md)).
+- [ ] Scale the time limit with the crop's growth time or the amount asked for.
 - [ ] Rush orders and picky customers (events from the design doc).
 - [x] Use `pick` and `randomInt` from `mulberry.ts` instead of a local helper (see [mulberry.md](mulberry.md)).

@@ -11,10 +11,12 @@ export class PauseView {
     private shade: GameObjects.Rectangle
     private banner: GameObjects.Text
     private label: GameObjects.Text
+    readonly bottom: number // y just below the button, for laying out what goes under it
 
     // (right, top) is the button's top-right corner.
     constructor(scene: Scene, right: number, top: number, onToggle: () => void) {
         const { width, height } = scene.scale
+        this.bottom = top + BUTTON_H
 
         this.shade = scene.add
             .rectangle(0, 0, width, height, COLORS.shade, 0.5)

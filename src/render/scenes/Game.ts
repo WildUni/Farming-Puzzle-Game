@@ -1,26 +1,29 @@
 import { Scene, GameObjects } from "phaser"
-import type { Action, CropTable, GameState, LogEntry } from "../../sim/types"
+import type { Action, CropTable, GameMode, GameState, LogEntry } from "../../sim/types"
 import { createGame, applyAction, step } from "../../sim/main"
 import { TICKS_PER_SECOND } from "../../sim/game_constants"
-import { debugText } from "../format"
+import { debugText, MAX_SEED } from "../format"
 import { COLORS, MARGIN, TEXT } from "../theme"
 import { OrdersView } from "../views/OrdersView"
 import { StatsView } from "../views/StatsView"
 import { PlotsView } from "../views/PlotsView"
 import { PlantPicker } from "../views/PlantPicker"
 import { PauseView } from "../views/PauseView"
+import { BuyLifeView } from "../views/BuyLifeView"
+import { GameOverView } from "../views/GameOverView"
 
 const MS_PER_TICK = 1000 / TICKS_PER_SECOND
 const MAX_CATCH_UP_TICKS = 5 // a background tab doesn't jump ahead when it comes back
 const GAP = 12
 
-type GameData = { seed: number }
+type GameData = { seed: number; mode: GameMode }
 
 // Owns one run: holds the GameState, advances it on a fixed tick, turns clicks into
 // actions, and hands each new state to the views.
 export class Game extends Scene {
     private crops: CropTable
     private seed: number
+    private mode: GameMode
     private state: GameState
     private log: LogEntry[]
     private elapsed: number
@@ -32,22 +35,25 @@ export class Game extends Scene {
     private plots: PlotsView
     private picker: PlantPicker
     private pause: PauseView
+    private buyLife: BuyLifeView
+    private gameOver: GameOverView
     private debug: GameObjects.Text
 
     constructor() {
         super("Game")
     }
 
-    // The seed comes from the landing page, or from the restart key.
+    // The seed comes from the landing page, or from a restart. Survival until mode select exists.
     init(data: Partial<GameData>) {
         this.seed = data.seed ?? 0
+        this.mode = data.mode ?? "survival"
     }
 
     create() {
         this.cameras.main.setBackgroundColor(COLORS.background)
 
         this.crops = this.registry.get("crops") as CropTable
-        this.state = createGame(this.seed, { mode: "timed", allowPowerUps: false })
+        this.state = createGame(this.seed, { mode: this.mode, allowPowerUps: false })
         this.log = []
         this.elapsed = 0
         this.paused = false
@@ -66,6 +72,13 @@ export class Game extends Scene {
         this.pause = new PauseView(this, this.scale.width - MARGIN, this.stats.bottom + GAP, () =>
             this.togglePause()
         )
+        this.buyLife = new BuyLifeView(
+            this,
+            this.scale.width - MARGIN,
+            this.pause.bottom + GAP,
+            () => this.act({ type: "buyLife" })
+        )
+        this.gameOver = new GameOverView(this, () => this.restartNewSeed())
         this.debug = this.add
             .text(MARGIN, this.scale.height - MARGIN, "", TEXT.debug)
             .setOrigin(0, 1)
@@ -74,7 +87,7 @@ export class Game extends Scene {
         const keys = this.input.keyboard!
         keys.on("keydown-P", () => this.togglePause())
         keys.on("keydown-ESC", () => this.togglePause())
-        keys.on("keydown-R", () => this.scene.restart({ seed: this.seed }))
+        keys.on("keydown-R", () => this.scene.restart({ seed: this.seed, mode: this.mode }))
         keys.on("keydown-L", () => this.printLog())
 
         this.render()
@@ -98,7 +111,15 @@ export class Game extends Scene {
         this.stats.update(this.state)
         this.plots.update(this.state, this.pickerPlot)
         this.pause.update(this.paused)
+        this.buyLife.update(this.state)
+        this.gameOver.update(this.state)
         this.debug.setText(debugText(this.state, this.seed, this.paused))
+    }
+
+    // The game-over panel's Restart: a fresh run on a new random seed.
+    private restartNewSeed(): void {
+        const seed = Math.floor(Math.random() * (MAX_SEED + 1))
+        this.scene.restart({ seed, mode: this.mode })
     }
 
     private togglePause(): void {
