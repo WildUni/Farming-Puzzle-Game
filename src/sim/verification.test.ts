@@ -134,8 +134,18 @@ describe("replay: matches the original run", () => {
         const state = replayState(1, survival, log, 100, crops)
         expect(state.tick).toBe(100)
         expect(state.inventory).toEqual({ garlic: 2 })
-        expect(state.plots[0]).toEqual({ state: "growing", cropId: "pumpkin", plantedAt: 80 })
-        expect(state.plots[1]).toEqual({ state: "growing", cropId: "carrot", plantedAt: 0 })
+        expect(state.plots[0]).toEqual({
+            state: "growing",
+            cropId: "pumpkin",
+            plantedAt: 80,
+            readyAt: 330
+        })
+        expect(state.plots[1]).toEqual({
+            state: "growing",
+            cropId: "carrot",
+            plantedAt: 0,
+            readyAt: 150
+        })
     })
 
     it("is deterministic and never changes the log", () => {

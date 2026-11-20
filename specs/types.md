@@ -31,11 +31,12 @@ type CropTable = Record<string, Crop> // cropId -> Crop
 ```ts
 type Plot =
     | { state: "empty" }
-    | { state: "growing"; cropId: string; plantedAt: number }
+    | { state: "growing"; cropId: string; plantedAt: number; readyAt: number }
     | { state: "ready"; cropId: string }
 ```
 
-- `plantedAt` is the tick the crop was planted on. The ready tick is worked out as `plantedAt + growTicks`, not stored.
+- `plantedAt` is the tick the crop was planted on; it is only used to draw progress.
+- `readyAt` is the tick the crop becomes ready on. `plant` sets it to `plantedAt + growTicks`, and it is stored rather than worked out so later changes to growth speed don't affect crops already in the ground.
 - `cropId` can only be read after checking `state`, so an empty plot can never have a crop.
 
 ### `Order`
@@ -145,4 +146,5 @@ Input to `calcScore` (see [scoring.md](scoring.md)).
 
 - [ ] `RunData` repeats information already in `GameState` (`ordersCompleted`, `tick`, `score`) and uses snake_case while the rest uses camelCase. Decide whether scoring should read `GameState` directly.
 - [x] Add Survival fields (`lives`, `coins`, `livesBought`). The life price is derived from `livesBought` instead of stored.
-- [ ] Add plot modifiers (fertilizer, weeds, blocked) as a `modifiers` list when needed. Growth would then need a stored `progress` field instead of `plantedAt`.
+- [x] Store the ready tick on growing plots (`readyAt`).
+- [ ] Add plot modifiers (fertilizer, weeds, blocked) as a `modifiers` list when needed.

@@ -61,7 +61,7 @@ export class Game extends Scene {
 
         this.orders = new OrdersView(this, (id) => this.onOrderClick(id))
         this.stats = new StatsView(this, this.crops)
-        this.plots = new PlotsView(this, this.crops, (i) => this.onPlotClick(i))
+        this.plots = new PlotsView(this, (i) => this.onPlotClick(i))
         this.picker = new PlantPicker(
             this,
             this.crops,

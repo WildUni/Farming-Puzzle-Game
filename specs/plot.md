@@ -5,7 +5,7 @@ Rules for a single plot, plus building the crop table. Each function works on on
 ## Plot lifecycle
 
 ```
-empty --plant--> growing --updateGrowth (progress reaches 1)--> ready --harvest--> empty
+empty --plant--> growing --updateGrowth (now reaches readyAt)--> ready --harvest--> empty
 ```
 
 ## Exports
@@ -16,7 +16,8 @@ Turns the list in `src/data/crops.json` into a table keyed by crop id. Run it on
 
 ### `plant(plot, cropId, now, crops): Plot | null`
 
-- Returns `{ state: 'growing', cropId, plantedAt: now }`.
+- Returns `{ state: 'growing', cropId, plantedAt: now, readyAt: now + growTicks }`.
+- The ready tick is fixed when the crop is planted. Anything that changes growth speed later (upgrades, events) only affects crops planted after it; a power-up that finishes a crop early sets `readyAt` directly.
 - Returns `null` if the plot is not empty.
 - Returns `null` if `cropId` is not in the crop table. Only the table's own keys count, so ids like `"toString"` are rejected. This keeps unknown ids out of plots, so later lookups can trust them.
 
@@ -26,29 +27,34 @@ Turns the list in `src/data/crops.json` into a table keyed by crop id. Run it on
 - Returns `null` if the plot is not ready.
 - Does not touch the inventory. The caller looks up the crop's `yield` and adds it.
 
-### `progress(plot, now, crops): number`
+### `progress(plot, now): number`
 
 Growth progress from 0 to 1, for progress bars and for `updateGrowth`.
 
-| Plot state | Result                                         |
-| ---------- | ---------------------------------------------- |
-| `empty`    | `0`                                            |
-| `growing`  | `(now - plantedAt) / growTicks`, capped at `1` |
-| `ready`    | `1`                                            |
+| Plot state | Result                                                                                |
+| ---------- | ------------------------------------------------------------------------------------- |
+| `empty`    | `0`                                                                                   |
+| `growing`  | `(now - plantedAt) / (readyAt - plantedAt)`, capped at `1`; `1` once `now >= readyAt` |
+| `ready`    | `1`                                                                                   |
 
-### `updateGrowth(plot, now, crops): Plot`
+The `now >= readyAt` check comes first, so a plot whose `readyAt` was pulled back to `plantedAt` never divides by zero.
 
-- Turns a growing plot into `{ state: 'ready', cropId }` once its progress reaches 1, which happens exactly at `plantedAt + growTicks`.
+### `updateGrowth(plot, now): Plot`
+
+- Turns a growing plot into `{ state: 'ready', cropId }` once `now >= readyAt`.
 - Returns the **same object** for any plot that doesn't change. The renderer can use `oldPlot !== newPlot` to tell which plots to redraw.
 
 ## Tested
 
-- Planting works on an empty plot and is rejected on busy plots and for unknown crop ids.
+- Planting works on an empty plot, sets `readyAt` to `now + growTicks`, and is rejected on busy plots and for unknown crop ids.
 - Harvesting empties a ready plot and is rejected otherwise.
 - `progress` is 0, 0.5 and 1 at the start, halfway and past the end, and 1 for ready plots.
 - Garlic (80 ticks) turns ready at tick 80 and not at 79.
 - Empty and ready plots come back unchanged.
+- A plot uses its stored `readyAt`, not the crop's current `growTicks` (a plot with a shorter `readyAt` turns ready early).
+- A plot with `readyAt === plantedAt` has progress 1 and turns ready on the next update.
 
 ## Open items
 
-- [ ] Plot modifiers (fertilizer, weeds, blocked plots). Once growth speed can change, `plantedAt` should be replaced by a `progress` field that `step` increases each tick.
+- [x] Store the ready tick on the plot (`readyAt`) so growth-speed upgrades and instant-grow power-ups don't change crops retroactively.
+- [ ] Plot modifiers (fertilizer, weeds, blocked plots). Effects that change speed _while_ a crop grows (weeds at half speed) can push `readyAt` back each tick they're active, or a stored `progress` field can replace `plantedAt`/`readyAt` if that gets awkward.

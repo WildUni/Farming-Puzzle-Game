@@ -21,7 +21,7 @@ type Inventory = Record<string, number> // cropId -> amount held, missing means 
 
 type Plot =
     | { state: "empty" }
-    | { state: "growing"; cropId: string; plantedAt: number }
+    | { state: "growing"; cropId: string; plantedAt: number; readyAt: number } // readyAt fixed at planting
     | { state: "ready"; cropId: string }
 
 type Order = {

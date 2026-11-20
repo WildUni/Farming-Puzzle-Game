@@ -8,7 +8,7 @@ const crops = buildCropTable([
 ])
 
 const empty: Plot = { state: "empty" }
-const growingGarlic: Plot = { state: "growing", cropId: "garlic", plantedAt: 0 }
+const growingGarlic: Plot = { state: "growing", cropId: "garlic", plantedAt: 0, readyAt: 80 }
 const readyGarlic: Plot = { state: "ready", cropId: "garlic" }
 
 describe("buildCropTable", () => {
@@ -19,11 +19,12 @@ describe("buildCropTable", () => {
 })
 
 describe("plant", () => {
-    it("plants on an empty plot", () => {
+    it("plants on an empty plot and fixes the ready tick", () => {
         expect(plant(empty, "garlic", 10, crops)).toEqual({
             state: "growing",
             cropId: "garlic",
-            plantedAt: 10
+            plantedAt: 10,
+            readyAt: 90
         })
     })
 
@@ -51,25 +52,41 @@ describe("harvest", () => {
 
 describe("progress", () => {
     it("is 0 for an empty plot and 1 for a ready plot", () => {
-        expect(progress(empty, 100, crops)).toBe(0)
-        expect(progress(readyGarlic, 100, crops)).toBe(1)
+        expect(progress(empty, 100)).toBe(0)
+        expect(progress(readyGarlic, 100)).toBe(1)
     })
 
     it("grows linearly and stays at 1 once done", () => {
-        expect(progress(growingGarlic, 0, crops)).toBe(0)
-        expect(progress(growingGarlic, 40, crops)).toBe(0.5)
-        expect(progress(growingGarlic, 200, crops)).toBe(1)
+        expect(progress(growingGarlic, 0)).toBe(0)
+        expect(progress(growingGarlic, 40)).toBe(0.5)
+        expect(progress(growingGarlic, 200)).toBe(1)
+    })
+
+    it("is 1 when readyAt equals plantedAt", () => {
+        const instant: Plot = { state: "growing", cropId: "garlic", plantedAt: 30, readyAt: 30 }
+        expect(progress(instant, 30)).toBe(1)
     })
 })
 
 describe("updateGrowth", () => {
     it("turns ready at exactly growTicks, not before", () => {
-        expect(updateGrowth(growingGarlic, 79, crops)).toBe(growingGarlic)
-        expect(updateGrowth(growingGarlic, 80, crops)).toEqual(readyGarlic)
+        expect(updateGrowth(growingGarlic, 79)).toBe(growingGarlic)
+        expect(updateGrowth(growingGarlic, 80)).toEqual(readyGarlic)
+    })
+
+    it("uses the stored readyAt, not the crop's growTicks", () => {
+        const early: Plot = { state: "growing", cropId: "garlic", plantedAt: 0, readyAt: 50 }
+        expect(updateGrowth(early, 49)).toBe(early)
+        expect(updateGrowth(early, 50)).toEqual(readyGarlic)
+    })
+
+    it("turns a plot with readyAt === plantedAt ready on the next update", () => {
+        const instant: Plot = { state: "growing", cropId: "garlic", plantedAt: 30, readyAt: 30 }
+        expect(updateGrowth(instant, 31)).toEqual(readyGarlic)
     })
 
     it("leaves empty and ready plots unchanged", () => {
-        expect(updateGrowth(empty, 80, crops)).toBe(empty)
-        expect(updateGrowth(readyGarlic, 80, crops)).toBe(readyGarlic)
+        expect(updateGrowth(empty, 80)).toBe(empty)
+        expect(updateGrowth(readyGarlic, 80)).toBe(readyGarlic)
     })
 })

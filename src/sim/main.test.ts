@@ -128,7 +128,12 @@ describe("applyAction: plant", () => {
     it("plants on an empty plot at the current tick and leaves other plots alone", () => {
         const state = makeState({ tick: 42 })
         const next = apply(state, { type: "plant", plot: 2, cropId: "pumpkin" })
-        expect(next.plots[2]).toEqual({ state: "growing", cropId: "pumpkin", plantedAt: 42 })
+        expect(next.plots[2]).toEqual({
+            state: "growing",
+            cropId: "pumpkin",
+            plantedAt: 42,
+            readyAt: 42 + crops.pumpkin.growTicks
+        })
         for (const i of [0, 1, 3]) expect(next.plots[i]).toEqual(state.plots[i])
         expect(next.inventory).toEqual(state.inventory)
         expect(next.score).toBe(state.score)
@@ -137,7 +142,7 @@ describe("applyAction: plant", () => {
     it("returns null for a busy plot", () => {
         const state = makeState({
             plots: [
-                { state: "growing", cropId: "carrot", plantedAt: 0 },
+                { state: "growing", cropId: "carrot", plantedAt: 0, readyAt: 150 },
                 { state: "ready", cropId: "carrot" }
             ]
         })
@@ -182,7 +187,10 @@ describe("applyAction: harvest", () => {
 
     it("returns null for an empty or growing plot", () => {
         const state = makeState({
-            plots: [{ state: "empty" }, { state: "growing", cropId: "carrot", plantedAt: 0 }]
+            plots: [
+                { state: "empty" },
+                { state: "growing", cropId: "carrot", plantedAt: 0, readyAt: 150 }
+            ]
         })
         expect(applyAction(state, { type: "harvest", plot: 0 }, crops)).toBeNull()
         expect(applyAction(state, { type: "harvest", plot: 1 }, crops)).toBeNull()
@@ -323,7 +331,7 @@ describe("applyAction: full flow", () => {
 
         // Stand-in for step: move time forward and grow every plot.
         const tick = crops.carrot.growTicks
-        state = { ...state, tick, plots: state.plots.map((p) => updateGrowth(p, tick, crops)) }
+        state = { ...state, tick, plots: state.plots.map((p) => updateGrowth(p, tick)) }
 
         state = apply(state, { type: "harvest", plot: 0 })
         state = apply(state, { type: "harvest", plot: 1 })
@@ -352,7 +360,7 @@ describe("step: tick and rules", () => {
 
     it("never changes the state passed in", () => {
         const state = makeState({
-            plots: [{ state: "growing", cropId: "garlic", plantedAt: 0 }],
+            plots: [{ state: "growing", cropId: "garlic", plantedAt: 0, readyAt: 80 }],
             orders: [makeOrder({ expiresAt: 0 }), makeOrder({ id: 1, expiresAt: 900 })],
             nextOrderId: 2,
             tick: 79

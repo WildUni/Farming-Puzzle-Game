@@ -31,6 +31,9 @@
 
 
 ## 11/19
-* Added survial mode
+* Added survial mode: base number of lives, scaling difficulty with time: more orders, less time.
+* Added mode selection to the base screen.
+* Updated end condition checks based on mode
+* 
 
 ## 11/20

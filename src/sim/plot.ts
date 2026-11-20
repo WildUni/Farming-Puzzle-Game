@@ -1,4 +1,4 @@
-import { Plot, Crop, CropTable } from "./types"
+import type { Plot, Crop, CropTable } from "./types"
 
 // Turns the crop list from crops.json into a lookup table keyed by id.
 function buildCropTable(crops: Crop[]): CropTable {
@@ -6,14 +6,15 @@ function buildCropTable(crops: Crop[]): CropTable {
 }
 
 // Returns null if the plot is busy or the crop id is unknown,
-// so an unknown id never gets into a plot.
+// so an unknown id never gets into a plot. The ready tick is fixed here.
 function plant(plot: Plot, cropId: string, now: number, crops: CropTable): Plot | null {
     if (plot.state !== "empty") return null
     if (!Object.prototype.hasOwnProperty.call(crops, cropId)) return null
     return {
         state: "growing",
         cropId,
-        plantedAt: now
+        plantedAt: now,
+        readyAt: now + crops[cropId].growTicks
     }
 }
 
@@ -28,17 +29,18 @@ function harvest(plot: Plot): { plot: Plot; cropId: string } | null {
 }
 
 // Growth progress from 0 (empty / just planted) to 1 (ready).
-function progress(plot: Plot, now: number, crops: CropTable): number {
+// Checks readyAt first, so readyAt === plantedAt never divides by zero.
+function progress(plot: Plot, now: number): number {
     if (plot.state === "ready") return 1
     if (plot.state !== "growing") return 0
-    const ticksPassed = now - plot.plantedAt
-    const ticksRequired = crops[plot.cropId].growTicks
-    return Math.min(1, ticksPassed / ticksRequired)
+    if (now >= plot.readyAt) return 1
+    return (now - plot.plantedAt) / (plot.readyAt - plot.plantedAt)
 }
 
-function updateGrowth(plot: Plot, now: number, crops: CropTable): Plot {
+// Returns the same object for any plot that doesn't change.
+function updateGrowth(plot: Plot, now: number): Plot {
     if (plot.state !== "growing") return plot
-    return progress(plot, now, crops) >= 1 ? { state: "ready", cropId: plot.cropId } : plot
+    return now >= plot.readyAt ? { state: "ready", cropId: plot.cropId } : plot
 }
 
 export { buildCropTable, plant, harvest, progress, updateGrowth }

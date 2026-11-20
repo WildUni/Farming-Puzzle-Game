@@ -127,7 +127,7 @@ function step(state: GameState, crops: CropTable): GameState {
     const tick = state.tick + 1
 
     // 2. Growth
-    const plots = state.plots.map((p) => updateGrowth(p, tick, crops))
+    const plots = state.plots.map((p) => updateGrowth(p, tick))
 
     // 3. Failed orders
     const open = state.orders.filter((o) => !isExpired(o, tick))

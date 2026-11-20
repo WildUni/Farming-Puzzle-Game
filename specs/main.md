@@ -93,15 +93,15 @@ The order rules `step` uses for new orders.
 
 Moves the game forward one tick. This is the only way time passes in a run.
 
-| Argument | Type        | Meaning                                                 |
-| -------- | ----------- | ------------------------------------------------------- |
-| `state`  | `GameState` | The current state. Never changed                        |
-| `crops`  | `CropTable` | Crop stats, for growth times and for picking new orders |
+| Argument | Type        | Meaning                            |
+| -------- | ----------- | ---------------------------------- |
+| `state`  | `GameState` | The current state. Never changed   |
+| `crops`  | `CropTable` | Crop stats, for picking new orders |
 
 Returns a **new** state. The steps run in this order, each one using the result of the one before:
 
 1. **Tick:** `tick` becomes `state.tick + 1`. Every later step uses this new tick.
-2. **Growth:** every plot is passed through `updateGrowth(plot, tick, crops)`. A crop planted on tick _p_ becomes `'ready'` on tick _p + growTicks_. Empty and ready plots don't change.
+2. **Growth:** every plot is passed through `updateGrowth(plot, tick)`. A growing plot becomes `'ready'` on its `readyAt` tick (_p + growTicks_ for a crop planted on tick _p_). Empty and ready plots don't change.
 3. **Failed orders:** every order where `isExpired(order, tick)` (`tick > expiresAt`) is removed, and `ordersFailed` goes up by 1 for each. The other orders keep their order in the list.
     - **Survival:** each failed order also costs one life. `lives` never goes below 0, even when more orders fail on one tick than there are lives left.
 4. **End of run:** if the mode's end condition is met, `status` becomes `'ended'` and `step` stops here. No new orders are created.
@@ -133,7 +133,7 @@ Returns a **new** state. The steps run in this order, each one using the result 
 
 **`plant`**
 
-- Plants a crop on an empty plot with `plantedAt = tick`, and leaves the other plots alone.
+- Plants a crop on an empty plot with `plantedAt = tick` and `readyAt = tick + growTicks`, and leaves the other plots alone.
 - Returns `null` for a busy plot (growing or ready).
 - Returns `null` for an unknown crop.
 - Returns `null` for a plot index that is negative, too large, or not a whole number.

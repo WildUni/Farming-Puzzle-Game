@@ -81,12 +81,12 @@ function timerText(state: GameState): string {
 }
 
 // Label inside a plot square: crop id plus growth, or "empty".
-function plotText(plot: Plot, now: number, crops: CropTable): string {
+function plotText(plot: Plot, now: number): string {
     switch (plot.state) {
         case "empty":
             return "empty"
         case "growing":
-            return `${plot.cropId}\n${Math.floor(progress(plot, now, crops) * 100)}%`
+            return `${plot.cropId}\n${Math.floor(progress(plot, now) * 100)}%`
         case "ready":
             return `${plot.cropId}\nREADY`
     }

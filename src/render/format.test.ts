@@ -60,11 +60,11 @@ describe("timerText", () => {
 
 describe("plotText", () => {
     it("labels each plot state", () => {
-        expect(plotText({ state: "empty" }, 0, crops)).toBe("empty")
-        expect(plotText({ state: "growing", cropId: "garlic", plantedAt: 0 }, 40, crops)).toBe(
-            "garlic\n50%"
-        )
-        expect(plotText({ state: "ready", cropId: "carrot" }, 0, crops)).toBe("carrot\nREADY")
+        expect(plotText({ state: "empty" }, 0)).toBe("empty")
+        expect(
+            plotText({ state: "growing", cropId: "garlic", plantedAt: 0, readyAt: 80 }, 40)
+        ).toBe("garlic\n50%")
+        expect(plotText({ state: "ready", cropId: "carrot" }, 0)).toBe("carrot\nREADY")
     })
 })
 

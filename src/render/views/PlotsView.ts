@@ -1,7 +1,7 @@
 // Near-square grid of plot squares centered on the screen. Reports clicks by plot index.
 // Growing plots show a progress bar; ready plots and the selected plot are outlined.
 import { GameObjects, Scene } from "phaser"
-import type { GameState, CropTable } from "../../sim/types"
+import type { GameState } from "../../sim/types"
 import { progress } from "../../sim/plot"
 import { plotText } from "../format"
 import { COLORS, TEXT } from "../theme"
@@ -22,13 +22,11 @@ type Square = {
 
 export class PlotsView {
     private scene: Scene
-    private crops: CropTable
     private onClick: (plot: number) => void
     private squares: Square[] = []
 
-    constructor(scene: Scene, crops: CropTable, onClick: (plot: number) => void) {
+    constructor(scene: Scene, onClick: (plot: number) => void) {
         this.scene = scene
-        this.crops = crops
         this.onClick = onClick
     }
 
@@ -41,11 +39,11 @@ export class PlotsView {
             box.setFillStyle(COLORS.plot[plot.state])
             if (plot.state === "ready" || i === selected) box.setStrokeStyle(4, COLORS.highlight)
             else box.setStrokeStyle(2, COLORS.plotStroke)
-            label.setText(plotText(plot, state.tick, this.crops))
+            label.setText(plotText(plot, state.tick))
             const growing = plot.state === "growing"
             track.setVisible(growing)
             bar.setVisible(growing)
-            if (growing) bar.width = BAR_W * progress(plot, state.tick, this.crops)
+            if (growing) bar.width = BAR_W * progress(plot, state.tick)
         })
     }
 
