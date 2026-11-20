@@ -24,7 +24,13 @@
 * Created custom type for supported actions. 
 * Change expiration to be at the end of the expiration tick instead of at the beginnng.
 * Added a replay function that takes in an action log and replays the run, then returns an object denoting if any mismatches occurred.
-* Added simple game UI with squares, and tables.
+* Added simple game UI with squares, and tables for displaying game state data
 * Specified what render takes care of. Only render will call phaser
 * Right now, plant selection only shows up after clicking on empty plot. Will be changed to visible at all times
-* 
+* Added custom seed selector to loading page, displays ticks, pause for testing.
+
+
+## 11/19
+* Added survial mode
+
+## 11/20
