@@ -15,6 +15,11 @@ const ORDER_MIN_AMOUNT = 2
 const ORDER_MAX_AMOUNT = 6
 const MAX_OPEN_ORDERS = 2 //step keeps this many orders open
 
+//Upgrades (Survival)
+const ORDERS_PER_UPGRADE = 10 //an upgrade offer comes after every this many filled orders
+const UPGRADE_CHOICES = 3 //upgrades shown on one offer
+const MIN_MODIFIER_PCT = 25 //floor for every percentage modifier
+
 // Fixed order rules for Timed and Puzzle. Survival reads its rules from difficulty.json.
 const DEFAULT_ORDER_RULES: OrderRules = {
     maxOpenOrders: MAX_OPEN_ORDERS,
@@ -31,5 +36,8 @@ export {
     ORDER_TICKS,
     ORDER_MIN_AMOUNT,
     ORDER_MAX_AMOUNT,
-    MAX_OPEN_ORDERS
+    MAX_OPEN_ORDERS,
+    ORDERS_PER_UPGRADE,
+    UPGRADE_CHOICES,
+    MIN_MODIFIER_PCT
 }

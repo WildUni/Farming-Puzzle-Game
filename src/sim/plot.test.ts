@@ -28,6 +28,11 @@ describe("plant", () => {
         })
     })
 
+    it("applies growthPct to the ready tick", () => {
+        expect(plant(empty, "garlic", 10, crops, 50)).toMatchObject({ readyAt: 10 + 40 })
+        expect(plant(empty, "garlic", 10, crops, 85)).toMatchObject({ readyAt: 10 + 68 })
+    })
+
     it("rejects a busy plot", () => {
         expect(plant(growingGarlic, "pumpkin", 10, crops)).toBeNull()
         expect(plant(readyGarlic, "pumpkin", 10, crops)).toBeNull()

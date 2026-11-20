@@ -1,0 +1,50 @@
+[
+    {
+        "id": "extraPlot",
+        "name": "Extra plot",
+        "text": "One more plot to plant in",
+        "stat": "extraPlots",
+        "amount": 1,
+        "maxStacks": 2
+    },
+    {
+        "id": "fastGrowth",
+        "name": "Green thumb",
+        "text": "Crops grow 15% faster",
+        "stat": "growthPct",
+        "amount": -15,
+        "maxStacks": 3
+    },
+    {
+        "id": "bigHarvest",
+        "name": "Big harvest",
+        "text": "+1 crop from every harvest",
+        "stat": "yieldBonus",
+        "amount": 1,
+        "maxStacks": 3
+    },
+    {
+        "id": "patientCustomers",
+        "name": "Patient folk",
+        "text": "New orders wait 15% longer",
+        "stat": "orderTimePct",
+        "amount": 15,
+        "maxStacks": 3
+    },
+    {
+        "id": "tips",
+        "name": "Tips",
+        "text": "+2 coins for every order",
+        "stat": "coinsPerOrder",
+        "amount": 2,
+        "maxStacks": 3
+    },
+    {
+        "id": "haggler",
+        "name": "Haggler",
+        "text": "Lives cost 15% less",
+        "stat": "lifePricePct",
+        "amount": -15,
+        "maxStacks": 3
+    }
+]

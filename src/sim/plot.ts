@@ -1,4 +1,5 @@
 import type { Plot, Crop, CropTable } from "./types"
+import { scalePct } from "./upgrades"
 
 // Turns the crop list from crops.json into a lookup table keyed by id.
 function buildCropTable(crops: Crop[]): CropTable {
@@ -6,15 +7,22 @@ function buildCropTable(crops: Crop[]): CropTable {
 }
 
 // Returns null if the plot is busy or the crop id is unknown,
-// so an unknown id never gets into a plot. The ready tick is fixed here.
-function plant(plot: Plot, cropId: string, now: number, crops: CropTable): Plot | null {
+// so an unknown id never gets into a plot. The ready tick is fixed here, with the
+// run's growthPct modifier applied (100 = normal speed).
+function plant(
+    plot: Plot,
+    cropId: string,
+    now: number,
+    crops: CropTable,
+    growthPct: number = 100
+): Plot | null {
     if (plot.state !== "empty") return null
     if (!Object.prototype.hasOwnProperty.call(crops, cropId)) return null
     return {
         state: "growing",
         cropId,
         plantedAt: now,
-        readyAt: now + crops[cropId].growTicks
+        readyAt: now + scalePct(crops[cropId].growTicks, growthPct)
     }
 }
 

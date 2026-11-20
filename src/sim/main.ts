@@ -1,9 +1,15 @@
 import type { RNGSeed, GameConfig, GameState, Plot, Action, CropTable, OrderRules } from "./types"
 import { seedRNG } from "./mulberry"
-import { START_PLOTS, TIMED_MODE_TICKS, DEFAULT_ORDER_RULES } from "./game_constants"
+import {
+    START_PLOTS,
+    TIMED_MODE_TICKS,
+    DEFAULT_ORDER_RULES,
+    ORDERS_PER_UPGRADE
+} from "./game_constants"
 import { plant, harvest, updateGrowth } from "./plot"
 import { createOrder, fulfill, isExpired } from "./orders"
 import { DIFFICULTY, levelFor, orderRulesFor, lifePrice } from "./difficulty"
+import { UPGRADES, modifiersFor, scalePct, rollOffer } from "./upgrades"
 
 function createGame(seed: RNGSeed, config: GameConfig): GameState {
     return {
@@ -20,15 +26,25 @@ function createGame(seed: RNGSeed, config: GameConfig): GameState {
         ordersFailed: 0,
         lives: config.mode === "survival" ? DIFFICULTY.startLives : 0,
         coins: 0,
-        livesBought: 0
+        livesBought: 0,
+        upgrades: [],
+        upgradeOffer: null,
+        offersMade: 0
     }
 }
 
 // The rules step uses for new orders: the current level in Survival, fixed otherwise.
+// Survival order timers are scaled by the orderTimePct upgrade modifier.
 function orderRules(state: GameState): OrderRules {
-    return state.mode === "survival"
-        ? orderRulesFor(levelFor(state.ordersCompleted))
-        : DEFAULT_ORDER_RULES
+    if (state.mode !== "survival") return DEFAULT_ORDER_RULES
+    const rules = orderRulesFor(levelFor(state.ordersCompleted))
+    const { orderTimePct } = modifiersFor(state.upgrades)
+    return { ...rules, orderTicks: scalePct(rules.orderTicks, orderTimePct) }
+}
+
+// Price of the next life, with the lifePricePct upgrade modifier applied.
+function lifePriceFor(state: GameState): number {
+    return scalePct(lifePrice(state.livesBought), modifiersFor(state.upgrades).lifePricePct)
 }
 
 // True when a buyLife action would succeed. The buy button uses this.
@@ -36,7 +52,8 @@ function canBuyLife(state: GameState): boolean {
     return (
         state.mode === "survival" &&
         state.status === "running" &&
-        state.coins >= lifePrice(state.livesBought)
+        state.upgradeOffer === null &&
+        state.coins >= lifePriceFor(state)
     )
 }
 
@@ -54,11 +71,20 @@ function replacePlot(plots: Plot[], i: number, plot: Plot): Plot[] {
 // Never changes `state`, `tick` or `rngState`. See specs/main.md.
 function applyAction(state: GameState, action: Action, crops: CropTable): GameState | null {
     if (state.status === "ended") return null
+    // While an upgrade offer is open the clock is stopped and only the pick is allowed.
+    if (state.upgradeOffer !== null && action.type !== "chooseUpgrade") return null
 
     switch (action.type) {
         case "plant": {
             if (!isPlotIndex(state, action.plot)) return null
-            const planted = plant(state.plots[action.plot], action.cropId, state.tick, crops)
+            const { growthPct } = modifiersFor(state.upgrades)
+            const planted = plant(
+                state.plots[action.plot],
+                action.cropId,
+                state.tick,
+                crops,
+                growthPct
+            )
             if (planted === null) return null
             return { ...state, plots: replacePlot(state.plots, action.plot, planted) }
         }
@@ -68,12 +94,13 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
             const result = harvest(state.plots[action.plot])
             if (result === null) return null
             const { plot, cropId } = result
+            const amount = crops[cropId].yield + modifiersFor(state.upgrades).yieldBonus
             return {
                 ...state,
                 plots: replacePlot(state.plots, action.plot, plot),
                 inventory: {
                     ...state.inventory,
-                    [cropId]: (state.inventory[cropId] ?? 0) + crops[cropId].yield
+                    [cropId]: (state.inventory[cropId] ?? 0) + amount
                 }
             }
         }
@@ -83,14 +110,14 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
             if (order === undefined || isExpired(order, state.tick)) return null
             const inventory = fulfill(order, state.inventory)
             if (inventory === null) return null
+            const pay = DIFFICULTY.coinsPerOrder + modifiersFor(state.upgrades).coinsPerOrder
             return {
                 ...state,
                 inventory,
                 orders: state.orders.filter((o) => o.id !== order.id),
                 score: state.score + order.value,
                 ordersCompleted: state.ordersCompleted + 1,
-                coins:
-                    state.mode === "survival" ? state.coins + DIFFICULTY.coinsPerOrder : state.coins
+                coins: state.mode === "survival" ? state.coins + pay : state.coins
             }
         }
 
@@ -98,11 +125,31 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
             if (!canBuyLife(state)) return null
             return {
                 ...state,
-                coins: state.coins - lifePrice(state.livesBought),
+                coins: state.coins - lifePriceFor(state),
                 lives: state.lives + 1,
                 livesBought: state.livesBought + 1
             }
         }
+
+        case "chooseUpgrade": {
+            const offer = state.upgradeOffer
+            if (offer === null || !offer.includes(action.upgradeId)) return null
+            const def = UPGRADES[action.upgradeId]
+            const added =
+                def.stat === "extraPlots"
+                    ? Array.from({ length: def.amount }, (): Plot => ({ state: "empty" }))
+                    : []
+            return {
+                ...state,
+                upgrades: [...state.upgrades, action.upgradeId],
+                upgradeOffer: null,
+                plots: added.length > 0 ? [...state.plots, ...added] : state.plots
+            }
+        }
+
+        default:
+            // An unknown action type (from a bad log) is refused, not thrown.
+            return null
     }
 }
 
@@ -118,10 +165,18 @@ function isRunOver(state: GameState): boolean {
     }
 }
 
-// Moves the game forward one tick. Returns a new state, or `state` itself once ended.
-// See specs/main.md for the order of the steps.
+// True when Survival has filled enough orders for the next upgrade offer.
+function isOfferDue(state: GameState): boolean {
+    return (
+        state.mode === "survival" &&
+        state.ordersCompleted >= (state.offersMade + 1) * ORDERS_PER_UPGRADE
+    )
+}
+
+// Moves the game forward one tick. Returns a new state, or `state` itself once ended
+// or while an upgrade offer is open. See specs/main.md for the order of the steps.
 function step(state: GameState, crops: CropTable): GameState {
-    if (state.status === "ended") return state
+    if (state.status === "ended" || state.upgradeOffer !== null) return state
 
     // 1. Tick
     const tick = state.tick + 1
@@ -153,7 +208,17 @@ function step(state: GameState, crops: CropTable): GameState {
         nextOrderId += 1
     }
 
-    return { ...next, orders, rngState, nextOrderId }
+    // 6. Upgrade offer (Survival), drawn after the orders
+    if (!isOfferDue(next)) return { ...next, orders, rngState, nextOrderId }
+    const [offer, afterOffer] = rollOffer(next.upgrades, rngState)
+    return {
+        ...next,
+        orders,
+        rngState: afterOffer,
+        nextOrderId,
+        upgradeOffer: offer.length > 0 ? offer : null,
+        offersMade: next.offersMade + 1
+    }
 }
 
-export { createGame, applyAction, step, canBuyLife, orderRules }
+export { createGame, applyAction, step, canBuyLife, orderRules, lifePriceFor }

@@ -12,6 +12,7 @@ import {
     debugText,
     heartsText,
     buyLifeText,
+    upgradeCardText,
     gameOverText,
     gameOverTitle,
     modeName,
@@ -23,6 +24,7 @@ import { createGame } from "../sim/main"
 import { buildCropTable } from "../sim/plot"
 import { lifePrice, levelFor, DIFFICULTY } from "../sim/difficulty"
 import { TIMED_MODE_TICKS, ORDER_TICKS } from "../sim/game_constants"
+import { UPGRADES, scalePct } from "../sim/upgrades"
 import type { GameState, Order } from "../sim/types"
 
 const crops = buildCropTable([
@@ -160,6 +162,22 @@ describe("buyLifeText", () => {
     it("shows the next life's price", () => {
         const state = { ...game("survival"), livesBought: 2 }
         expect(buyLifeText(state)).toBe(`Buy life\n${lifePrice(2)} coins`)
+    })
+
+    it("applies the life price upgrade", () => {
+        const state = { ...game("survival"), upgrades: ["haggler"] }
+        const price = scalePct(lifePrice(0), 100 + UPGRADES.haggler.amount)
+        expect(buyLifeText(state)).toBe(`Buy life\n${price} coins`)
+    })
+})
+
+describe("upgradeCardText", () => {
+    it("shows name, description and the stack count after picking", () => {
+        const def = UPGRADES.fastGrowth
+        expect(upgradeCardText(def, [])).toBe(`${def.name}\n${def.text}\n1 / ${def.maxStacks}`)
+        expect(upgradeCardText(def, ["fastGrowth", "tips"])).toBe(
+            `${def.name}\n${def.text}\n2 / ${def.maxStacks}`
+        )
     })
 })
 

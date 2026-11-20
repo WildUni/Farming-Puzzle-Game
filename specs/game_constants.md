@@ -13,6 +13,9 @@ Tuning numbers that are the same for every run. Changing one should never requir
 | `ORDER_MIN_AMOUNT`    | `2`          | Smallest amount an order asks for                                                                                              |
 | `ORDER_MAX_AMOUNT`    | `6`          | Largest amount an order asks for                                                                                               |
 | `MAX_OPEN_ORDERS`     | `2`          | `step` keeps this many orders open, creating new ones as orders close                                                          |
+| `ORDERS_PER_UPGRADE`  | `10`         | Survival offers an upgrade after every this many filled orders (see [upgrades.md](upgrades.md))                                |
+| `UPGRADE_CHOICES`     | `3`          | Upgrades shown on one offer                                                                                                    |
+| `MIN_MODIFIER_PCT`    | `25`         | Lowest value any percentage upgrade modifier can reach                                                                         |
 | `DEFAULT_ORDER_RULES` | `OrderRules` | The four order constants above as one object. Timed and Puzzle use it; Survival reads its rules from `difficulty.json` instead |
 
 `TIMED_MODE_TIMELIMIT` (300 seconds) and `ORDER_TIMELIMIT` (60 seconds) are used to calculate the tick values but are not exported.

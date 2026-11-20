@@ -42,6 +42,7 @@ type ReplayError =
     | "after-end" // an entry is on a tick after the run ended
     | "refused" // applyAction rejected an entry
     | "bad-final-tick" // finalTick is not a whole number >= 0, or the run ended before it
+    | "offer-pending" // time had to pass while an upgrade offer was unanswered
 
 type ReplayResult =
     { ok: true; state: GameState } | { ok: false; error: ReplayError; entry: number | null } // entry: index in log, or null
@@ -54,9 +55,9 @@ Steps:
 3. For each log entry, in log order:
     1. Its tick must be a whole number from `0` to `finalTick`, otherwise `bad-tick`.
     2. Its tick must not be lower than the current `state.tick`, otherwise `out-of-order`. Several entries may share a tick.
-    3. `step` until `state.tick` equals the entry's tick. If the run ends before that tick is reached, `after-end`.
+    3. `step` until `state.tick` equals the entry's tick. If the run ends before that tick is reached, `after-end`. If an upgrade offer is open and the tick still has to move, `offer-pending` (time can't pass until `chooseUpgrade` is logged).
     4. Apply the action. If `applyAction` returns `null` (or anything that is not a state), `refused`.
-4. `step` until `state.tick` equals `finalTick`. If the run ends before `finalTick`, `bad-final-tick` with `entry: null`.
+4. `step` until `state.tick` equals `finalTick`. If the run ends before `finalTick`, `bad-final-tick` with `entry: null`. If an offer is open and the tick still has to move, `offer-pending` with `entry: null`.
 5. Return `{ ok: true, state }`.
 
 Rules:
@@ -76,6 +77,7 @@ Rules:
 - A weaker scripted player that only plants garlic lets orders fail, and its runs also replay equal.
 - A full Timed run ends with `status: 'ended'` and replays equal.
 - A full Survival run, played until lives run out by a player that also buys lives whenever it can, ends with `status: 'ended'`, has `buyLife` entries in its log, and replays equal.
+- The scripted players pick the first upgrade on each offer; their Survival runs have `chooseUpgrade` entries and replay equal.
 - `after-end`: an action logged after a Survival run ran out of lives.
 - Actions on tick 0, and several actions on the same tick, replay correctly.
 - The same arguments give equal results, and the log is not changed.
@@ -89,6 +91,7 @@ Rules:
 - `after-end`: an action logged on or after the tick a Timed run ends.
 - `bad-final-tick`: a negative or fractional `finalTick`, and a `finalTick` after a Timed run ended.
 - Changing the seed makes a valid log fail or give a different state.
+- `offer-pending`: an entry after an unanswered upgrade offer (reported at that entry), and a `finalTick` after one (`entry: null`). A run that stops while the offer is open replays fine with `finalTick` on the offer's tick.
 
 ## Open items
 

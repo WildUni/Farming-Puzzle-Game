@@ -7,14 +7,21 @@ type ReplayError =
     | "after-end" // an entry is on a tick after the run ended
     | "refused" // applyAction rejected an entry
     | "bad-final-tick" // finalTick is invalid, or the run ended before it
+    | "offer-pending" // time had to pass while an upgrade offer was unanswered
 
 type ReplayResult =
     { ok: true; state: GameState } | { ok: false; error: ReplayError; entry: number | null } // entry: index in log
 
-// Steps until state.tick reaches target. Returns null if the run ends first.
-function stepUntil(state: GameState, target: number, crops: CropTable): GameState | null {
+// Steps until state.tick reaches target. Returns "ended" if the run ends first, and
+// "offer-pending" if an upgrade offer stops the clock before then.
+function stepUntil(
+    state: GameState,
+    target: number,
+    crops: CropTable
+): GameState | "ended" | "offer-pending" {
     while (state.tick < target) {
-        if (state.status === "ended") return null
+        if (state.status === "ended") return "ended"
+        if (state.upgradeOffer !== null) return "offer-pending"
         state = step(state, crops)
     }
     return state
@@ -43,8 +50,9 @@ function replay(
         if (tick < state.tick) return { ok: false, error: "out-of-order", entry: i }
 
         const reached = stepUntil(state, tick, crops)
+        if (reached === "offer-pending") return { ok: false, error: "offer-pending", entry: i }
         // Actions are refused once the run has ended, including on the ending tick.
-        if (reached === null || reached.status === "ended") {
+        if (reached === "ended" || reached.status === "ended") {
             return { ok: false, error: "after-end", entry: i }
         }
 
@@ -55,7 +63,8 @@ function replay(
     }
 
     const final = stepUntil(state, finalTick, crops)
-    if (final === null) return { ok: false, error: "bad-final-tick", entry: null }
+    if (final === "offer-pending") return { ok: false, error: "offer-pending", entry: null }
+    if (final === "ended") return { ok: false, error: "bad-final-tick", entry: null }
     return { ok: true, state: final }
 }
 

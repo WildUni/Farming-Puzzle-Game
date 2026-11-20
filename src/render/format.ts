@@ -1,9 +1,11 @@
 // Text shown on screen, built from plain state. No Phaser imports so it can be unit tested.
-import type { GameMode, GameState, Order, Plot, Crop, CropTable } from "../sim/types"
+import type { GameMode, GameState, Order, Plot, Crop, CropTable, UpgradeDef } from "../sim/types"
 import { TICKS_PER_SECOND, TIMED_MODE_TICKS } from "../sim/game_constants"
 import { progress } from "../sim/plot"
 import { timeLeft } from "../sim/orders"
-import { levelFor, lifePrice } from "../sim/difficulty"
+import { levelFor } from "../sim/difficulty"
+import { lifePriceFor } from "../sim/main"
+import { stackCount } from "../sim/upgrades"
 
 const MAX_HEARTS = 5 // more lives than this show as a count
 
@@ -13,9 +15,14 @@ function heartsText(lives: number): string {
     return lives <= MAX_HEARTS ? "♥".repeat(lives) : `♥ x${lives}`
 }
 
-// Label on the buy-life button, with the next life's price.
+// Label on the buy-life button, with the next life's price (upgrades applied).
 function buyLifeText(state: GameState): string {
-    return `Buy life\n${lifePrice(state.livesBought)} coins`
+    return `Buy life\n${lifePriceFor(state)} coins`
+}
+
+// Text on an upgrade pick card: name, what it does, and the stack count after picking it.
+function upgradeCardText(def: UpgradeDef, upgrades: readonly string[]): string {
+    return `${def.name}\n${def.text}\n${stackCount(upgrades, def.id) + 1} / ${def.maxStacks}`
 }
 
 // Summary on the game-over panel. Levels are shown counted from 1.
@@ -160,5 +167,5 @@ function debugText(state: GameState, seed: number, paused: boolean): string {
 }
 
 export { orderTimeFraction, isOrderUrgent, parseSeed, debugText, MAX_SEED }
-export { heartsText, buyLifeText, gameOverText, gameOverTitle }
+export { heartsText, buyLifeText, upgradeCardText, gameOverText, gameOverTitle }
 export { PLAYABLE_MODES, modeName, modeButtonText }

@@ -144,4 +144,4 @@ Price of the next life when `livesBought` lives have already been bought this ru
 
 - [ ] Pass the config into `createGame` (or record a rules version in the log) so a server replay knows which numbers a run used.
 - [ ] Events get more frequent as the level rises (Day 4).
-- [ ] Upgrades that change lives, prices or timers (Day 4) read from a modifiers object on top of these numbers.
+- [x] Upgrades that change prices, timers and coins read from `modifiersFor(state.upgrades)` on top of these numbers (see [upgrades.md](upgrades.md)). The functions here stay unmodified; `main.ts` applies the modifiers.

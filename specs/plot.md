@@ -14,9 +14,9 @@ empty --plant--> growing --updateGrowth (now reaches readyAt)--> ready --harvest
 
 Turns the list in `src/data/crops.json` into a table keyed by crop id. Run it once when the game loads.
 
-### `plant(plot, cropId, now, crops): Plot | null`
+### `plant(plot, cropId, now, crops, growthPct = 100): Plot | null`
 
-- Returns `{ state: 'growing', cropId, plantedAt: now, readyAt: now + growTicks }`.
+- Returns `{ state: 'growing', cropId, plantedAt: now, readyAt: now + scalePct(growTicks, growthPct) }` (see [upgrades.md](upgrades.md)). At the default 100% that is `now + growTicks`.
 - The ready tick is fixed when the crop is planted. Anything that changes growth speed later (upgrades, events) only affects crops planted after it; a power-up that finishes a crop early sets `readyAt` directly.
 - Returns `null` if the plot is not empty.
 - Returns `null` if `cropId` is not in the crop table. Only the table's own keys count, so ids like `"toString"` are rejected. This keeps unknown ids out of plots, so later lookups can trust them.
@@ -47,6 +47,7 @@ The `now >= readyAt` check comes first, so a plot whose `readyAt` was pulled bac
 ## Tested
 
 - Planting works on an empty plot, sets `readyAt` to `now + growTicks`, and is rejected on busy plots and for unknown crop ids.
+- With `growthPct` 50, `readyAt` is `now + round(growTicks / 2)`.
 - Harvesting empties a ready plot and is rejected otherwise.
 - `progress` is 0, 0.5 and 1 at the start, halfway and past the end, and 1 for ready plots.
 - Garlic (80 ticks) turns ready at tick 80 and not at 79.

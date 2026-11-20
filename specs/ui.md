@@ -51,6 +51,18 @@ The Timed length comes from `TIMED_MODE_TICKS`, so it stays right if the constan
 - Timed has no lives, coins or levels (see [main.md](main.md)), so those rows are left out instead of showing zeros.
 - The **Buy life** button only shows in Survival.
 
+## Upgrade pick (UpgradePickView)
+
+Shown over the board while `state.upgradeOffer` is not `null` (Survival only).
+
+- A shade covers the board and swallows clicks, like the pause shade. The plant picker closes when it opens.
+- Title `Choose an upgrade`, and one card per offered upgrade, side by side.
+- Each card's text (`upgradeCardText`): name, the one-line description, and how many the player will have after picking it out of the most allowed, e.g. `Green thumb
+Crops grow 15% faster
+1 / 3`.
+- Clicking a card sends `chooseUpgrade` through `act()`, so it is logged; the view closes and time resumes.
+- The game loop does not step while an offer is open. Pause still works on top of it.
+
 ## End of run (GameOverView)
 
 Shown over the board as soon as `status` is `'ended'`.
@@ -75,6 +87,8 @@ Shown over the board as soon as `status` is `'ended'`.
 - `statRows`: the exact rows for Timed, and for Survival; Timed has no Level, Lives or Coins rows.
 - `gameOverTitle` and `gameOverText` for each mode.
 - `debugText` includes the mode.
+- `upgradeCardText` shows name, description and the stack count after picking.
+- `buyLifeText` shows the price with the `lifePricePct` modifier applied.
 
 ## Open items
 

@@ -16,10 +16,14 @@ const crops: CropTable = buildCropTable(cropList)
 const survival: GameConfig = { mode: "survival", allowPowerUps: false }
 const timed: GameConfig = { mode: "timed", allowPowerUps: false }
 
-// Picks this tick's moves: harvest every ready plot, deliver every order it can,
-// then plant every empty plot with the crop the first open order wants.
+// Picks this tick's moves: take the first upgrade on an open offer, harvest every ready
+// plot, deliver every order it can, then plant every empty plot with the crop the first
+// open order wants.
 function botMoves(state: GameState): Action[] {
     const moves: Action[] = []
+    if (state.upgradeOffer !== null) {
+        moves.push({ type: "chooseUpgrade", upgradeId: state.upgradeOffer[0] })
+    }
     state.plots.forEach((p, plot) => {
         if (p.state === "ready") moves.push({ type: "harvest", plot })
     })
@@ -65,8 +69,19 @@ function play(
             state = next
         }
         if (state.tick >= finalTick || state.status === "ended") break
-        state = step(state, crops)
+        const next = step(state, crops)
+        if (next === state) break // an unanswered upgrade offer stopped the clock
+        state = next
     }
+    return { state, log }
+}
+
+// Plays like botMoves but never answers an upgrade offer; stops on the tick one opens.
+function playUntilOffer(seed: number): { state: GameState; log: LogEntry[] } {
+    const { state, log } = play(seed, survival, 20_000, (s) =>
+        s.upgradeOffer !== null ? [] : botMoves(s)
+    )
+    if (state.upgradeOffer === null) throw new Error("no upgrade offer was reached")
     return { state, log }
 }
 
@@ -120,6 +135,8 @@ describe("replay: matches the original run", () => {
             expect(state.status).toBe("ended")
             expect(state.lives).toBe(0)
             expect(log.some((e) => e.action.type === "buyLife")).toBe(true)
+            expect(log.some((e) => e.action.type === "chooseUpgrade")).toBe(true)
+            expect(state.upgrades.length).toBeGreaterThan(0)
             expect(replayState(seed, survival, log, state.tick, crops)).toEqual(state)
         }
     )
@@ -280,5 +297,42 @@ describe("replay: rejects bad logs", () => {
         const other = replay(4, survival, log, state.tick, crops)
         if (other.ok) expect(other.state).not.toEqual(state)
         else expect(other.error).toBe("refused")
+    })
+})
+
+describe("replay: upgrade offers", () => {
+    it("replays a run that stops while an offer is open", () => {
+        const { state, log } = playUntilOffer(1)
+        expect(replayState(1, survival, log, state.tick, crops)).toEqual(state)
+    })
+
+    it("rejects a finalTick after an unanswered offer", () => {
+        const { state, log } = playUntilOffer(1)
+        expect(replay(1, survival, log, state.tick + 1, crops)).toEqual({
+            ok: false,
+            error: "offer-pending",
+            entry: null
+        })
+    })
+
+    it("rejects an entry after an unanswered offer, naming the entry", () => {
+        const { state, log } = playUntilOffer(1)
+        const late: LogEntry = { tick: state.tick + 1, action: { type: "buyLife" } }
+        expect(replay(1, survival, [...log, late], state.tick + 1, crops)).toEqual({
+            ok: false,
+            error: "offer-pending",
+            entry: log.length
+        })
+    })
+
+    it("replays once the offer is answered on its tick", () => {
+        const { state, log } = playUntilOffer(1)
+        const pick: LogEntry = {
+            tick: state.tick,
+            action: { type: "chooseUpgrade", upgradeId: state.upgradeOffer![0] }
+        }
+        const result = replayState(1, survival, [...log, pick], state.tick + 50, crops)
+        expect(result.upgrades).toEqual([state.upgradeOffer![0]])
+        expect(result.tick).toBe(state.tick + 50)
     })
 })

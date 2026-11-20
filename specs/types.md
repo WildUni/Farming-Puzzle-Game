@@ -74,23 +74,26 @@ How `step` creates orders at the current difficulty: how many it keeps open, eac
 
 Everything that changes during a run. If `step` or `replay` would give a different result without a value, it belongs here.
 
-| Field                             | Meaning                                                                   |
-| --------------------------------- | ------------------------------------------------------------------------- |
-| `mode`                            | The run's `GameMode`                                                      |
-| `status`                          | `'running'` until the run ends                                            |
-| `tick`                            | Current tick, starting at 0                                               |
-| `rngState`                        | Generator state. Every random draw reads it and stores the new state back |
-| `plots`                           | One `Plot` per plot                                                       |
-| `inventory`                       | Crop id → amount held. Missing ids mean 0                                 |
-| `orders`                          | Open orders                                                               |
-| `nextOrderId`                     | Id for the next order created                                             |
-| `score`                           | Points so far                                                             |
-| `ordersCompleted`, `ordersFailed` | Run counters                                                              |
-| `lives`                           | Lives left (Survival). The run ends at 0. Always 0 in other modes         |
-| `coins`                           | In-run coins, earned by filling orders in Survival. Reset every run       |
-| `livesBought`                     | Lives bought this run. Sets the next life's price                         |
+| Field                             | Meaning                                                                          |
+| --------------------------------- | -------------------------------------------------------------------------------- |
+| `mode`                            | The run's `GameMode`                                                             |
+| `status`                          | `'running'` until the run ends                                                   |
+| `tick`                            | Current tick, starting at 0                                                      |
+| `rngState`                        | Generator state. Every random draw reads it and stores the new state back        |
+| `plots`                           | One `Plot` per plot                                                              |
+| `inventory`                       | Crop id → amount held. Missing ids mean 0                                        |
+| `orders`                          | Open orders                                                                      |
+| `nextOrderId`                     | Id for the next order created                                                    |
+| `score`                           | Points so far                                                                    |
+| `ordersCompleted`, `ordersFailed` | Run counters                                                                     |
+| `lives`                           | Lives left (Survival). The run ends at 0. Always 0 in other modes                |
+| `coins`                           | In-run coins, earned by filling orders in Survival. Reset every run              |
+| `livesBought`                     | Lives bought this run. Sets the next life's price                                |
+| `upgrades`                        | Upgrade ids picked this run, in order. Repeats are stacks                        |
+| `upgradeOffer`                    | Upgrade ids on offer while the player chooses, else `null`. Time stops while set |
+| `offersMade`                      | Upgrade offers made this run. Sets when the next one is due                      |
 
-The Survival level and the next life's price are worked out from `ordersCompleted` and `livesBought` (see [difficulty.md](difficulty.md)), so they are not stored.
+The Survival level and the next life's price are worked out from `ordersCompleted` and `livesBought` (see [difficulty.md](difficulty.md)), so they are not stored. The same goes for the upgrade `Modifiers`, which are added up from `upgrades` (see [upgrades.md](upgrades.md)).
 
 **Not in `GameState`:** crop stats, constants, `GameConfig`, the action log, anything that can be worked out (time left, growth progress), and anything only the screen needs (open menus, animations, pause).
 
@@ -110,13 +113,19 @@ type Action =
     | { type: "harvest"; plot: number }
     | { type: "deliver"; orderId: number }
     | { type: "buyLife" }
+    | { type: "chooseUpgrade"; upgradeId: string }
 ```
 
 One player move, passed to `applyAction` (see [main.md](main.md)).
 
 - `plot` is an index into `GameState.plots`.
 - `orderId` is an `Order.id`, not a position in the list, so it stays correct when other orders are removed.
+- `upgradeId` must be one of the ids in `GameState.upgradeOffer`.
 - Plain data only, so actions can be stored in the log and saved as JSON.
+
+### `Modifiers`, `ModifierStat`, `UpgradeDef`, `UpgradeTable`
+
+Upgrade types, described in [upgrades.md](upgrades.md). `Modifiers` is never stored in `GameState`; it is worked out from `GameState.upgrades`.
 
 ### `LogEntry`
 

@@ -1,6 +1,6 @@
 # main.ts
 
-Whole-game functions. This module coordinates the other modules: it owns `GameState` and calls `plot.ts`, `orders.ts`, `difficulty.ts` and `mulberry.ts` to do the detailed work.
+Whole-game functions. This module coordinates the other modules: it owns `GameState` and calls `plot.ts`, `orders.ts`, `difficulty.ts`, `upgrades.ts` and `mulberry.ts` to do the detailed work.
 
 ## Exports
 
@@ -21,6 +21,9 @@ Returns a fresh state for a new run.
 | `score`, `ordersCompleted`, `ordersFailed` | `0`                                                 |
 | `lives`                                    | Survival: `DIFFICULTY.startLives`. Other modes: `0` |
 | `coins`, `livesBought`                     | `0`                                                 |
+| `upgrades`                                 | `[]`                                                |
+| `upgradeOffer`                             | `null`                                              |
+| `offersMade`                               | `0`                                                 |
 
 Rules:
 
@@ -43,16 +46,17 @@ Returns a **new** state, or `null` if the move is not allowed. A `null` result m
 **Rules for every action**
 
 1. Returns `null` when `state.status` is `'ended'`.
-2. Never changes `state` or anything inside it. Plots and orders the action doesn't touch may be shared with the old state, since nothing changes them in place.
-3. Does not change `tick` or `rngState`. Time only moves in `step`, and actions never draw random numbers.
-4. Deterministic: the same arguments always give an equal result.
+1. While `upgradeOffer` is not `null`, returns `null` for every action except `chooseUpgrade` (the clock is stopped; see [upgrades.md](upgrades.md)).
+1. Never changes `state` or anything inside it. Plots and orders the action doesn't touch may be shared with the old state, since nothing changes them in place.
+1. Does not change `tick` or `rngState`. Time only moves in `step`, and actions never draw random numbers.
+1. Deterministic: the same arguments always give an equal result.
 
 **Order within a tick.** On each tick, `step` runs first, then the actions logged for that tick are applied in log order. So a crop whose growth finishes on tick _t_ can be harvested on tick _t_, and an order with `expiresAt` _t_ can still be delivered by actions on tick _t_. `step` on tick _t + 1_ fails it before that tick's actions run. `replay` must use the same order.
 
 **`plant`** `{ type: 'plant', plot, cropId }`
 
 - `plot` must be a whole number from `0` to `plots.length − 1`, otherwise `null`.
-- Calls `plant(plots[plot], cropId, state.tick, crops)`. Returns `null` if that does (plot not empty, or unknown crop).
+- Calls `plant(plots[plot], cropId, state.tick, crops, growthPct)` with the run's `growthPct` modifier. Returns `null` if that does (plot not empty, or unknown crop).
 - Replaces that plot with the growing plot. Nothing else changes.
 - Planting is free for now (no seeds or coins).
 
@@ -60,7 +64,7 @@ Returns a **new** state, or `null` if the move is not allowed. A `null` result m
 
 - `plot` must be a valid index, as for `plant`.
 - Calls `harvest(plots[plot])`. Returns `null` if the plot is not `'ready'` (empty or still growing).
-- Empties that plot and adds `crops[cropId].yield` to `inventory[cropId]` (starting from 0 if missing).
+- Empties that plot and adds `crops[cropId].yield + yieldBonus` to `inventory[cropId]` (starting from 0 if missing).
 
 **`deliver`** `{ type: 'deliver', orderId }`
 
@@ -68,25 +72,36 @@ Returns a **new** state, or `null` if the move is not allowed. A `null` result m
 - Returns `null` if the order `isExpired` at `state.tick` (`tick > expiresAt`). Delivering on tick `expiresAt` itself is allowed. With the tick order above this can't normally happen, but it keeps `applyAction` safe to call on any state.
 - Calls `fulfill(order, inventory)`. Returns `null` if the inventory is short.
 - Removes the order from `orders` (other orders keep their order), stores the new inventory, adds `order.value` to `score`, and adds 1 to `ordersCompleted`.
-- **Survival:** also adds `DIFFICULTY.coinsPerOrder` to `coins`. Other modes don't earn coins.
+- **Survival:** also adds `DIFFICULTY.coinsPerOrder + coinsPerOrder` (the modifier) to `coins`. Other modes don't earn coins.
 - Does not create a new order. That is `step`'s job. Filling an order can raise the level (see [difficulty.md](difficulty.md)); orders `step` creates from then on use the new level's rules, while orders already open keep their time limit and amount.
 
 **`buyLife`** `{ type: 'buyLife' }`
 
 - Survival only. Returns `null` in other modes.
-- The price is `lifePrice(livesBought)` (see [difficulty.md](difficulty.md)). Returns `null` if `coins` is below it.
+- The price is `lifePriceFor(state)`. Returns `null` if `coins` is below it.
 - Takes the price from `coins`, adds 1 to `lives` and 1 to `livesBought`. Nothing else changes.
 - There is no cap on lives. The rising price is the limit.
 
+**`chooseUpgrade`** `{ type: 'chooseUpgrade', upgradeId }`
+
+- Returns `null` when there is no open offer, or `upgradeId` is not on it.
+- Appends `upgradeId` to `upgrades` (a new array) and sets `upgradeOffer` to `null`.
+- If the upgrade's stat is `extraPlots`, also adds `amount` empty plots to the end of `plots`.
+- Nothing else changes. See [upgrades.md](upgrades.md) for the whole offer flow.
+
+### `lifePriceFor(state: GameState): number`
+
+Price of the next life with upgrades applied: `scalePct(lifePrice(livesBought), lifePricePct)`. `buyLife`, `canBuyLife` and the buy button all use it.
+
 ### `canBuyLife(state: GameState): boolean`
 
-`true` when `buyLife` would succeed: the run is Survival, not ended, and `coins >= lifePrice(livesBought)`. The buy button uses it, so the screen and the rules can't disagree.
+`true` when `buyLife` would succeed: the run is Survival, not ended, no upgrade offer is open, and `coins >= lifePriceFor(state)`. The buy button uses it, so the screen and the rules can't disagree.
 
 ### `orderRules(state: GameState): OrderRules`
 
 The order rules `step` uses for new orders.
 
-- **Survival:** `orderRulesFor(levelFor(ordersCompleted))` from `difficulty.ts`.
+- **Survival:** `orderRulesFor(levelFor(ordersCompleted))` from `difficulty.ts`, with `orderTicks` scaled by the `orderTimePct` modifier (`scalePct`).
 - **Timed** and **Puzzle:** the fixed `DEFAULT_ORDER_RULES` from `game_constants.ts` (`MAX_OPEN_ORDERS`, `ORDER_TICKS`, `ORDER_MIN_AMOUNT`, `ORDER_MAX_AMOUNT`).
 
 ### `step(state: GameState, crops: CropTable): GameState`
@@ -109,13 +124,15 @@ Returns a **new** state. The steps run in this order, each one using the result 
     - **Survival:** `lives` is 0. Once ended, `applyAction` refuses every action, including `buyLife`.
     - **Puzzle:** no end condition yet (see Open items).
 5. **New orders:** with `rules = orderRules(state)`, while fewer than `rules.maxOpenOrders` orders are open, create one with `createOrder(nextOrderId, tick, rngState, crops, rules)`, add it to the **end** of `orders`, store the returned RNG state, and add 1 to `nextOrderId`. This also creates the first orders, on tick 1, and refills a slot the tick after an order is delivered or failed. If more orders are open than `maxOpenOrders` allows, none are removed; no new ones are made until the count drops.
+6. **Upgrade offer (Survival):** if `ordersCompleted >= (offersMade + 1) × ORDERS_PER_UPGRADE`, `rollOffer(upgrades, rngState)` picks the offer, `upgradeOffer` is set to it (or stays `null` if nothing is eligible), the RNG state is stored and `offersMade` goes up by 1.
 
 **Rules**
 
 - Once `status` is `'ended'`, returns `state` unchanged.
+- While `upgradeOffer` is not `null`, returns `state` unchanged: time stops until `chooseUpgrade`.
 - Never changes `state` or anything inside it.
 - Never changes `inventory`, `score`, `ordersCompleted`, `coins` or `livesBought`. Those only change through `applyAction`. `lives` only goes down in `step`.
-- `rngState` changes only when orders are created, by exactly two draws per order.
+- `rngState` changes only when orders are created (exactly two draws per order) and when an upgrade offer is made (one draw per offered upgrade, after the orders).
 - Deterministic: the same arguments always give an equal result, so the same seed and the same actions always give the same run.
 
 ## Tests (`main.test.ts`)
@@ -203,6 +220,11 @@ Returns a **new** state. The steps run in this order, each one using the result 
 
 - A crop can be harvested on the same tick `step` makes it ready.
 - An order can be delivered on its `expiresAt` tick, but after the next `step` it is gone.
+
+**Upgrades** (see [upgrades.md](upgrades.md) for the full list)
+
+- The offer flow: no offer before `ORDERS_PER_UPGRADE` filled orders, an offer on the next step, time stopped and other actions refused while it is open, `chooseUpgrade` accepting only an offered id, the next offer at `2 × ORDERS_PER_UPGRADE`, none in Timed, none when nothing is eligible.
+- Each modifier changes its rule: `growthPct` on `plant`'s `readyAt` (and not on crops already growing), `yieldBonus` on harvest, `coinsPerOrder` on deliver, `orderTimePct` on new orders, `lifePricePct` on `buyLife` and `canBuyLife`, `extraPlot` adding an empty plot.
 
 `replay`, which rebuilds a run from its seed and action log, lives in `verification.ts` (see [verification.md](verification.md)).
 

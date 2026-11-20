@@ -11,6 +11,7 @@ import { PlantPicker } from "../views/PlantPicker"
 import { PauseView } from "../views/PauseView"
 import { BuyLifeView } from "../views/BuyLifeView"
 import { GameOverView } from "../views/GameOverView"
+import { UpgradePickView } from "../views/UpgradePickView"
 
 const MS_PER_TICK = 1000 / TICKS_PER_SECOND
 const MAX_CATCH_UP_TICKS = 5 // a background tab doesn't jump ahead when it comes back
@@ -37,6 +38,7 @@ export class Game extends Scene {
     private pause: PauseView
     private buyLife: BuyLifeView
     private gameOver: GameOverView
+    private upgradePick: UpgradePickView
     private debug: GameObjects.Text
 
     constructor() {
@@ -78,6 +80,9 @@ export class Game extends Scene {
             this.pause.bottom + GAP,
             () => this.act({ type: "buyLife" })
         )
+        this.upgradePick = new UpgradePickView(this, (upgradeId) =>
+            this.act({ type: "chooseUpgrade", upgradeId })
+        )
         this.gameOver = new GameOverView(
             this,
             () => this.restartNewSeed(),
@@ -97,16 +102,21 @@ export class Game extends Scene {
         this.render()
     }
 
-    // Fixed-tick loop: step() once per MS_PER_TICK of real time. Paused, the counter stops.
+    // Fixed-tick loop: step() once per MS_PER_TICK of real time. Paused, or while an
+    // upgrade offer is open, the counter stops.
     update(_time: number, delta: number) {
         if (this.paused || this.state.status === "ended") return
+        if (this.state.upgradeOffer !== null) {
+            this.elapsed = 0
+            return
+        }
 
         this.elapsed = Math.min(this.elapsed + delta, MAX_CATCH_UP_TICKS * MS_PER_TICK)
         while (this.elapsed >= MS_PER_TICK && this.state.status === "running") {
             this.state = step(this.state, this.crops)
             this.elapsed -= MS_PER_TICK
         }
-        if (this.state.status === "ended") this.closePicker()
+        if (this.state.status === "ended" || this.state.upgradeOffer !== null) this.closePicker()
         this.render()
     }
 
@@ -116,6 +126,7 @@ export class Game extends Scene {
         this.plots.update(this.state, this.pickerPlot)
         this.pause.update(this.paused)
         this.buyLife.update(this.state)
+        this.upgradePick.update(this.state)
         this.gameOver.update(this.state)
         this.debug.setText(debugText(this.state, this.seed, this.paused))
     }
@@ -152,7 +163,7 @@ export class Game extends Scene {
 
     // Empty plot: open the plant picker. Ready plot: harvest it. Growing plot: nothing.
     private onPlotClick(plot: number): void {
-        if (this.paused || this.state.status === "ended") return
+        if (this.paused || this.state.status === "ended" || this.state.upgradeOffer !== null) return
         switch (this.state.plots[plot].state) {
             case "empty":
                 this.pickerPlot = plot
