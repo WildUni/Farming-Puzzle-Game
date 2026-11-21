@@ -1,6 +1,6 @@
 // Visual constants shared by the views: spacing, colors and text styles.
 import type { GameObjects, Scene } from "phaser"
-import type { Plot } from "../sim/types"
+import type { Plot, Tier } from "../sim/types"
 
 type TextStyle = Phaser.Types.GameObjects.Text.TextStyle
 
@@ -25,7 +25,15 @@ const COLORS = {
     barTrack: 0x3b2a14, // empty part of a progress or countdown bar
     barFill: 0x7fd34e, // growth and countdown bar
     barUrgent: 0xd8342c, // countdown bar in an order's last quarter
-    shade: 0x000000 // dims the board while paused
+    shade: 0x000000, // dims the board while paused
+    // Frame of an upgrade card, by tier.
+    tier: {
+        common: 0x8a8a8a,
+        uncommon: 0x3c9a3c,
+        rare: 0x2f6fd6,
+        epic: 0x8e3fc7,
+        legendary: 0xe08a12
+    } satisfies Record<Tier, number>
 }
 
 const TEXT: Record<"body" | "label" | "title" | "debug", TextStyle> = {

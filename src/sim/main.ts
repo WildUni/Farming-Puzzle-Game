@@ -1,5 +1,14 @@
-import type { RNGSeed, GameConfig, GameState, Plot, Action, CropTable, OrderRules } from "./types"
-import { seedRNG } from "./mulberry"
+import type {
+    RNGSeed,
+    GameConfig,
+    GameState,
+    Plot,
+    Action,
+    CropTable,
+    OrderRules,
+    Pool
+} from "./types"
+import { randomInt, seedRNG, seedStream } from "./mulberry"
 import {
     START_PLOTS,
     TIMED_MODE_TICKS,
@@ -9,14 +18,22 @@ import {
 import { plant, harvest, updateGrowth } from "./plot"
 import { createOrder, fulfill, isExpired } from "./orders"
 import { DIFFICULTY, levelFor, orderRulesFor, lifePrice } from "./difficulty"
-import { UPGRADES, modifiersFor, scalePct, rollOffer } from "./upgrades"
+import { UPGRADES, modifiersFor, modifiersAt, scalePct, rollOffer, validTargets } from "./upgrades"
+
+// Salts for the separate streams. The orders stream uses the seed itself (see specs/mulberry.md).
+const UPGRADE_STREAM_SALT = 1
+const HARVEST_STREAM_SALT = 2
 
 function createGame(seed: RNGSeed, config: GameConfig): GameState {
     return {
         mode: config.mode,
         status: "running",
         tick: 0,
-        rngState: seedRNG(seed),
+        rng: {
+            orders: seedRNG(seed),
+            upgrades: seedStream(seed, UPGRADE_STREAM_SALT),
+            harvest: seedStream(seed, HARVEST_STREAM_SALT)
+        },
         plots: Array.from({ length: START_PLOTS }, (): Plot => ({ state: "empty" })),
         inventory: {},
         orders: [],
@@ -68,7 +85,7 @@ function replacePlot(plots: Plot[], i: number, plot: Plot): Plot[] {
 }
 
 // Applies one player move. Returns a new state, or null if the move isn't allowed.
-// Never changes `state`, `tick` or `rngState`. See specs/main.md.
+// Never changes `state` or `tick`; only harvest draws, and only from rng.harvest. See specs/main.md.
 function applyAction(state: GameState, action: Action, crops: CropTable): GameState | null {
     if (state.status === "ended") return null
     // While an upgrade offer is open the clock is stopped and only the pick is allowed.
@@ -77,7 +94,8 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
     switch (action.type) {
         case "plant": {
             if (!isPlotIndex(state, action.plot)) return null
-            const { growthPct } = modifiersFor(state.upgrades)
+            const where = { plot: action.plot, cropId: action.cropId }
+            const { growthPct } = modifiersAt(state.upgrades, where)
             const planted = plant(
                 state.plots[action.plot],
                 action.cropId,
@@ -94,9 +112,22 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
             const result = harvest(state.plots[action.plot])
             if (result === null) return null
             const { plot, cropId } = result
-            const amount = crops[cropId].yield + modifiersFor(state.upgrades).yieldBonus
+            const { yieldBonus, bumperChance } = modifiersAt(state.upgrades, {
+                plot: action.plot,
+                cropId
+            })
+            // Bumper harvest: one roll from rng.harvest, only when there is a chance at all.
+            let bumper = 0
+            let rng = state.rng
+            if (bumperChance > 0) {
+                const [roll, next] = randomInt(state.rng.harvest, 0, 99)
+                if (roll < bumperChance) bumper = 1
+                rng = { ...state.rng, harvest: next }
+            }
+            const amount = crops[cropId].yield + yieldBonus + bumper
             return {
                 ...state,
+                rng,
                 plots: replacePlot(state.plots, action.plot, plot),
                 inventory: {
                     ...state.inventory,
@@ -132,16 +163,27 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
         }
 
         case "chooseUpgrade": {
-            const offer = state.upgradeOffer
-            if (offer === null || !offer.includes(action.upgradeId)) return null
-            const def = UPGRADES[action.upgradeId]
-            const added =
-                def.stat === "extraPlots"
-                    ? Array.from({ length: def.amount }, (): Plot => ({ state: "empty" }))
-                    : []
+            const card = state.upgradeOffer?.find((c) => c.id === action.upgradeId)
+            if (card === undefined) return null
+            const def = UPGRADES.upgrades[card.id]
+            const target = action.target ?? null
+            if (def.target === null) {
+                if (target !== null) return null
+            } else {
+                const valid = validTargets(state.upgrades, card.id, state.plots.length, crops)
+                if (target === null || !valid.includes(target)) return null
+            }
+            const upgrades = [...state.upgrades, { id: card.id, tier: card.tier, target }]
+            // plots.length always equals START_PLOTS + extraPlots (clamped), so a pick past
+            // the cap adds nothing.
+            const wanted = START_PLOTS + modifiersFor(upgrades).extraPlots
+            const added = Array.from(
+                { length: Math.max(0, wanted - state.plots.length) },
+                (): Plot => ({ state: "empty" })
+            )
             return {
                 ...state,
-                upgrades: [...state.upgrades, action.upgradeId],
+                upgrades,
                 upgradeOffer: null,
                 plots: added.length > 0 ? [...state.plots, ...added] : state.plots
             }
@@ -165,10 +207,16 @@ function isRunOver(state: GameState): boolean {
     }
 }
 
-// True when Survival has filled enough orders for the next upgrade offer.
+// The pool free picks draw from in this mode, or null when the mode makes no offers.
+// Only Survival makes offers so far (Timed joins in a later phase).
+function offerPool(state: GameState): Pool | null {
+    return state.mode === "survival" ? "survival" : null
+}
+
+// True when enough orders are filled for the next upgrade offer.
 function isOfferDue(state: GameState): boolean {
     return (
-        state.mode === "survival" &&
+        offerPool(state) !== null &&
         state.ordersCompleted >= (state.offersMade + 1) * ORDERS_PER_UPGRADE
     )
 }
@@ -199,25 +247,31 @@ function step(state: GameState, crops: CropTable): GameState {
     // 5. New orders, using the rules for the current difficulty
     const rules = orderRules(next)
     const orders = [...open]
-    let rngState = state.rngState
+    let ordersRng = state.rng.orders
     let nextOrderId = state.nextOrderId
     while (orders.length < rules.maxOpenOrders) {
-        const [order, after] = createOrder(nextOrderId, tick, rngState, crops, rules)
+        const [order, after] = createOrder(nextOrderId, tick, ordersRng, crops, rules)
         orders.push(order)
-        rngState = after
+        ordersRng = after
         nextOrderId += 1
     }
 
-    // 6. Upgrade offer (Survival), drawn after the orders
-    if (!isOfferDue(next)) return { ...next, orders, rngState, nextOrderId }
-    const [offer, afterOffer] = rollOffer(next.upgrades, rngState)
-    return {
+    const withOrders: GameState = {
         ...next,
         orders,
-        rngState: afterOffer,
         nextOrderId,
+        rng: { ...state.rng, orders: ordersRng }
+    }
+
+    // 6. Upgrade offer, drawn from its own stream after the orders
+    const pool = offerPool(withOrders)
+    if (pool === null || !isOfferDue(withOrders)) return withOrders
+    const [offer, upgradesRng] = rollOffer(withOrders, pool, crops)
+    return {
+        ...withOrders,
+        rng: { ...withOrders.rng, upgrades: upgradesRng },
         upgradeOffer: offer.length > 0 ? offer : null,
-        offersMade: next.offersMade + 1
+        offersMade: withOrders.offersMade + 1
     }
 }
 

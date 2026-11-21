@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest"
 import { createGame, applyAction, step, canBuyLife, orderRules, lifePriceFor } from "./main"
 import { buildCropTable, updateGrowth } from "./plot"
 import { createOrder } from "./orders"
+import { randomInt, seedRNG, seedStream } from "./mulberry"
 import {
     START_PLOTS,
     MAX_OPEN_ORDERS,
@@ -12,8 +13,18 @@ import {
     UPGRADE_CHOICES
 } from "./game_constants"
 import { DIFFICULTY, lifePrice, levelFor, orderRulesFor } from "./difficulty"
-import { UPGRADES, modifiersFor, rollOffer, scalePct } from "./upgrades"
-import type { Action, Crop, GameConfig, GameState, Order, Plot } from "./types"
+import { UPGRADES, effectAmount, modifiersFor, rollOffer, scalePct } from "./upgrades"
+import type {
+    Action,
+    Crop,
+    GameConfig,
+    GameState,
+    OfferCard,
+    Order,
+    OwnedUpgrade,
+    Plot,
+    Tier
+} from "./types"
 
 const config: GameConfig = { mode: "survival", allowPowerUps: false }
 const timed: GameConfig = { mode: "timed", allowPowerUps: false }
@@ -46,6 +57,17 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
     }
 }
 
+function card(id: string, tier: Tier = "common"): OfferCard {
+    return { id, tier }
+}
+
+function own(id: string, tier: Tier = "common", target: number | string | null = null) {
+    return { id, tier, target } satisfies OwnedUpgrade
+}
+
+// An open offer of shipped upgrades, for tests that set one up by hand.
+const OFFER: OfferCard[] = [card("bigTips"), card("lifeDiscount", "rare"), card("fastGrowth")]
+
 // Applies an action that is expected to succeed.
 function apply(state: GameState, action: Action): GameState {
     const next = applyAction(state, action, crops)
@@ -73,6 +95,11 @@ describe("createGame", () => {
         expect(g.upgrades).toEqual([])
         expect(g.upgradeOffer).toBeNull()
         expect(g.offersMade).toBe(0)
+        expect(g.rng).toEqual({
+            orders: seedRNG(1),
+            upgrades: seedStream(1, 1),
+            harvest: seedStream(1, 2)
+        })
     })
 
     it("gives Timed runs no lives", () => {
@@ -109,8 +136,8 @@ describe("applyAction: every action", () => {
         ["buyLife", makeState({ coins: 1000 }), { type: "buyLife" }],
         [
             "chooseUpgrade",
-            makeState({ upgradeOffer: ["tips", "haggler", "bigHarvest"] }),
-            { type: "chooseUpgrade", upgradeId: "tips" }
+            makeState({ upgradeOffer: OFFER }),
+            { type: "chooseUpgrade", upgradeId: "bigTips" }
         ]
     ]
 
@@ -128,10 +155,10 @@ describe("applyAction: every action", () => {
         expect(state).toEqual(before)
     })
 
-    it.each(cases)("%s leaves tick and rngState unchanged", (_, state, action) => {
+    it.each(cases)("%s leaves tick and rng unchanged", (_, state, action) => {
         const next = apply(state, action)
         expect(next.tick).toBe(state.tick)
-        expect(next.rngState).toBe(state.rngState)
+        expect(next.rng).toEqual(state.rng)
     })
 })
 
@@ -438,7 +465,7 @@ describe("step: orders", () => {
         const next = step(state, crops)
 
         // Build the expected orders the same way step should.
-        let rng = state.rngState
+        let rng = state.rng.orders
         const expected: Order[] = []
         for (let id = 0; id < MAX_OPEN_ORDERS; id++) {
             const [order, after] = createOrder(id, 1, rng, crops)
@@ -449,7 +476,7 @@ describe("step: orders", () => {
         expect(next.orders).toEqual(expected)
         expect(next.orders.every((o) => o.expiresAt === 1 + ORDER_TICKS)).toBe(true)
         expect(next.nextOrderId).toBe(MAX_OPEN_ORDERS)
-        expect(next.rngState).toBe(rng)
+        expect(next.rng.orders).toBe(rng)
     })
 
     it("never opens more than MAX_OPEN_ORDERS orders", () => {
@@ -511,7 +538,7 @@ describe("step: end of run", () => {
         expect(state.status).toBe("ended")
         // No new orders on the ending step.
         expect(state.nextOrderId).toBe(before.nextOrderId)
-        expect(state.rngState).toBe(before.rngState)
+        expect(state.rng).toEqual(before.rng)
     })
 
     it("changes nothing after a Timed run ends, and refuses actions", () => {
@@ -579,7 +606,7 @@ describe("step: Survival lives and difficulty", () => {
         // No new orders on the ending step.
         expect(next.orders).toEqual([])
         expect(next.nextOrderId).toBe(2)
-        expect(next.rngState).toBe(state.rngState)
+        expect(next.rng).toEqual(state.rng)
     })
 
     it("changes nothing after the run ends and refuses every action", () => {
@@ -707,18 +734,55 @@ describe("upgrades: offer flow", () => {
         expect(next.offersMade).toBe(0)
     })
 
-    it("offers UPGRADE_CHOICES upgrades on the step after the ORDERS_PER_UPGRADE-th order", () => {
+    it("offers UPGRADE_CHOICES cards on the step after the ORDERS_PER_UPGRADE-th order", () => {
         const state = due()
         const next = step(state, crops)
         expect(next.tick).toBe(state.tick + 1)
         expect(next.upgradeOffer).toHaveLength(UPGRADE_CHOICES)
-        expect(new Set(next.upgradeOffer).size).toBe(UPGRADE_CHOICES)
+        expect(new Set(next.upgradeOffer!.map((c) => c.id)).size).toBe(UPGRADE_CHOICES)
         expect(next.offersMade).toBe(1)
 
-        // The offer is drawn after the step's new orders, from the RNG state they leave.
+        // The offer comes from rng.upgrades, after the step's new orders.
         const noOffer = step({ ...state, offersMade: 1 }, crops)
         expect(next.orders).toEqual(noOffer.orders)
-        expect(rollOffer([], noOffer.rngState)).toEqual([next.upgradeOffer, next.rngState])
+        expect(rollOffer(noOffer, "survival", crops)).toEqual([
+            next.upgradeOffer,
+            next.rng.upgrades
+        ])
+    })
+
+    it("leaves rng.orders alone when making an offer", () => {
+        const state = due()
+        const next = step(state, crops)
+        const noOffer = step({ ...state, offersMade: 1 }, crops)
+        expect(next.rng.orders).toBe(noOffer.rng.orders)
+        expect(next.rng.upgrades).not.toBe(state.rng.upgrades)
+    })
+
+    it("gives the same order sequence whether or not an offer was made", () => {
+        const open = step(due(), crops)
+        const c = open.upgradeOffer![0]
+        const picked = apply(open, {
+            type: "chooseUpgrade",
+            upgradeId: c.id,
+            ...(UPGRADES.upgrades[c.id].target === "crop" ? { target: "carrot" } : {})
+        })
+        const noOffer = step({ ...due(), offersMade: 1 }, crops)
+        // Clearing the orders every tick makes both runs create orders on the same ticks.
+        const ordersAfter = (start: GameState): Order[] => {
+            let s = start
+            const seen: Order[] = []
+            for (let i = 0; i < 200; i++) {
+                s = step({ ...s, lives: 99, orders: [] }, crops)
+                seen.push(...s.orders)
+            }
+            return seen
+        }
+        // Same ids, crops and amounts (time limits may differ by upgrade).
+        const shape = (o: Order) => [o.id, o.required]
+        const withOffer = ordersAfter(picked).map(shape)
+        expect(withOffer.length).toBeGreaterThan(0)
+        expect(withOffer).toEqual(ordersAfter(noOffer).map(shape))
     })
 
     it("stops time and refuses other actions while an offer is open", () => {
@@ -735,27 +799,47 @@ describe("upgrades: offer flow", () => {
         expect(canBuyLife(open)).toBe(false)
     })
 
-    it("chooseUpgrade stores the pick and clears the offer", () => {
-        const open = step(due(), crops)
-        const id = open.upgradeOffer![1]
-        const next = apply(open, { type: "chooseUpgrade", upgradeId: id })
-        expect(next.upgrades).toEqual([id])
+    it("chooseUpgrade stores the copy with the card's tier and clears the offer", () => {
+        const open = makeState({ upgradeOffer: OFFER })
+        const next = apply(open, { type: "chooseUpgrade", upgradeId: "lifeDiscount" })
+        expect(next.upgrades).toEqual([{ id: "lifeDiscount", tier: "rare", target: null }])
         expect(next.upgradeOffer).toBeNull()
         expect(next.tick).toBe(open.tick)
         expect(step(next, crops).tick).toBe(open.tick + 1)
     })
 
-    it("chooseUpgrade refuses an id not on the offer, and when there is no offer", () => {
-        const open = makeState({ upgradeOffer: ["tips", "haggler", "bigHarvest"] })
-        const pick = (state: GameState, upgradeId: string) =>
-            applyAction(state, { type: "chooseUpgrade", upgradeId }, crops)
-        expect(pick(open, "extraPlot")).toBeNull()
+    it("chooseUpgrade stores the target of a targeted upgrade", () => {
+        const open = makeState({ upgradeOffer: [card("favoriteCrop", "epic")] })
+        const next = apply(open, {
+            type: "chooseUpgrade",
+            upgradeId: "favoriteCrop",
+            target: "pumpkin"
+        })
+        expect(next.upgrades).toEqual([{ id: "favoriteCrop", tier: "epic", target: "pumpkin" }])
+    })
+
+    it("chooseUpgrade refuses bad picks", () => {
+        const open = makeState({ upgradeOffer: [...OFFER, card("favoriteCrop")] })
+        const pick = (state: GameState, upgradeId: string, target?: number | string) =>
+            applyAction(
+                state,
+                target === undefined
+                    ? { type: "chooseUpgrade", upgradeId }
+                    : { type: "chooseUpgrade", upgradeId, target },
+                crops
+            )
+        expect(pick(open, "extraPlot")).toBeNull() // not on the offer
         expect(pick(open, "nope")).toBeNull()
-        expect(pick(makeState(), "tips")).toBeNull()
+        expect(pick(makeState(), "bigTips")).toBeNull() // no offer open
+        expect(pick(open, "bigTips", 0)).toBeNull() // a target on an untargeted upgrade
+        expect(pick(open, "favoriteCrop")).toBeNull() // no target
+        expect(pick(open, "favoriteCrop", "turnip")).toBeNull() // not a crop
+        expect(pick(open, "favoriteCrop", 0)).toBeNull() // a plot, not a crop
+        expect(pick(open, "favoriteCrop", "carrot")).not.toBeNull()
     })
 
     it("makes the next offer at 2 x ORDERS_PER_UPGRADE", () => {
-        const after = { upgrades: ["tips"], offersMade: 1 }
+        const after = { upgrades: [own("bigTips")], offersMade: 1 }
         const early = makeState({ ...after, ordersCompleted: 2 * ORDERS_PER_UPGRADE - 1 })
         expect(step(early, crops).upgradeOffer).toBeNull()
         const ready = makeState({ ...after, ordersCompleted: 2 * ORDERS_PER_UPGRADE })
@@ -770,8 +854,12 @@ describe("upgrades: offer flow", () => {
         expect(next.offersMade).toBe(0)
     })
 
-    it("carries on with no offer when every upgrade is at maxStacks", () => {
-        const all = Object.values(UPGRADES).flatMap((u) => Array<string>(u.maxStacks).fill(u.id))
+    it("carries on with no offer when every upgrade is at maxCopies", () => {
+        const all = Object.values(UPGRADES.upgrades).flatMap((u) =>
+            Array.from({ length: u.maxCopies }, () =>
+                own(u.id, "common", u.target === "crop" ? "carrot" : null)
+            )
+        )
         const state = makeState({ upgrades: all, ordersCompleted: ORDERS_PER_UPGRADE })
         const next = step(state, crops)
         expect(next.upgradeOffer).toBeNull()
@@ -782,49 +870,111 @@ describe("upgrades: offer flow", () => {
 
 describe("upgrades: modifiers change the rules", () => {
     it("growthPct shortens readyAt for new crops", () => {
-        const state = makeState({ tick: 10, upgrades: ["fastGrowth"] })
+        const state = makeState({ tick: 10, upgrades: [own("fastGrowth", "epic")] })
         const next = apply(state, { type: "plant", plot: 0, cropId: "garlic" })
-        const pct = 100 + UPGRADES.fastGrowth.amount
-        expect(next.plots[0]).toMatchObject({ readyAt: 10 + scalePct(crops.garlic.growTicks, pct) })
+        const pct = 100 + effectAmount(UPGRADES.upgrades.fastGrowth, 0, "epic")
+        expect(next.plots[0]).toMatchObject({
+            readyAt: 10 + scalePct(crops.garlic.growTicks, pct)
+        })
     })
 
     it("growthPct doesn't change crops already growing", () => {
         const growing: Plot = { state: "growing", cropId: "garlic", plantedAt: 0, readyAt: 80 }
-        const state = makeState({ plots: [growing], upgradeOffer: ["fastGrowth"] })
+        const state = makeState({ plots: [growing], upgradeOffer: [card("fastGrowth", "epic")] })
         const next = apply(state, { type: "chooseUpgrade", upgradeId: "fastGrowth" })
         expect(next.plots[0]).toBe(growing)
     })
 
-    it("yieldBonus adds crops on harvest", () => {
-        const state = makeState({
-            plots: [{ state: "ready", cropId: "carrot" }],
-            upgrades: ["bigHarvest", "bigHarvest"]
+    it("Favorite crop speeds up and adds yield only for its crop", () => {
+        const fav = UPGRADES.upgrades.favoriteCrop
+        const upgrades = [own("favoriteCrop", "legendary", "carrot")]
+        const growPct = 100 + effectAmount(fav, 0, "legendary")
+        const bonus = effectAmount(fav, 1, "legendary")
+
+        const planted = apply(makeState({ upgrades }), { type: "plant", plot: 0, cropId: "carrot" })
+        expect(planted.plots[0]).toMatchObject({
+            readyAt: scalePct(crops.carrot.growTicks, growPct)
         })
-        const next = apply(state, { type: "harvest", plot: 0 })
-        expect(next.inventory.carrot).toBe(crops.carrot.yield + 2 * UPGRADES.bigHarvest.amount)
+        const other = apply(makeState({ upgrades }), { type: "plant", plot: 0, cropId: "garlic" })
+        expect(other.plots[0]).toMatchObject({ readyAt: crops.garlic.growTicks })
+
+        const ready: Plot[] = [
+            { state: "ready", cropId: "carrot" },
+            { state: "ready", cropId: "garlic" }
+        ]
+        let state = makeState({ upgrades, plots: ready })
+        state = apply(state, { type: "harvest", plot: 0 })
+        state = apply(state, { type: "harvest", plot: 1 })
+        expect(state.inventory).toEqual({
+            carrot: crops.carrot.yield + bonus,
+            garlic: crops.garlic.yield
+        })
+    })
+
+    describe("bumperChance", () => {
+        const bumper = UPGRADES.upgrades.bumperHarvest
+        const ready: Plot[] = [{ state: "ready", cropId: "carrot" }]
+
+        it("draws nothing without Bumper harvest", () => {
+            const state = makeState({ plots: ready })
+            const next = apply(state, { type: "harvest", plot: 0 })
+            expect(next.rng).toEqual(state.rng)
+            expect(next.inventory.carrot).toBe(crops.carrot.yield)
+        })
+
+        it("draws once from rng.harvest and adds a crop exactly when the roll is below the chance", () => {
+            const chance = effectAmount(bumper, 0, "legendary")
+            let hits = 0
+            let misses = 0
+            for (let seed = 0; seed < 200; seed++) {
+                const state = {
+                    ...createGame(seed, config),
+                    plots: ready,
+                    upgrades: [own("bumperHarvest", "legendary")]
+                }
+                const [roll, after] = randomInt(state.rng.harvest, 0, 99)
+                const next = apply(state, { type: "harvest", plot: 0 })
+                const extra = roll < chance ? 1 : 0
+                expect(next.inventory.carrot).toBe(crops.carrot.yield + extra)
+                expect(next.rng).toEqual({ ...state.rng, harvest: after })
+                if (extra === 1) hits += 1
+                else misses += 1
+            }
+            expect(hits).toBeGreaterThan(0)
+            expect(misses).toBeGreaterThan(0)
+        })
+
+        it("is capped at the stat's max", () => {
+            const owned = Array.from({ length: bumper.maxCopies }, () =>
+                own("bumperHarvest", "legendary")
+            )
+            expect(modifiersFor(owned).bumperChance).toBe(UPGRADES.stats.bumperChance.max)
+        })
     })
 
     it("coinsPerOrder adds coins on delivery", () => {
         const state = makeState({
             orders: [makeOrder()],
             inventory: { carrot: 3 },
-            upgrades: ["tips"]
+            upgrades: [own("bigTips", "rare")]
         })
         const next = apply(state, { type: "deliver", orderId: 0 })
-        expect(next.coins).toBe(DIFFICULTY.coinsPerOrder + UPGRADES.tips.amount)
+        const tip = effectAmount(UPGRADES.upgrades.bigTips, 0, "rare")
+        expect(next.coins).toBe(DIFFICULTY.coinsPerOrder + tip)
     })
 
     it("orderTimePct lengthens new orders' time limit", () => {
-        const state = makeState({ upgrades: ["patientCustomers"] })
-        const base = orderRulesFor(0).orderTicks
-        const expected = scalePct(base, 100 + UPGRADES.patientCustomers.amount)
+        const state = makeState({ upgrades: [own("patientCustomers", "uncommon")] })
+        const pct = 100 + effectAmount(UPGRADES.upgrades.patientCustomers, 0, "uncommon")
+        const expected = scalePct(orderRulesFor(0).orderTicks, pct)
         expect(orderRules(state).orderTicks).toBe(expected)
         expect(step(state, crops).orders[0].timeLimit).toBe(expected)
     })
 
     it("lifePricePct lowers the life price for canBuyLife and buyLife", () => {
-        const upgrades = ["haggler"]
-        const price = scalePct(lifePrice(0), 100 + UPGRADES.haggler.amount)
+        const upgrades = [own("lifeDiscount", "legendary")]
+        const pct = 100 + effectAmount(UPGRADES.upgrades.lifeDiscount, 0, "legendary")
+        const price = scalePct(lifePrice(0), pct)
         expect(price).toBeLessThan(lifePrice(0))
         expect(lifePriceFor(makeState({ upgrades }))).toBe(price)
 
@@ -834,12 +984,22 @@ describe("upgrades: modifiers change the rules", () => {
         expect(apply(state, { type: "buyLife" }).coins).toBe(0)
     })
 
-    it("extraPlot adds empty plots when picked", () => {
-        const state = makeState({ upgradeOffer: ["extraPlot", "tips", "haggler"] })
+    it("extraPlots adds an empty plot when picked", () => {
+        const state = makeState({ upgradeOffer: [card("extraPlot", "rare")] })
         const next = apply(state, { type: "chooseUpgrade", upgradeId: "extraPlot" })
-        expect(next.plots).toHaveLength(START_PLOTS + UPGRADES.extraPlot.amount)
+        expect(next.plots).toHaveLength(START_PLOTS + 1)
         expect(next.plots[next.plots.length - 1]).toEqual({ state: "empty" })
         expect(next.plots.slice(0, START_PLOTS)).toEqual(state.plots)
-        expect(modifiersFor(next.upgrades).extraPlots).toBe(UPGRADES.extraPlot.amount)
+        expect(modifiersFor(next.upgrades).extraPlots).toBe(1)
+    })
+
+    it("extraPlots adds no plot past its cap", () => {
+        const max = UPGRADES.stats.extraPlots.max
+        const owned = Array.from({ length: max }, () => own("extraPlot", "rare"))
+        const plots = Array.from({ length: START_PLOTS + max }, (): Plot => ({ state: "empty" }))
+        const offer = [card("extraPlot", "rare")]
+        const state = makeState({ upgrades: owned, plots, upgradeOffer: offer })
+        const next = apply(state, { type: "chooseUpgrade", upgradeId: "extraPlot" })
+        expect(next.plots).toBe(state.plots)
     })
 })

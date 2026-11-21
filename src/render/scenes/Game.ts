@@ -80,8 +80,12 @@ export class Game extends Scene {
             this.pause.bottom + GAP,
             () => this.act({ type: "buyLife" })
         )
-        this.upgradePick = new UpgradePickView(this, (upgradeId) =>
-            this.act({ type: "chooseUpgrade", upgradeId })
+        this.upgradePick = new UpgradePickView(this, this.crops, (upgradeId, target) =>
+            this.act(
+                target === null
+                    ? { type: "chooseUpgrade", upgradeId }
+                    : { type: "chooseUpgrade", upgradeId, target }
+            )
         )
         this.gameOver = new GameOverView(
             this,

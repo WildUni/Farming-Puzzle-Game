@@ -15,7 +15,7 @@ Tuning numbers that are the same for every run. Changing one should never requir
 | `MAX_OPEN_ORDERS`     | `2`          | `step` keeps this many orders open, creating new ones as orders close                                                          |
 | `ORDERS_PER_UPGRADE`  | `10`         | Survival offers an upgrade after every this many filled orders (see [upgrades.md](upgrades.md))                                |
 | `UPGRADE_CHOICES`     | `3`          | Upgrades shown on one offer                                                                                                    |
-| `MIN_MODIFIER_PCT`    | `25`         | Lowest value any percentage upgrade modifier can reach                                                                         |
+| `TIERS`               | list         | Upgrade tiers in order: `common`, `uncommon`, `rare`, `epic`, `legendary`                                                      |
 | `DEFAULT_ORDER_RULES` | `OrderRules` | The four order constants above as one object. Timed and Puzzle use it; Survival reads its rules from `difficulty.json` instead |
 
 `TIMED_MODE_TIMELIMIT` (300 seconds) and `ORDER_TIMELIMIT` (60 seconds) are used to calculate the tick values but are not exported.
@@ -24,6 +24,7 @@ Tuning numbers that are the same for every run. Changing one should never requir
 
 - Every duration the simulation uses is in ticks. Convert from seconds here, using `TICKS_PER_SECOND`, not in other modules.
 - Per-crop numbers (growth time, yield, value) belong in `src/data/crops.json`, not here.
+- Upgrade numbers (stat caps, tier weights, per-tier amounts) belong in `src/data/upgrades.json`. `MIN_MODIFIER_PCT` was removed when each stat got its own `min` and `max` there (see [upgrades.md](upgrades.md)).
 
 ## Open items
 

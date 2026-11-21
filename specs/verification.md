@@ -77,7 +77,7 @@ Rules:
 - A weaker scripted player that only plants garlic lets orders fail, and its runs also replay equal.
 - A full Timed run ends with `status: 'ended'` and replays equal.
 - A full Survival run, played until lives run out by a player that also buys lives whenever it can, ends with `status: 'ended'`, has `buyLife` entries in its log, and replays equal.
-- The scripted players pick the first upgrade on each offer; their Survival runs have `chooseUpgrade` entries and replay equal.
+- The scripted players pick the first card on each offer, with the first of its `validTargets` when it is targeted; their Survival runs have `chooseUpgrade` entries (some with a `target`) and replay equal.
 - `after-end`: an action logged after a Survival run ran out of lives.
 - Actions on tick 0, and several actions on the same tick, replay correctly.
 - The same arguments give equal results, and the log is not changed.

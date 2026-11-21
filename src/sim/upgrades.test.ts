@@ -2,105 +2,338 @@ import { describe, it, expect } from "vitest"
 import {
     validateUpgrades,
     UPGRADES,
-    BASE_MODIFIERS,
+    MODIFIER_STATS,
+    baseModifiers,
+    effectAmount,
     modifiersFor,
+    modifiersAt,
     scalePct,
-    stackCount,
+    copyCount,
+    validTargets,
     eligibleUpgrades,
     rollOffer
 } from "./upgrades"
-import { MIN_MODIFIER_PCT, UPGRADE_CHOICES } from "./game_constants"
-import { seedRNG, nextValue } from "./mulberry"
+import { TIERS, UPGRADE_CHOICES } from "./game_constants"
+import { createGame } from "./main"
+import { buildCropTable } from "./plot"
+import { nextValue, seedStream } from "./mulberry"
 import rawUpgrades from "../data/upgrades.json"
-import type { UpgradeDef, UpgradeTable } from "./types"
+import type { GameState, OwnedUpgrade, Tier, UpgradeConfig } from "./types"
 
-function def(overrides: Partial<UpgradeDef> & { id: string }): UpgradeDef {
-    return { name: "Name", text: "Text", stat: "yieldBonus", amount: 1, maxStacks: 3, ...overrides }
+const crops = buildCropTable([
+    { id: "garlic", growTicks: 80, yield: 2, value: 2 },
+    { id: "carrot", growTicks: 150, yield: 2, value: 8 }
+])
+
+// A small config of our own, so these tests don't depend on the shipped numbers.
+function rawConfig(): Record<string, unknown> {
+    return {
+        stats: {
+            extraPlots: { base: 0, min: 0, max: 2 },
+            growthPct: { base: 100, min: 40, max: 100 },
+            yieldBonus: { base: 0, min: 0, max: 3 },
+            bumperChance: { base: 0, min: 0, max: 50 },
+            orderTimePct: { base: 100, min: 100, max: 200 },
+            coinsPerOrder: { base: 0, min: 0, max: 6 },
+            lifePricePct: { base: 100, min: 25, max: 100 }
+        },
+        tiers: {
+            common: { weight: 40, sellPrice: 1 },
+            uncommon: { weight: 30, sellPrice: 2 },
+            rare: { weight: 15, sellPrice: 3 },
+            epic: { weight: 10, sellPrice: 4 },
+            legendary: { weight: 5, sellPrice: 5 }
+        },
+        upgrades: [
+            {
+                id: "grow",
+                name: "Grow",
+                text: "Grow {0}% faster",
+                pools: ["survival"],
+                maxCopies: 5,
+                sellable: true,
+                effects: [{ stat: "growthPct", perTier: [-10, -20, -30, -40, -50] }]
+            },
+            {
+                id: "coins",
+                name: "Coins",
+                text: "+{0} coins",
+                pools: ["survival", "timed"],
+                maxCopies: 2,
+                sellable: true,
+                effects: [{ stat: "coinsPerOrder", perTier: [1, 2, 3, 4, 5] }]
+            },
+            {
+                id: "plot",
+                name: "Plot",
+                text: "One more plot",
+                pools: ["shop"],
+                tier: "rare",
+                maxCopies: 2,
+                sellable: false,
+                effects: [{ stat: "extraPlots", amount: 1 }]
+            },
+            {
+                id: "fav",
+                name: "Fav",
+                text: "{0}% faster, +{1}",
+                pools: ["survival"],
+                maxCopies: 3,
+                sellable: true,
+                target: "crop",
+                targetRule: "stackable",
+                effects: [
+                    { stat: "growthPct", perTier: [-20, -20, -30, -30, -60] },
+                    { stat: "yieldBonus", perTier: [1, 1, 1, 2, 3] }
+                ]
+            },
+            {
+                id: "guard",
+                name: "Guard",
+                text: "+{0} on one plot",
+                pools: ["survival"],
+                maxCopies: 4,
+                sellable: false,
+                target: "plot",
+                targetRule: "oncePerTarget",
+                effects: [{ stat: "yieldBonus", perTier: [1, 1, 1, 1, 1] }]
+            },
+            {
+                id: "peek",
+                name: "Peek",
+                text: "Lives {0}% cheaper",
+                pools: ["survival"],
+                tier: "epic",
+                maxCopies: 1,
+                sellable: true,
+                requires: ["coins"],
+                category: "economy",
+                effects: [{ stat: "lifePricePct", amount: -10 }]
+            }
+        ]
+    }
 }
 
-// A small table of our own, so these tests don't depend on the shipped numbers.
-const table: UpgradeTable = validateUpgrades([
-    def({ id: "grow", stat: "growthPct", amount: -30, maxStacks: 5 }),
-    def({ id: "yield", stat: "yieldBonus", amount: 1, maxStacks: 2 }),
-    def({ id: "coins", stat: "coinsPerOrder", amount: 3, maxStacks: 1 }),
-    def({ id: "plot", stat: "extraPlots", amount: 1, maxStacks: 2 }),
-    def({ id: "slow", stat: "yieldBonus", amount: -5, maxStacks: 1 })
-])
+const config: UpgradeConfig = validateUpgrades(rawConfig())
+
+function own(id: string, tier: Tier = "common", target: number | string | null = null) {
+    return { id, tier, target } satisfies OwnedUpgrade
+}
+
+function survival(overrides: Partial<GameState> = {}): GameState {
+    return { ...createGame(1, { mode: "survival", allowPowerUps: false }), ...overrides }
+}
+
+// Advances an RNG state n times.
+function advance(rng: number, n: number): number {
+    for (let i = 0; i < n; i++) rng = nextValue(rng)[1]
+    return rng
+}
 
 describe("validateUpgrades", () => {
     it("accepts the shipped upgrades.json", () => {
-        expect(Object.keys(UPGRADES).length).toBe(rawUpgrades.length)
-        for (const u of rawUpgrades) expect(UPGRADES[u.id]).toEqual(u)
+        expect(Object.keys(UPGRADES.upgrades)).toEqual(rawUpgrades.upgrades.map((u) => u.id))
+        expect(Object.keys(UPGRADES.stats).sort()).toEqual([...MODIFIER_STATS].sort())
+        expect(UPGRADES.tiers).toEqual(rawUpgrades.tiers)
     })
 
-    const good = { id: "a", name: "A", text: "Does a", stat: "yieldBonus", amount: 1, maxStacks: 1 }
-    const bad: [string, unknown][] = [
-        ["not a list", { a: good }],
-        ["an empty list", []],
-        ["a duplicate id", [good, { ...good, name: "Other" }]],
-        ["a missing name", [{ ...good, name: undefined }]],
-        ["an empty id", [{ ...good, id: "" }]],
-        ["an unknown stat", [{ ...good, stat: "speed" }]],
-        ["an amount of 0", [{ ...good, amount: 0 }]],
-        ["a fractional amount", [{ ...good, amount: 1.5 }]],
-        ["maxStacks 0", [{ ...good, maxStacks: 0 }]]
+    it("turns perTier and amount into amounts, and fills optional fields", () => {
+        expect(config.upgrades.grow.effects[0].amounts).toEqual([-10, -20, -30, -40, -50])
+        expect(config.upgrades.plot.effects[0].amounts).toEqual([1])
+        expect(config.upgrades.grow).toMatchObject({
+            tier: null,
+            target: null,
+            targetRule: null,
+            requires: [],
+            category: null
+        })
+        expect(config.upgrades.peek).toMatchObject({
+            tier: "epic",
+            requires: ["coins"],
+            category: "economy"
+        })
+        expect(config.upgrades.fav).toMatchObject({ target: "crop", targetRule: "stackable" })
+    })
+
+    type Raw = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
+    // Each case changes one thing in a valid config.
+    it("throws for a value that is not an object", () => {
+        expect(() => validateUpgrades([])).toThrow(/upgrades config/)
+    })
+
+    const bad: [string, (raw: Raw) => unknown][] = [
+        ["no upgrades", (r) => (r.upgrades = [])],
+        ["a missing stat", (r) => delete r.stats.growthPct],
+        ["an extra stat", (r) => (r.stats.speed = { base: 0, min: 0, max: 1 })],
+        ["a fractional stat bound", (r) => (r.stats.growthPct.min = 1.5)],
+        ["min above base", (r) => (r.stats.growthPct.min = 101)],
+        ["a missing tier", (r) => delete r.tiers.epic],
+        ["an extra tier", (r) => (r.tiers.mythic = { weight: 1, sellPrice: 1 })],
+        ["a negative weight", (r) => (r.tiers.common.weight = -1)],
+        ["a negative sell price", (r) => (r.tiers.common.sellPrice = -1)],
+        [
+            "every weight 0",
+            (r) => {
+                for (const t of TIERS) r.tiers[t].weight = 0
+            }
+        ],
+        ["an empty id", (r) => (r.upgrades[0].id = "")],
+        ["a missing name", (r) => delete r.upgrades[0].name],
+        ["a missing text", (r) => delete r.upgrades[0].text],
+        ["a duplicate id", (r) => (r.upgrades[1].id = "grow")],
+        ["empty pools", (r) => (r.upgrades[0].pools = [])],
+        ["a repeated pool", (r) => (r.upgrades[0].pools = ["survival", "survival"])],
+        ["an unknown pool", (r) => (r.upgrades[0].pools = ["puzzle"])],
+        ["an unknown tier", (r) => (r.upgrades[2].tier = "mythic")],
+        ["maxCopies 0", (r) => (r.upgrades[0].maxCopies = 0)],
+        ["a missing sellable", (r) => delete r.upgrades[0].sellable],
+        ["no effects", (r) => (r.upgrades[0].effects = [])],
+        ["an unknown stat", (r) => (r.upgrades[0].effects[0].stat = "speed")],
+        [
+            "two effects on one stat",
+            (r) => r.upgrades[0].effects.push({ stat: "growthPct", perTier: [-1, -1, -1, -1, -1] })
+        ],
+        [
+            "amount on a tiered upgrade",
+            (r) => (r.upgrades[0].effects[0] = { stat: "growthPct", amount: -5 })
+        ],
+        ["four perTier values", (r) => (r.upgrades[0].effects[0].perTier = [-1, -2, -3, -4])],
+        ["a perTier value of 0", (r) => (r.upgrades[0].effects[0].perTier = [0, -2, -3, -4, -5])],
+        ["mixed signs", (r) => (r.upgrades[0].effects[0].perTier = [-1, 2, -3, -4, -5])],
+        ["a weaker higher tier", (r) => (r.upgrades[0].effects[0].perTier = [-5, -4, -6, -7, -8])],
+        [
+            "a fractional perTier",
+            (r) => (r.upgrades[0].effects[0].perTier = [-1.5, -2, -3, -4, -5])
+        ],
+        [
+            "perTier on a non-tiered upgrade",
+            (r) => (r.upgrades[2].effects[0] = { stat: "extraPlots", perTier: [1, 1, 1, 1, 1] })
+        ],
+        ["an amount of 0", (r) => (r.upgrades[2].effects[0].amount = 0)],
+        ["a fractional amount", (r) => (r.upgrades[2].effects[0].amount = 0.5)],
+        ["an unknown target", (r) => (r.upgrades[3].target = "order")],
+        ["a target with no rule", (r) => delete r.upgrades[3].targetRule],
+        ["an unknown target rule", (r) => (r.upgrades[3].targetRule = "twice")],
+        ["a rule with no target", (r) => (r.upgrades[0].targetRule = "stackable")],
+        [
+            "a targeted effect on a run-wide stat",
+            (r) => (r.upgrades[4].effects[0] = { stat: "coinsPerOrder", perTier: [1, 1, 1, 1, 1] })
+        ],
+        ["requires an unknown id", (r) => (r.upgrades[5].requires = ["nope"])],
+        ["requires itself", (r) => (r.upgrades[5].requires = ["peek"])],
+        ["an empty category", (r) => (r.upgrades[5].category = "")]
     ]
-    it.each(bad)("throws for %s", (_, raw) => {
+    it.each(bad)("throws for %s", (_, change) => {
+        const raw = rawConfig()
+        change(raw)
         expect(() => validateUpgrades(raw)).toThrow(/upgrades config/)
     })
 })
 
+describe("effectAmount", () => {
+    it("gives each tier's value for a tiered upgrade", () => {
+        TIERS.forEach((tier, i) => {
+            expect(effectAmount(config.upgrades.grow, 0, tier)).toBe(-10 * (i + 1))
+        })
+        expect(effectAmount(config.upgrades.fav, 1, "epic")).toBe(2)
+    })
+
+    it("gives the one amount at any tier for a non-tiered upgrade", () => {
+        for (const tier of TIERS) expect(effectAmount(config.upgrades.plot, 0, tier)).toBe(1)
+    })
+})
+
 describe("modifiersFor", () => {
-    it("gives the base modifiers with no upgrades", () => {
-        expect(modifiersFor([], table)).toEqual(BASE_MODIFIERS)
-    })
+    const base = baseModifiers(config)
 
-    it("changes only the picked upgrade's stat", () => {
-        expect(modifiersFor(["yield"], table)).toEqual({ ...BASE_MODIFIERS, yieldBonus: 1 })
-    })
-
-    it("stacks repeats by adding", () => {
-        expect(modifiersFor(["grow", "grow"], table).growthPct).toBe(40)
-        expect(modifiersFor(["yield", "coins", "yield"], table)).toEqual({
-            ...BASE_MODIFIERS,
-            yieldBonus: 2,
-            coinsPerOrder: 3
+    it("gives each stat's base with no upgrades", () => {
+        expect(modifiersFor([], config)).toEqual(base)
+        expect(base).toEqual({
+            extraPlots: 0,
+            growthPct: 100,
+            yieldBonus: 0,
+            bumperChance: 0,
+            orderTimePct: 100,
+            coinsPerOrder: 0,
+            lifePricePct: 100
         })
     })
 
-    it("stops percentages at MIN_MODIFIER_PCT and other fields at 0", () => {
-        expect(modifiersFor(["grow", "grow", "grow", "grow"], table).growthPct).toBe(
-            MIN_MODIFIER_PCT
-        )
-        expect(modifiersFor(["slow"], table).yieldBonus).toBe(0)
+    it("changes only the copy's stats, by its tier's amount", () => {
+        expect(modifiersFor([own("coins", "rare")], config)).toEqual({ ...base, coinsPerOrder: 3 })
+    })
+
+    it("adds copies at different tiers", () => {
+        const m = modifiersFor([own("grow", "common"), own("grow", "epic")], config)
+        expect(m.growthPct).toBe(50)
+    })
+
+    it("clamps totals to min and max, whatever the order of the copies", () => {
+        const a = [own("grow", "legendary"), own("grow", "epic"), own("coins", "legendary")]
+        const b = [own("coins", "legendary"), own("grow", "epic"), own("grow", "legendary")]
+        expect(modifiersFor(a, config)).toEqual({ ...base, growthPct: 40, coinsPerOrder: 5 })
+        expect(modifiersFor(b, config)).toEqual(modifiersFor(a, config))
+        const coins = [own("coins", "legendary"), own("coins", "legendary")]
+        expect(modifiersFor(coins, config).coinsPerOrder).toBe(6)
+    })
+
+    it("ignores targeted copies", () => {
+        const m = modifiersFor([own("fav", "common", "carrot"), own("guard", "common", 0)], config)
+        expect(m).toEqual(base)
     })
 
     it("throws for an unknown id", () => {
-        expect(() => modifiersFor(["nope"], table)).toThrow(/unknown upgrade/)
+        expect(() => modifiersFor([own("nope")], config)).toThrow(/unknown upgrade/)
     })
 
     it("returns the same object for the same array, and recalculates for a new one", () => {
-        const picks = ["yield"]
-        const first = modifiersFor(picks, table)
-        expect(modifiersFor(picks, table)).toBe(first)
-
-        const copy = ["yield"]
-        expect(modifiersFor(copy, table)).toEqual(first)
-
-        const more = [...picks, "coins"]
-        expect(modifiersFor(more, table)).toEqual({ ...first, coinsPerOrder: 3 })
+        const picks = [own("coins")]
+        const first = modifiersFor(picks, config)
+        expect(modifiersFor(picks, config)).toBe(first)
+        expect(modifiersFor([own("coins")], config)).toEqual(first)
+        expect(modifiersFor([...picks, own("coins")], config).coinsPerOrder).toBe(2)
     })
 
-    it("recalculates when the table changes", () => {
-        const picks: string[] = []
-        modifiersFor(picks, table)
-        const other = validateUpgrades([def({ id: "x" })])
-        expect(() => modifiersFor(["grow"], other)).toThrow()
-        expect(modifiersFor(picks, other)).toEqual(BASE_MODIFIERS)
+    it("recalculates when the config changes", () => {
+        // "grow" only exists in the test config, so a cached result would hide the throw.
+        const picks = [own("grow")]
+        expect(modifiersFor(picks, config).growthPct).toBe(90)
+        expect(() => modifiersFor(picks, UPGRADES)).toThrow(/unknown upgrade/)
     })
 
     it("returns a frozen object", () => {
-        expect(Object.isFrozen(modifiersFor(["yield"], table))).toBe(true)
+        expect(Object.isFrozen(modifiersFor([own("coins")], config))).toBe(true)
+    })
+})
+
+describe("modifiersAt", () => {
+    const copies = [own("grow"), own("fav", "common", "carrot"), own("guard", "common", 1)]
+
+    it("adds a crop copy only for its crop", () => {
+        expect(modifiersAt(copies, { plot: 0, cropId: "carrot" }, config)).toMatchObject({
+            growthPct: 70,
+            yieldBonus: 1
+        })
+        expect(modifiersAt(copies, { plot: 0, cropId: "garlic" }, config)).toMatchObject({
+            growthPct: 90,
+            yieldBonus: 0
+        })
+    })
+
+    it("adds a plot copy only for its plot, together with crop copies", () => {
+        expect(modifiersAt(copies, { plot: 1, cropId: "garlic" }, config).yieldBonus).toBe(1)
+        expect(modifiersAt(copies, { plot: 1, cropId: "carrot" }, config).yieldBonus).toBe(2)
+    })
+
+    it("clamps the combined total", () => {
+        const many = [own("grow", "legendary"), own("fav", "legendary", "carrot")]
+        expect(modifiersAt(many, { plot: 0, cropId: "carrot" }, config).growthPct).toBe(40)
+    })
+
+    it("equals modifiersFor with no plot and no crop", () => {
+        expect(modifiersAt(copies, { plot: null, cropId: null }, config)).toEqual(
+            modifiersFor(copies, config)
+        )
     })
 })
 
@@ -121,68 +354,169 @@ describe("scalePct", () => {
     })
 })
 
-describe("stackCount and eligibleUpgrades", () => {
-    it("counts repeats", () => {
-        expect(stackCount(["yield", "grow", "yield"], "yield")).toBe(2)
-        expect(stackCount([], "yield")).toBe(0)
+describe("copyCount", () => {
+    it("counts copies at any tier and on any target", () => {
+        const picks = [own("grow", "rare"), own("fav", "common", "carrot"), own("grow", "epic")]
+        expect(copyCount(picks, "grow")).toBe(2)
+        expect(copyCount(picks, "fav")).toBe(1)
+        expect(copyCount([], "grow")).toBe(0)
+    })
+})
+
+describe("validTargets", () => {
+    it("gives [null] for an untargeted upgrade, and [] once its stat is capped", () => {
+        expect(validTargets([], "grow", 4, crops, config)).toEqual([null])
+        const capped = [own("grow", "legendary"), own("grow", "common")]
+        expect(validTargets(capped, "grow", 4, crops, config)).toEqual([])
     })
 
-    it("lists every id, sorted, with no picks", () => {
-        expect(eligibleUpgrades([], table)).toEqual(["coins", "grow", "plot", "slow", "yield"])
+    it("lists every plot without a copy for a oncePerTarget plot upgrade", () => {
+        expect(validTargets([], "guard", 3, crops, config)).toEqual([0, 1, 2])
+        const placed = [own("guard", "common", 1)]
+        expect(validTargets(placed, "guard", 3, crops, config)).toEqual([0, 2])
     })
 
-    it("drops an id once it reaches maxStacks", () => {
-        expect(eligibleUpgrades(["coins", "yield"], table)).toContain("yield")
-        expect(eligibleUpgrades(["coins", "yield", "yield"], table)).toEqual([
+    it("lists a new plot once one is added", () => {
+        const placed = [own("guard", "common", 0)]
+        expect(validTargets(placed, "guard", 1, crops, config)).toEqual([])
+        expect(validTargets(placed, "guard", 2, crops, config)).toEqual([1])
+    })
+
+    it("lists every crop, sorted, for a stackable crop upgrade, even with copies on it", () => {
+        expect(validTargets([], "fav", 4, crops, config)).toEqual(["carrot", "garlic"])
+        const placed = [own("fav", "common", "carrot")]
+        expect(validTargets(placed, "fav", 4, crops, config)).toEqual(["carrot", "garlic"])
+    })
+
+    it("drops a crop once all its stats are capped there", () => {
+        // Growth hits 40 and yield hits 3 on carrot.
+        const placed = [own("fav", "legendary", "carrot")]
+        expect(validTargets(placed, "fav", 4, crops, config)).toEqual(["garlic"])
+    })
+
+    it("keeps a crop while one of its stats can still change", () => {
+        // Growth is capped on carrot, but yield (1) is not.
+        const placed = [own("grow", "legendary"), own("fav", "common", "carrot")]
+        expect(validTargets(placed, "fav", 4, crops, config)).toEqual(["carrot", "garlic"])
+    })
+})
+
+describe("eligibleUpgrades", () => {
+    it("lists only ids in the given pool, sorted", () => {
+        expect(eligibleUpgrades(survival(), "survival", crops, config)).toEqual([
+            "coins",
+            "fav",
             "grow",
-            "plot",
-            "slow"
+            "guard"
         ])
+        expect(eligibleUpgrades(survival(), "timed", crops, config)).toEqual(["coins"])
+        expect(eligibleUpgrades(survival(), "shop", crops, config)).toEqual(["plot"])
+    })
+
+    it("drops an id at maxCopies, counting copies of every tier", () => {
+        const two = survival({ upgrades: [own("coins", "common"), own("coins", "legendary")] })
+        expect(eligibleUpgrades(two, "timed", crops, config)).toEqual([])
+    })
+
+    it("lists an id only once its requires are owned", () => {
+        expect(eligibleUpgrades(survival(), "survival", crops, config)).not.toContain("peek")
+        const owned = survival({ upgrades: [own("coins")] })
+        expect(eligibleUpgrades(owned, "survival", crops, config)).toContain("peek")
+    })
+
+    it("drops an id with no valid targets, and an untargeted id whose stats are capped", () => {
+        const plots = survival().plots.length
+        const allPlots = Array.from({ length: plots }, (_, i) => own("guard", "common", i))
+        const capped = [own("grow", "legendary"), own("grow", "common")]
+        const state = survival({ upgrades: [...allPlots, ...capped] })
+        const ids = eligibleUpgrades(state, "survival", crops, config)
+        expect(ids).not.toContain("guard")
+        expect(ids).not.toContain("grow")
     })
 })
 
 describe("rollOffer", () => {
-    const rng = seedRNG(42)
+    const state = survival()
 
-    it("offers UPGRADE_CHOICES different eligible ids, one draw each", () => {
-        const [offer, after] = rollOffer([], rng, table)
+    it("gives UPGRADE_CHOICES cards with different ids, two draws each, from rng.upgrades", () => {
+        const [offer, after] = rollOffer(state, "survival", crops, config)
         expect(offer).toHaveLength(UPGRADE_CHOICES)
-        expect(new Set(offer).size).toBe(UPGRADE_CHOICES)
-        for (const id of offer) expect(eligibleUpgrades([], table)).toContain(id)
-
-        let expected = rng
-        for (let i = 0; i < UPGRADE_CHOICES; i++) expected = nextValue(expected)[1]
-        expect(after).toBe(expected)
+        expect(new Set(offer.map((c) => c.id)).size).toBe(UPGRADE_CHOICES)
+        const eligible = eligibleUpgrades(state, "survival", crops, config)
+        for (const card of offer) expect(eligible).toContain(card.id)
+        expect(after).toBe(advance(state.rng.upgrades, 2 * UPGRADE_CHOICES))
     })
 
-    it("gives the same offer from the same RNG state", () => {
-        expect(rollOffer([], rng, table)).toEqual(rollOffer([], rng, table))
+    it("gives the same offer from the same state", () => {
+        expect(rollOffer(state, "survival", crops, config)).toEqual(
+            rollOffer(state, "survival", crops, config)
+        )
     })
 
-    it("varies with the RNG state", () => {
+    it("varies with the stream", () => {
         const offers = new Set(
-            [1, 2, 3, 4, 5, 6, 7, 8].map((s) => rollOffer([], seedRNG(s), table)[0].join())
+            [1, 2, 3, 4, 5, 6, 7, 8].map((s) => {
+                const s2 = { ...state, rng: { ...state.rng, upgrades: seedStream(s, 1) } }
+                return JSON.stringify(rollOffer(s2, "survival", crops, config)[0])
+            })
         )
         expect(offers.size).toBeGreaterThan(1)
     })
 
-    it("offers fewer when fewer are eligible", () => {
-        const small = validateUpgrades([def({ id: "a" }), def({ id: "b", maxStacks: 1 })])
-        const [offer, after] = rollOffer(["b"], rng, small)
-        expect(offer).toEqual(["a"])
-        expect(after).toBe(nextValue(rng)[1])
-    })
-
-    it("offers nothing and leaves the RNG alone when nothing is eligible", () => {
-        const one = validateUpgrades([def({ id: "a", maxStacks: 1 })])
-        expect(rollOffer(["a"], rng, one)).toEqual([[], rng])
-    })
-
-    it("never offers an upgrade at maxStacks", () => {
-        const picks = ["coins", "slow", "yield", "yield"]
-        for (let s = 0; s < 50; s++) {
-            const [offer] = rollOffer(picks, seedRNG(s), table)
-            expect(offer.sort()).toEqual(["grow", "plot"])
+    it("gives a non-tiered upgrade only at its own tier", () => {
+        for (let s = 0; s < 100; s++) {
+            const s2 = { ...state, rng: { ...state.rng, upgrades: seedStream(s, 1) } }
+            for (const card of rollOffer(s2, "shop", crops, config)[0]) {
+                expect(card).toEqual({ id: "plot", tier: "rare" })
+            }
         }
+    })
+
+    it("only rolls tiers with a weight above 0", () => {
+        const raw = rawConfig() as { tiers: Record<Tier, { weight: number }> }
+        for (const t of TIERS) raw.tiers[t].weight = t === "common" ? 1 : 0
+        const commonOnly = validateUpgrades(raw)
+        for (let s = 0; s < 30; s++) {
+            const s2 = { ...state, rng: { ...state.rng, upgrades: seedStream(s, 1) } }
+            for (const card of rollOffer(s2, "survival", crops, commonOnly)[0]) {
+                expect(card.tier).toBe("common")
+            }
+        }
+    })
+
+    it("skips a tier with no candidates and still fills the offer", () => {
+        // Only "plot" (rare) is in the shop pool, so every shop card must be rare.
+        const [offer] = rollOffer(state, "shop", crops, config)
+        expect(offer).toEqual([{ id: "plot", tier: "rare" }])
+    })
+
+    it("rolls tiers close to their weights over many seeds", () => {
+        const counts: Record<Tier, number> = {
+            common: 0,
+            uncommon: 0,
+            rare: 0,
+            epic: 0,
+            legendary: 0
+        }
+        const runs = 4000
+        for (let s = 0; s < runs; s++) {
+            const s2 = { ...state, rng: { ...state.rng, upgrades: seedStream(s, 1) } }
+            counts[rollOffer(s2, "timed", crops, config)[0][0].tier] += 1
+        }
+        const total = TIERS.reduce((sum, t) => sum + config.tiers[t].weight, 0)
+        for (const t of TIERS) {
+            expect(Math.abs(counts[t] / runs - config.tiers[t].weight / total)).toBeLessThan(0.04)
+        }
+    })
+
+    it("offers fewer cards when fewer ids are eligible", () => {
+        const [offer, after] = rollOffer(state, "timed", crops, config)
+        expect(offer.map((c) => c.id)).toEqual(["coins"])
+        expect(after).toBe(advance(state.rng.upgrades, 2))
+    })
+
+    it("offers nothing and leaves the stream alone when nothing is eligible", () => {
+        const full = survival({ upgrades: [own("coins"), own("coins")] })
+        expect(rollOffer(full, "timed", crops, config)).toEqual([[], full.rng.upgrades])
     })
 })

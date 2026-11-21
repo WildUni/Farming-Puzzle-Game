@@ -1,11 +1,22 @@
 // Text shown on screen, built from plain state. No Phaser imports so it can be unit tested.
-import type { GameMode, GameState, Order, Plot, Crop, CropTable, UpgradeDef } from "../sim/types"
+import type {
+    GameMode,
+    GameState,
+    Order,
+    Plot,
+    Crop,
+    CropTable,
+    OwnedUpgrade,
+    Tier,
+    UpgradeDef,
+    UpgradeTarget
+} from "../sim/types"
 import { TICKS_PER_SECOND, TIMED_MODE_TICKS } from "../sim/game_constants"
 import { progress } from "../sim/plot"
 import { timeLeft } from "../sim/orders"
 import { levelFor } from "../sim/difficulty"
 import { lifePriceFor } from "../sim/main"
-import { stackCount } from "../sim/upgrades"
+import { copyCount, effectAmount } from "../sim/upgrades"
 
 const MAX_HEARTS = 5 // more lives than this show as a count
 
@@ -20,9 +31,37 @@ function buyLifeText(state: GameState): string {
     return `Buy life\n${lifePriceFor(state)} coins`
 }
 
-// Text on an upgrade pick card: name, what it does, and the stack count after picking it.
-function upgradeCardText(def: UpgradeDef, upgrades: readonly string[]): string {
-    return `${def.name}\n${def.text}\n${stackCount(upgrades, def.id) + 1} / ${def.maxStacks}`
+// Tier name as shown on a card, e.g. "Rare".
+function tierName(tier: Tier): string {
+    return tier.charAt(0).toUpperCase() + tier.slice(1)
+}
+
+// An upgrade's one-line description with {0}, {1}, ... replaced by each effect's size at `tier`.
+function upgradeDescription(def: UpgradeDef, tier: Tier): string {
+    return def.text.replace(/\{(\d+)\}/g, (match, i: string) => {
+        const n = Number(i)
+        return n < def.effects.length ? String(Math.abs(effectAmount(def, n, tier))) : match
+    })
+}
+
+// Text on an upgrade pick card: name, tier, what it does at that tier, and the copy count
+// after picking it.
+function upgradeCardText(def: UpgradeDef, tier: Tier, upgrades: readonly OwnedUpgrade[]): string {
+    const copies = `${copyCount(upgrades, def.id) + 1} / ${def.maxCopies}`
+    return `${def.name}
+${tierName(tier)}
+${upgradeDescription(def, tier)}
+${copies}`
+}
+
+// Title of the target step after a targeted card is clicked.
+function targetTitle(def: UpgradeDef): string {
+    return def.target === "plot" ? "Choose a plot" : "Choose a crop"
+}
+
+// Label on a target button: plots are counted from 1, crops show their id.
+function targetText(target: UpgradeTarget): string {
+    return typeof target === "number" ? `Plot ${target + 1}` : String(target)
 }
 
 // Summary on the game-over panel. Levels are shown counted from 1.
@@ -167,5 +206,6 @@ function debugText(state: GameState, seed: number, paused: boolean): string {
 }
 
 export { orderTimeFraction, isOrderUrgent, parseSeed, debugText, MAX_SEED }
-export { heartsText, buyLifeText, upgradeCardText, gameOverText, gameOverTitle }
+export { heartsText, buyLifeText, gameOverText, gameOverTitle }
+export { tierName, upgradeDescription, upgradeCardText, targetTitle, targetText }
 export { PLAYABLE_MODES, modeName, modeButtonText }

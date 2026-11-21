@@ -1,6 +1,6 @@
 # mulberry.ts
 
-Seeded random number generator (mulberry32). Its state is a single number stored in `GameState.rngState`, so a run can be saved and replayed exactly.
+Seeded random number generator (mulberry32). Each state is a single number. `GameState.rng` holds one state per system (`orders`, `upgrades`), so a run can be saved and replayed exactly, and one system's draws never shift another's.
 
 ## Exports
 
@@ -8,13 +8,21 @@ Seeded random number generator (mulberry32). Its state is a single number stored
 
 Turns a seed into the starting state by converting it to an unsigned 32-bit integer (`seed >>> 0`). For example, `-1` becomes `4294967295`.
 
+### `seedStream(seed: RNGSeed, salt: number): RNGState`
+
+Starting state for a separate stream from the same run seed. Mixes the salt into the seed, then takes the generator's first output as a whole number: with `s = (seed ^ Math.imul(salt, 0x9e3779b9)) >>> 0`, the result is `floor(nextValue(s)[0] × 2^32)`.
+
+- The same seed and salt always give the same state; different salts give unrelated states.
+- mulberry32's state is a counter, so every stream is a position on the same cycle of 2^32 values. Mixing puts each stream at a scattered position, so two streams only overlap if a run draws a large share of 2^32 numbers, which never happens.
+- `GameState.rng.orders` uses `seedRNG(seed)` itself, so order sequences are the same as before streams existed. Other streams use `seedStream` with a fixed salt each: `upgrades` uses salt `1`, `harvest` uses salt `2`.
+
 ### `nextValue(state: RNGState): [number, RNGState]`
 
 Advances the generator once.
 
 - Returns `[value, nextState]`.
 - `value` is a float in `[0, 1)`.
-- `nextState` must be stored back (for example into `GameState.rngState`). Reusing an old state repeats the same number.
+- `nextState` must be stored back (for example into `GameState.rng.orders`). Reusing an old state repeats the same number.
 - Pure: the same `state` always gives the same result. It never calls `Math.random`.
 
 ### `randomInt(state: RNGState, min: number, max: number): [number, RNGState]`
@@ -43,8 +51,11 @@ Advances the generator once.
 - Negative seeds are converted to unsigned 32-bit integers.
 - `randomInt` stays in range, reaches every value, uses one draw, and returns `min` when `min === max`.
 - `pick` returns items from the list, reaches every item, uses one draw, is deterministic, never changes the list, and throws on an empty list.
+- `seedStream` is deterministic, gives different states for salts `1` and `2` and from `seedRNG(seed)`, and its first 1,000 values don't match the first 1,000 values of `seedRNG(seed)` position by position.
 
 ## Open items
+
+- [ ] Add `seedStream(seed, salt)` for separate streams (orders, upgrades, harvest; later events).
 
 - [x] Rename the float generator to `nextValue` and add `randomInt(state, min, max)` on top of it.
 - [x] Add `pick(state, list)` for choosing a random item, such as a crop for an order.

@@ -1,219 +1,434 @@
 # upgrades.ts
 
-Survival upgrades: every `ORDERS_PER_UPGRADE` filled orders the run stops and offers the player a choice of `UPGRADE_CHOICES` upgrades. The pick lasts for the rest of the run.
+Upgrades: what each one does, the tiers they come in, which mode's pool they belong to, adding the owned ones up into `Modifiers`, and rolling offers. Every `ORDERS_PER_UPGRADE` filled orders the run stops and offers the player a choice of `UPGRADE_CHOICES` upgrades, each at a tier. The pick lasts for the rest of the run.
 
-What each upgrade does lives in **`src/data/upgrades.json`**. Which upgrades the player has picked lives in **`GameState.upgrades`**. Rules never look at upgrade ids: they read one number from `modifiersFor(state.upgrades)`, which adds up every pick into a flat `Modifiers` object.
+What each upgrade does lives in **`src/data/upgrades.json`**. Which upgrades the player owns lives in **`GameState.upgrades`**. Rules never look at upgrade ids: they read one number from `modifiersFor` or `modifiersAt`, which add up the owned upgrades into a flat `Modifiers` object.
 
-Only Survival offers upgrades. Timed and Puzzle runs always have `upgrades: []`, so their modifiers are the defaults.
+This spec is **phase 1** of the upgrade plan: the data shape, tiers, pools, caps, copy limits, targeted upgrades and a separate random stream. Only Survival makes offers so far. Rerolls, offers in Timed, the shop and selling come later (see [Later phases](#later-phases)); the data already carries the fields they need.
+
+## Concepts
+
+- **Tier.** One of `common`, `uncommon`, `rare`, `epic`, `legendary`, in that order. A **tiered** upgrade exists at all five tiers, and a higher tier is a stronger version of the same effect. A **non-tiered** upgrade exists at one fixed tier only.
+- **Copy.** Every pick adds a new copy, even of an upgrade already owned at another tier. Copies stack by adding.
+- **Stat cap.** Each `Modifiers` stat has a `min` and a `max`. The total of all copies is clamped to them, so an upgrade that would pass the cap only adds what is left.
+- **Copy limit.** Every upgrade, tiered or not, has `maxCopies`: the most copies one run can own, at any mix of tiers.
+- **Pool.** Each upgrade lists the pools it belongs to: `survival`, `timed`, `shop`. A free pick draws from the current mode's pool. (The shop, later, draws from the mode's pool plus `shop`.)
+- **Target.** A targeted upgrade applies to one plot or one crop that the player chooses when picking it. `oncePerTarget` upgrades can have several copies, but never two on the same target. `stackable` upgrades can put several copies on the same target.
+- **Eligible.** An upgrade can be offered only when it is in the pool, under `maxCopies`, its `requires` are owned, and at least one of its effects can still change a stat (see [Eligibility](#eligibility)). Once nothing can be gained from it, it stops being offered.
 
 ## `src/data/upgrades.json`
 
-A list of upgrade definitions:
+One object with three parts:
 
 ```json
-[
-    {
-        "id": "fastGrowth",
-        "name": "Green thumb",
-        "text": "Crops grow 15% faster",
-        "stat": "growthPct",
-        "amount": -15,
-        "maxStacks": 3
-    }
-]
+{
+    "stats": {
+        "growthPct": { "base": 100, "min": 20, "max": 100 }
+    },
+    "tiers": {
+        "common": { "weight": 40, "sellPrice": 5 }
+    },
+    "upgrades": [
+        {
+            "id": "fastGrowth",
+            "name": "Fast growth",
+            "text": "Crops grow {0}% faster",
+            "pools": ["survival", "timed"],
+            "maxCopies": 5,
+            "sellable": true,
+            "effects": [{ "stat": "growthPct", "perTier": [-2, -4, -7, -12, -20] }]
+        },
+        {
+            "id": "extraPlot",
+            "name": "Extra plot",
+            "text": "One more plot to plant on",
+            "pools": ["shop"],
+            "tier": "rare",
+            "maxCopies": 2,
+            "sellable": false,
+            "effects": [{ "stat": "extraPlots", "amount": 1 }]
+        }
+    ]
+}
 ```
 
-| Field       | Meaning                                                               |
-| ----------- | --------------------------------------------------------------------- |
-| `id`        | Unique id, stored in `GameState.upgrades` and in `chooseUpgrade`      |
-| `name`      | Title on the pick card                                                |
-| `text`      | One line on the pick card saying what it does                         |
-| `stat`      | The `Modifiers` field it changes                                      |
-| `amount`    | Added to that field for each time the upgrade is picked               |
-| `maxStacks` | How many times one run can pick it. Once reached, it is never offered |
+### `stats`
 
-Shipped upgrades:
+One entry per `Modifiers` field, no more and no fewer.
 
-| id                 | name         | stat            | amount | maxStacks |
-| ------------------ | ------------ | --------------- | ------ | --------- |
-| `extraPlot`        | Extra plot   | `extraPlots`    | +1     | 2         |
-| `fastGrowth`       | Green thumb  | `growthPct`     | −15    | 3         |
-| `bigHarvest`       | Big harvest  | `yieldBonus`    | +1     | 3         |
-| `patientCustomers` | Patient folk | `orderTimePct`  | +15    | 3         |
-| `tips`             | Tips         | `coinsPerOrder` | +2     | 3         |
-| `haggler`          | Haggler      | `lifePricePct`  | −15    | 3         |
+| Field  | Meaning                                         |
+| ------ | ----------------------------------------------- |
+| `base` | The value with no upgrades                      |
+| `min`  | Lowest the total can go after adding all copies |
+| `max`  | Highest the total can go                        |
+
+All three are whole numbers with `min <= base <= max`.
+
+### `tiers`
+
+One entry per tier, no more and no fewer.
+
+| Field       | Meaning                                                                           |
+| ----------- | --------------------------------------------------------------------------------- |
+| `weight`    | Relative chance of this tier when rolling a card. Whole number `>= 0`             |
+| `sellPrice` | Coins paid for selling a copy of this tier in the shop (later). Whole number >= 0 |
+
+At least one weight must be above 0. Shipped weights: common 40, uncommon 30, rare 15, epic 10, legendary 5 (they add up to 100).
+
+### `upgrades`
+
+| Field        | Required             | Meaning                                                                                                              |
+| ------------ | -------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `id`         | yes                  | Unique id, stored in `GameState.upgrades` and sent in `chooseUpgrade`                                                |
+| `name`       | yes                  | Title on the pick card                                                                                               |
+| `text`       | yes                  | One line on the card. `{0}`, `{1}`, … are replaced by the size (absolute value) of effect 0, 1, … at the card's tier |
+| `pools`      | yes                  | Non-empty list of `survival`, `timed`, `shop`, no repeats                                                            |
+| `tier`       | non-tiered only      | The one tier it exists at. Leaving it out makes the upgrade tiered                                                   |
+| `maxCopies`  | yes                  | Most copies one run can own. Whole number `>= 1`                                                                     |
+| `sellable`   | yes                  | Whether the shop will buy a copy back. Upgrades that change plots or lives are `false`                               |
+| `effects`    | yes                  | Non-empty list. Tiered: `{ stat, perTier }` with five values, common first. Non-tiered: `{ stat, amount }`           |
+| `target`     | no                   | `"plot"` or `"crop"`. Leaving it out means the upgrade applies everywhere                                            |
+| `targetRule` | when `target` is set | `"oncePerTarget"` or `"stackable"`                                                                                   |
+| `requires`   | no                   | Upgrade ids that must be owned (at least one copy each) before this one is offered                                   |
+| `category`   | no                   | A group name, for per-category copy limits later. Not used by any rule yet                                           |
+
+### Shipped upgrades (phase 1)
+
+All numbers are placeholders until playtesting.
+
+| id                 | name              | pools           | tier   | maxCopies | effects (common → legendary)                                       | target            | sellable |
+| ------------------ | ----------------- | --------------- | ------ | --------- | ------------------------------------------------------------------ | ----------------- | -------- |
+| `fastGrowth`       | Fast growth       | survival, timed | tiered | 5         | `growthPct` −2, −4, −7, −12, −20                                   | –                 | yes      |
+| `patientCustomers` | Patient customers | survival, timed | tiered | 5         | `orderTimePct` +3, +6, +10, +15, +25                               | –                 | yes      |
+| `bigTips`          | Big tips          | survival, timed | tiered | 5         | `coinsPerOrder` +1, +2, +3, +5, +8                                 | –                 | yes      |
+| `lifeDiscount`     | Life discount     | survival        | tiered | 5         | `lifePricePct` −3, −6, −10, −15, −25                               | –                 | yes      |
+| `bumperHarvest`    | Bumper harvest    | survival, timed | tiered | 5         | `bumperChance` +5, +8, +12, +18, +25                               | –                 | yes      |
+| `favoriteCrop`     | Favorite crop     | survival, timed | tiered | 3         | `growthPct` −3, −6, −10, −15, −25; `yieldBonus` +1, +1, +1, +2, +3 | crop, `stackable` | yes      |
+| `extraPlot`        | Extra plot        | shop            | rare   | 2         | `extraPlots` +1                                                    | –                 | no       |
+
+Shipped stats:
+
+| Stat            | base | min | max | Meaning                                             |
+| --------------- | ---- | --- | --- | --------------------------------------------------- |
+| `extraPlots`    | 0    | 0   | 2   | Plots added on top of `START_PLOTS`                 |
+| `growthPct`     | 100  | 20  | 100 | % of a crop's `growTicks`; 80 = takes 20% less time |
+| `yieldBonus`    | 0    | 0   | 3   | Extra crops per harvest                             |
+| `bumperChance`  | 0    | 0   | 50  | % chance that a harvest gives 1 more crop           |
+| `orderTimePct`  | 100  | 100 | 200 | % of the order time limit                           |
+| `coinsPerOrder` | 0    | 0   | 20  | Extra coins per filled order                        |
+| `lifePricePct`  | 100  | 25  | 100 | % of the normal life price                          |
+
+Changes from the old six: `bigHarvest` (flat +1 yield) is replaced by `bumperHarvest`, a chance of 1 extra crop per harvest (see [The harvest roll](#the-harvest-roll)). `haggler` becomes `lifeDiscount` (the new Haggler belongs to the Bulk buyer event). `tips` becomes `bigTips`. `extraPlot` is shop-only, so it is not offered until the shop exists. `"timed"` is already listed in the pools so that turning Timed offers on later is a code change only.
 
 ## Types (in [types.md](types.md))
 
 ```ts
+type Tier = "common" | "uncommon" | "rare" | "epic" | "legendary"
+type Pool = "survival" | "timed" | "shop"
 type Modifiers = {
-    extraPlots: number // plots added on top of START_PLOTS
-    growthPct: number // % of a crop's growTicks; 100 = normal, 85 = 15% faster
-    yieldBonus: number // extra crops per harvest
-    orderTimePct: number // % of the order time limit
-    coinsPerOrder: number // extra coins per filled order
-    lifePricePct: number // % of the normal life price
+    extraPlots: number
+    growthPct: number
+    yieldBonus: number
+    bumperChance: number
+    orderTimePct: number
+    coinsPerOrder: number
+    lifePricePct: number
 }
 type ModifierStat = keyof Modifiers
+type StatDef = { base: number; min: number; max: number }
+type TierDef = { weight: number; sellPrice: number }
+type UpgradeEffect = { stat: ModifierStat; amounts: number[] } // tiered: 5 values; non-tiered: 1
 type UpgradeDef = {
     id: string
     name: string
     text: string
-    stat: ModifierStat
-    amount: number
-    maxStacks: number
+    pools: Pool[]
+    tier: Tier | null // null = tiered
+    maxCopies: number
+    sellable: boolean
+    effects: UpgradeEffect[]
+    target: "plot" | "crop" | null
+    targetRule: "oncePerTarget" | "stackable" | null // null exactly when target is null
+    requires: string[]
+    category: string | null
 }
-type UpgradeTable = Record<string, UpgradeDef> // id -> definition
+type UpgradeConfig = {
+    stats: Record<ModifierStat, StatDef>
+    tiers: Record<Tier, TierDef>
+    upgrades: Record<string, UpgradeDef> // id -> definition
+}
+type UpgradeTarget = number | string | null // plot index, crop id, or null for untargeted
+type OwnedUpgrade = { id: string; tier: Tier; target: UpgradeTarget }
+type OfferCard = { id: string; tier: Tier }
 ```
+
+The JSON's `perTier` and `amount` both become `amounts` (five values or one), so code reads an effect the same way for both kinds. Optional JSON fields become `null` or `[]`, so every `UpgradeDef` has the same shape.
 
 ## Constants (in [game_constants.md](game_constants.md))
 
-| Constant             | Value | Meaning                                                                          |
-| -------------------- | ----- | -------------------------------------------------------------------------------- |
-| `ORDERS_PER_UPGRADE` | `10`  | An offer is made after every this many filled orders                             |
-| `UPGRADE_CHOICES`    | `3`   | Upgrades on one offer (fewer if fewer can still be picked)                       |
-| `MIN_MODIFIER_PCT`   | `25`  | Floor for every `…Pct` modifier, so stacking can't make anything instant or free |
+| Constant             | Value | Meaning                                                         |
+| -------------------- | ----- | --------------------------------------------------------------- |
+| `ORDERS_PER_UPGRADE` | `10`  | An offer is made after every this many filled orders            |
+| `UPGRADE_CHOICES`    | `3`   | Cards on one offer (fewer if fewer upgrades are eligible)       |
+| `TIERS`              | list  | `["common", "uncommon", "rare", "epic", "legendary"]`, in order |
+
+`MIN_MODIFIER_PCT` is removed: each stat's `min` and `max` in `upgrades.json` replace it.
 
 ## Exports
 
-### `validateUpgrades(raw: unknown): UpgradeTable`
+### `validateUpgrades(raw: unknown): UpgradeConfig`
 
-Checks a parsed JSON value and returns it as a table keyed by id. Throws an `Error` naming the bad entry when:
+Checks a parsed JSON value and returns it in the typed shape. Throws an `Error` naming the bad entry when:
 
-- `raw` is not a non-empty list.
-- An entry's `id`, `name` or `text` is not a non-empty string, or an `id` is used twice.
-- `stat` is not a `Modifiers` field.
-- `amount` is not a whole number other than 0.
-- `maxStacks` is not a whole number `>= 1`.
+- `raw` is not an object with `stats`, `tiers` and a non-empty `upgrades` list.
+- `stats` is missing a `Modifiers` field or has an extra one; a `base`, `min` or `max` is not a whole number; or `min <= base <= max` fails.
+- `tiers` is missing a tier or has an extra one; a `weight` or `sellPrice` is not a whole number `>= 0`; or every weight is 0.
+- An upgrade's `id`, `name` or `text` is not a non-empty string, or an `id` is used twice.
+- `pools` is empty, has a repeat, or has a value that is not a pool.
+- `tier`, when present, is not a tier.
+- `maxCopies` is not a whole number `>= 1`.
+- `sellable` is not `true` or `false`.
+- `effects` is empty; an effect's `stat` is not a `Modifiers` field; two effects use the same stat.
+- A **tiered** upgrade's effect doesn't have `perTier`, or has `amount`; `perTier` doesn't have exactly five whole numbers; a value is 0; the values don't all have the same sign; or a value is smaller in size than the one before it (a higher tier is never weaker).
+- A **non-tiered** upgrade's effect doesn't have `amount`, or has `perTier`; or `amount` is not a whole number other than 0.
+- `target` is set but is not `plot` or `crop`; `targetRule` is set without `target`, missing with it, or not one of its two values.
+- A targeted upgrade's effect uses a stat that is not read per plot and crop (only `growthPct`, `yieldBonus` and `bumperChance` are; see [Where the modifiers apply](#where-the-modifiers-apply)).
+- `requires` names an unknown id or the upgrade itself.
+- `category`, when present, is not a non-empty string.
 
 A bad file is a setup mistake, so this throws instead of returning `null`.
 
-### `UPGRADES: UpgradeTable`
+### `UPGRADES: UpgradeConfig`
 
 `upgrades.json` passed through `validateUpgrades` once, when the module loads.
 
-Every function below takes an optional last argument `table: UpgradeTable = UPGRADES`, so tests can use their own upgrades.
+Every function below takes an optional last argument `config: UpgradeConfig = UPGRADES`, so tests can use their own upgrades.
 
-### `BASE_MODIFIERS: Readonly<Modifiers>`
+### `baseModifiers(config?): Readonly<Modifiers>`
 
-The modifiers with no upgrades: `extraPlots 0`, `growthPct 100`, `yieldBonus 0`, `orderTimePct 100`, `coinsPerOrder 0`, `lifePricePct 100`. Frozen.
+Each stat's `base`. Frozen.
 
-### `modifiersFor(upgrades: readonly string[], table?): Readonly<Modifiers>`
+### `effectAmount(def: UpgradeDef, effect: number, tier: Tier): number`
 
-Adds up the picks:
+The amount effect number `effect` adds at `tier`: `amounts[TIERS.indexOf(tier)]` for a tiered upgrade, `amounts[0]` for a non-tiered one. Card text and every sum use this.
 
-1. Start from `BASE_MODIFIERS`.
-2. For each id in `upgrades` (repeats count each time), add `table[id].amount` to `table[id].stat`.
-3. Clamp: every `…Pct` field to at least `MIN_MODIFIER_PCT`, every other field to at least `0`.
+### `modifiersFor(upgrades: readonly OwnedUpgrade[], config?): Readonly<Modifiers>`
+
+The run-wide totals:
+
+1. Start from each stat's `base`.
+2. For each owned copy **with `target: null`**, add `effectAmount` of each of its effects to that effect's stat.
+3. Clamp every stat to its `[min, max]`.
 
 Rules:
 
-- Throws for an id that is not in the table. `chooseUpgrade` only stores offered ids, so this means a hand-built or corrupted state.
-- Stacking adds; it never multiplies. Two `fastGrowth` picks give `growthPct` 70.
-- **Remembers its last result.** If called with the same `upgrades` array object (`===`) and table as last time, it returns the same object without adding up again. The sim never changes arrays in place and only `chooseUpgrade` builds a new `upgrades` array, so this recalculates once per pick and once per new run. A different array with the same contents gives an equal result, just recalculated. The returned object is frozen and must not be changed.
+- Targeted copies are left out; they only count in `modifiersAt`.
+- Throws for an id that is not in the config. `chooseUpgrade` only stores offered ids, so this means a hand-built or corrupted state.
+- Stacking adds; it never multiplies. Clamping happens once, at the end, so the result doesn't depend on the order of the copies.
+- **Remembers its last result.** If called with the same `upgrades` array object (`===`) and config as last time, it returns the same frozen object without adding up again. The sim never changes arrays in place and only `chooseUpgrade` builds a new `upgrades` array, so this recalculates once per pick and once per new run.
+
+### `modifiersAt(upgrades, where: { plot: number | null; cropId: string | null }, config?): Readonly<Modifiers>`
+
+The totals at one place: like `modifiersFor`, but step 2 also adds copies whose target matches, meaning a `plot` upgrade whose target equals `where.plot`, or a `crop` upgrade whose target equals `where.cropId`. Clamping still happens once, on the combined total, so a stat's cap applies to everything that affects that crop on that plot. Not cached; it is only called by `plant` and `harvest`.
+
+`modifiersAt(upgrades, { plot: null, cropId: null })` equals `modifiersFor(upgrades)`.
 
 ### `scalePct(base: number, pct: number): number`
 
 `max(1, round(base × pct / 100))`. Every rule that applies a `…Pct` modifier uses this, so they all round the same way.
 
-### `stackCount(upgrades: readonly string[], id: string): number`
+### `copyCount(upgrades: readonly OwnedUpgrade[], id: string): number`
 
-How many times `id` appears in `upgrades`.
+How many copies of `id` are owned, at any tier and on any target.
 
-### `eligibleUpgrades(upgrades: readonly string[], table?): string[]`
+### `validTargets(upgrades, id: string, plotCount: number, crops: CropTable, config?): UpgradeTarget[]`
 
-Ids that can still be offered (`stackCount < maxStacks`), sorted, so the list doesn't depend on the JSON's key order.
+Where a new copy of `id` could go:
 
-### `rollOffer(upgrades, rng: RNGState, table?): [string[], RNGState]`
+- Untargeted upgrade: `[null]` if at least one effect can still change its stat in `modifiersFor`, else `[]`.
+- `plot` upgrade: plot indexes `0 … plotCount − 1`, ascending.
+- `crop` upgrade: crop ids in `crops`, sorted alphabetically.
 
-Picks the next offer from `eligibleUpgrades(upgrades)`:
+A plot or crop is left out when:
 
-- Offers `min(UPGRADE_CHOICES, eligible.length)` different ids, in the order drawn.
-- Uses a partial Fisher–Yates shuffle: for `i` from 0, draw `j = randomInt(i, n − 1)` and swap positions `i` and `j`. Exactly one draw per offered id.
-- With nothing eligible, returns `[]` and the same `rng`.
+- the rule is `oncePerTarget` and a copy of `id` already has that target; or
+- no effect can still change its stat there. For a plot this is checked with `modifiersAt(upgrades, { plot, cropId: null })`; for a crop, with `modifiersAt(upgrades, { plot: null, cropId })`. A crop-and-plot pair can still be clamped later; clamping keeps that safe.
+
+**Can still change** means: the effect's amount is negative and the total is above the stat's `min`, or the amount is positive and the total is below its `max`. Sign is the same at every tier (validated), so this doesn't depend on which tier is rolled.
+
+Plots are only ever added to the end of `plots`, never removed, so a plot index stays valid for the whole run.
+
+### `eligibleUpgrades(state: GameState, pool: Pool, crops: CropTable, config?): string[]`
+
+Ids that can be offered from `pool`, sorted. An id is eligible when all of these hold:
+
+1. `pool` is in its `pools`.
+2. `copyCount < maxCopies`.
+3. Every id in `requires` has at least one owned copy.
+4. `validTargets` is not empty.
+
+### `rollOffer(state: GameState, pool: Pool, crops: CropTable, config?): [OfferCard[], RNGState]`
+
+Draws the next offer from `state.rng.upgrades` and returns the cards and the new state of that stream. For each of up to `UPGRADE_CHOICES` cards, in turn:
+
+1. **Candidates per tier.** For each tier, the eligible ids that exist at that tier and are not already on this offer. A tiered upgrade exists at every tier; a non-tiered one only at its `tier`.
+2. **Usable tiers.** The tiers, in `TIERS` order, that have a weight above 0 and at least one candidate. If there are none, the offer stops here with the cards drawn so far.
+3. **Tier draw.** `r = randomInt(0, W − 1)`, where `W` is the sum of the usable tiers' weights. Walking the usable tiers in order and subtracting each weight, the tier where `r` drops below its weight is chosen.
+4. **Upgrade draw.** `pick` one id from that tier's candidates (sorted).
+5. The card is `{ id, tier }`.
+
+Rules:
+
+- Exactly two draws per card. With nothing eligible, returns `[]` and the stream unchanged.
+- A tier with no candidates is skipped and the other weights keep their proportions. For example, if nothing is left at legendary, the four remaining tiers are rolled at 40 : 30 : 15 : 10.
+- No id appears twice on one offer, even at different tiers.
+- A non-tiered upgrade competes only within its own tier, so adding more upgrades at one tier lowers the chance of each other upgrade at that tier.
+- Tier weights come from `config.tiers` as they are. Luck upgrades that change them come later (see Open items).
 
 ## The offer flow (in [main.md](main.md))
 
-New `GameState` fields:
+`GameState` fields:
 
-| Field          | Starting value | Meaning                                                    |
-| -------------- | -------------- | ---------------------------------------------------------- |
-| `upgrades`     | `[]`           | Picked ids, in pick order. Repeats mean stacks             |
-| `upgradeOffer` | `null`         | The ids on offer while the player is choosing, else `null` |
-| `offersMade`   | `0`            | Offers made so far this run                                |
+| Field          | Starting value                                                                           | Meaning                                                             |
+| -------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `rng`          | `{ orders: seedRNG(seed), upgrades: seedStream(seed, 1), harvest: seedStream(seed, 2) }` | One generator state per system (see [mulberry.md](mulberry.md))     |
+| `upgrades`     | `[]`                                                                                     | `OwnedUpgrade` copies, in pick order                                |
+| `upgradeOffer` | `null`                                                                                   | The `OfferCard`s on offer while the player is choosing, else `null` |
+| `offersMade`   | `0`                                                                                      | Offers made so far this run                                         |
 
 1. **Offer due:** in Survival, when `ordersCompleted >= (offersMade + 1) × ORDERS_PER_UPGRADE`. So the 1st offer comes after the 10th filled order, the 2nd after the 20th, and so on.
-2. **Making the offer:** at the end of a `step` (after new orders, and only if the run didn't end on that step), if an offer is due, `rollOffer` draws it from `rngState`, `upgradeOffer` is set and `offersMade` goes up by 1. If nothing is eligible, `offersMade` still goes up and `upgradeOffer` stays `null`, so the run continues.
-3. **The clock stops:** while `upgradeOffer` is not `null`, `step` returns the state unchanged (same object), and `applyAction` refuses every action except `chooseUpgrade`. Nothing can be grown, delivered or bought on frozen time.
-4. **Picking:** `chooseUpgrade { upgradeId }` is accepted only if `upgradeId` is in `upgradeOffer`. It appends the id to `upgrades` (a new array) and sets `upgradeOffer` to `null`. `extraPlot` also adds `amount` empty plots to the end of `plots` right away.
+2. **Making the offer:** at the end of a `step` (after new orders, and only if the run didn't end on that step), if an offer is due, `rollOffer(state, "survival", crops)` draws it from `rng.upgrades`, `upgradeOffer` is set and `offersMade` goes up by 1. If nothing is eligible, `offersMade` still goes up and `upgradeOffer` stays `null`, so the run continues.
+3. **The clock stops:** while `upgradeOffer` is not `null`, `step` returns the state unchanged (same object), and `applyAction` refuses every action except `chooseUpgrade`.
+4. **Picking:** `chooseUpgrade { upgradeId, target? }` is accepted only when:
+    - `upgradeId` is on the offer;
+    - for an untargeted upgrade, `target` is left out (or `null`);
+    - for a targeted upgrade, `target` is one of `validTargets(upgrades, upgradeId, plots.length, crops)`.
+
+    It appends `{ id, tier: <the card's tier>, target }` to `upgrades` (a new array) and sets `upgradeOffer` to `null`.
+
+5. **Extra plots:** after a pick, `plots.length` must equal `START_PLOTS + modifiersFor(upgrades).extraPlots`. If the pick raised `extraPlots`, that many empty plots are added to the end of `plots`. Because the clamped total is used, a pick past the cap adds no plot.
+
+The random draws for offers come from `rng.upgrades`, separate from `rng.orders`. So the Nth order a run creates is the same whatever the player picks, and later rerolls won't change which orders come next.
 
 ## Where the modifiers apply
 
 Each modifier is read in one place. Changes apply from then on; nothing already made is changed afterwards.
 
-| Modifier        | Read by                    | Effect                                                                                       |
-| --------------- | -------------------------- | -------------------------------------------------------------------------------------------- |
-| `extraPlots`    | `chooseUpgrade`            | Adds plots once, when picked                                                                 |
-| `growthPct`     | `plant`                    | `readyAt = now + scalePct(growTicks, growthPct)`; crops already growing keep their `readyAt` |
-| `yieldBonus`    | `harvest`                  | Adds `crops[cropId].yield + yieldBonus`                                                      |
-| `orderTimePct`  | `orderRules` (Survival)    | `orderTicks = scalePct(level orderTicks, orderTimePct)` for new orders                       |
-| `coinsPerOrder` | `deliver` (Survival)       | Pays `DIFFICULTY.coinsPerOrder + coinsPerOrder`                                              |
-| `lifePricePct`  | `lifePriceFor` / `buyLife` | Price is `scalePct(lifePrice(livesBought), lifePricePct)`                                    |
+| Modifier        | Read by                    | Through                         | Effect                                                                                       |
+| --------------- | -------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------- |
+| `extraPlots`    | `chooseUpgrade`            | `modifiersFor`                  | Adds plots when the total goes up                                                            |
+| `growthPct`     | `plant`                    | `modifiersAt({ plot, cropId })` | `readyAt = now + scalePct(growTicks, growthPct)`; crops already growing keep their `readyAt` |
+| `yieldBonus`    | `harvest`                  | `modifiersAt({ plot, cropId })` | Adds `crops[cropId].yield + yieldBonus`                                                      |
+| `bumperChance`  | `harvest`                  | `modifiersAt({ plot, cropId })` | Adds 1 more crop when the harvest roll is below it (see below)                               |
+| `orderTimePct`  | `orderRules` (Survival)    | `modifiersFor`                  | `orderTicks = scalePct(level orderTicks, orderTimePct)` for new orders                       |
+| `coinsPerOrder` | `deliver` (Survival)       | `modifiersFor`                  | Pays `DIFFICULTY.coinsPerOrder + coinsPerOrder`                                              |
+| `lifePricePct`  | `lifePriceFor` / `buyLife` | `modifiersFor`                  | Price is `scalePct(lifePrice(livesBought), lifePricePct)`                                    |
+
+### The harvest roll
+
+`harvest` is the only action that draws a random number, and only from `rng.harvest`:
+
+- When `bumperChance` (at that plot and crop) is 0, it draws nothing and `rng.harvest` is unchanged. Runs without Bumper harvest never touch the stream.
+- Otherwise it draws once: `roll = randomInt(rng.harvest, 0, 99)`. If `roll < bumperChance`, the harvest adds 1 more crop. The new state is stored in `rng.harvest` either way.
+- The extra crop is added after `yieldBonus`: `crops[cropId].yield + yieldBonus + (bumper ? 1 : 0)`.
+
+Replay stays exact, because the stream lives in `GameState` and actions are replayed in log order. A later Bigger bumper upgrade would add a stat for the number of extra crops instead of the fixed 1; Lucky drops can roll from the same stream.
+
+Adding a stat means: a `Modifiers` field, an entry under `stats` in `upgrades.json`, and one row here with the one place that reads it. Adding an upgrade that only uses existing stats is a JSON entry and nothing else.
 
 ## Rules
 
 - No Phaser or browser imports. Pure apart from the last-result cache in `modifiersFor`, which never changes what is returned for given arguments.
-- `GameState` stays plain JSON: it holds ids, never `Modifiers` objects.
+- `GameState` stays plain JSON: it holds `OwnedUpgrade` and `OfferCard` objects (ids, tiers, targets), never `Modifiers`.
+- No rule reads an upgrade id. A yes/no ability is a stat with `max` 1.
 
 ## Tests (`upgrades.test.ts`)
 
 **`validateUpgrades`**
 
 - Accepts the shipped `upgrades.json`.
-- Throws for: not a list, an empty list, a duplicate id, a missing name, an unknown stat, an amount of 0 or a fraction, and `maxStacks` 0.
+- Throws for each case in its list above, one test per case, using a small valid config with one field changed.
+- Turns `perTier` and `amount` into `amounts`, and missing optional fields into `null` / `[]`.
+
+**`effectAmount`**
+
+- Gives each tier's value for a tiered upgrade, and the one amount at any tier for a non-tiered one.
 
 **`modifiersFor`**
 
-- No upgrades gives `BASE_MODIFIERS`.
-- One pick changes only its stat; repeats stack by adding.
-- `…Pct` fields stop at `MIN_MODIFIER_PCT`, others at 0.
+- No upgrades gives each stat's `base`.
+- One copy changes only its stats, by its tier's amount; copies at different tiers add up.
+- Totals are clamped to `min` and `max`; the order of the copies doesn't change the result.
+- Targeted copies are ignored.
 - Throws for an unknown id.
-- The same array object returns the same result object; a new array with the same contents gives an equal result; a new array with another pick gives the new totals.
-- Switching tables with the same array recalculates.
+- The same array object returns the same result object; a new array with the same contents gives an equal result; switching configs recalculates.
+
+**`modifiersAt`**
+
+- Adds a crop copy only for its crop, and a plot copy only for its plot; both together on a matching plot and crop.
+- Clamps the combined total.
+- With `{ plot: null, cropId: null }`, equals `modifiersFor`.
 
 **`scalePct`**
 
 - 100% returns the base; rounds to the nearest whole number; never goes below 1.
 
+**`validTargets`**
+
+- Untargeted: `[null]`, or `[]` once every effect's stat is at its cap.
+- Plot, `oncePerTarget`: every plot with no copies; drops a plot once it has one; lists a new plot after an extra plot is added.
+- Crop, `stackable`: every crop, sorted, even with copies on it; drops a crop once its stats are capped there.
+
 **`eligibleUpgrades`**
 
-- Lists every id, sorted, with no picks; drops an id once it reaches `maxStacks`.
+- Lists only ids in the given pool, sorted.
+- Drops an id at `maxCopies`, counting copies of every tier.
+- Drops an id whose `requires` aren't owned, and lists it once they are.
+- Drops an id with no valid targets, and an untargeted id whose stats are all capped.
 
 **`rollOffer`**
 
-- Gives `UPGRADE_CHOICES` different eligible ids and uses exactly that many draws.
-- The same `rng` gives the same offer.
-- Offers fewer when fewer are eligible, and `[]` with the RNG unchanged when none are.
-- Never offers an id at `maxStacks`.
+- Gives `UPGRADE_CHOICES` cards with different ids, using exactly two draws per card, from `rng.upgrades` only.
+- The same state gives the same offer.
+- Each card's tier is one its upgrade exists at; a non-tiered upgrade always comes at its own tier.
+- With weights `[1, 0, 0, 0, 0]`, every card is common; with a tier that has no candidates, that tier never comes up and the run still gets a full offer when enough is eligible.
+- Over many seeds, tier frequencies are close to the weights (a loose bound, to catch a broken walk, not to test the generator).
+- Offers fewer cards when fewer ids are eligible, and `[]` with the stream unchanged when none are.
 
 **Offer flow (`main.test.ts`)**
 
-- No offer before `ORDERS_PER_UPGRADE` filled orders; an offer of `UPGRADE_CHOICES` ids on the step after the `ORDERS_PER_UPGRADE`th.
+- No offer before `ORDERS_PER_UPGRADE` filled orders; an offer on the step after the `ORDERS_PER_UPGRADE`th.
 - While an offer is open, `step` returns the same state and every other action returns `null`.
-- `chooseUpgrade` stores the pick and clears the offer; it refuses an id not on the offer and refuses when there is no offer.
-- The next offer comes at `2 × ORDERS_PER_UPGRADE`.
-- Timed never makes an offer.
-- With nothing eligible, the run carries on with no offer.
-- Each modifier changes its rule as in the table above, and `extraPlot` adds an empty plot.
+- `chooseUpgrade` stores `{ id, tier, target }` with the card's tier and clears the offer.
+- It refuses: no offer open; an id not on the offer; a target on an untargeted upgrade; no target, or a target not in `validTargets`, on a targeted one.
+- The next offer comes at `2 × ORDERS_PER_UPGRADE`; Timed never makes an offer; with nothing eligible the run carries on with no offer.
+- Bumper harvest: with `bumperChance` 0, a harvest leaves `rng.harvest` unchanged; above 0, it draws exactly once, adds 1 crop exactly when the roll is below the chance, and both outcomes happen over many seeds. A harvest never changes `rng.orders` or `rng.upgrades`.
+- Making an offer leaves `rng.orders` unchanged, so two Survival runs on the same seed that pick different upgrades get the same order sequence (same crops and same draws).
+- Each modifier changes its rule as in the table above; a Favorite crop copy changes growth and yield only for its crop.
+- An `extraPlots` pick adds an empty plot; a pick past the cap adds none.
 
 **Replay (`verification.test.ts`)**
 
-- Scripted Survival runs that pick upgrades replay equal.
+- Scripted Survival runs that pick upgrades replay equal, including a targeted pick and runs with Bumper harvest.
 - A log that leaves an offer unanswered and has later entries, or a later `finalTick`, fails with `offer-pending`.
+
+## Later phases
+
+Each later phase adds to this design without changing the stored shapes above.
+
+1. **Timed offers and rerolls.** `isOfferDue` and `rollOffer` use the mode's pool instead of always `survival`. A `rerollOffer` action pays a rising coin price (`rerollsThisOffer` in state) and redraws the whole offer from `rng.upgrades`, with the same tier weights as a normal roll.
+2. **Shop** (its own `shop.ts` and spec). Stock is drawn from the mode's pool plus `shop`, from `rng.upgrades` or its own stream. `sellUpgrade { index }` removes `upgrades[index]` and pays its tier's `sellPrice`; only `sellable` upgrades, only while the shop is open. Selling frees a copy and, for targeted upgrades, its target.
+3. **More upgrade kinds**, behind a `kind` field: `instant` (Promotion: changes an owned copy's tier and is not stored), `active` (Miracle grow: owning it unlocks a `useAbility` action, its recharge is a stat), `economy` (Interest, Discount card, Free restock: stats read by the shop).
+4. **Upgrades for events, power-ups and storage** ship with those systems. `requires` grows to name an event or power-up that must exist in the run. Other chance-based upgrades (Second chance, Lucky drops) draw from a stream of their own, as Bumper harvest does.
 
 ## Open items
 
-- [ ] Tune the numbers and the `ORDERS_PER_UPGRADE` gap after playtesting.
-- [ ] Buy upgrades with coins as well as picking them (design doc).
-- [ ] Offers use the main `rngState`, so they shift which orders come next. Consider a separate RNG stream if the Daily Challenge needs order sequences that don't depend on when offers happen.
+- [ ] Tune all numbers (tier weights, per-tier amounts, caps, `maxCopies`, `ORDERS_PER_UPGRADE`) after playtesting.
+- [ ] Should rerolls roll better tiers than a normal roll?
+- [ ] Luck upgrades (Lucky stars): the exact rule for changing the tier weights.
+- [ ] Per-category copy limits, using `category` (for example, at most 5 growth upgrades of any kind).
+- [ ] Plot-targeted upgrades are one per plot per upgrade for now. If they become sellable, they need a tradeoff: for example a limit on upgrades per plot, with same-type upgrades allowed to stack on one plot.
+- [x] Bumper harvest: a third stream, `rng.harvest`, used only by `harvest` and only when `bumperChance` is above 0.
+- [ ] Should `orderTimePct`'s `min` stay at 100? It stops any effect from shortening order timers, which rules out negative effects such as the Fake merchant's.
 - [ ] Pre-run boosts (meta currency, Daily Challenge) as starting entries in `upgrades`, passed through `createGame`.
+- [x] Offers use their own random stream (`rng.upgrades`), so they don't shift which orders come next.

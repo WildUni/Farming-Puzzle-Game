@@ -1,4 +1,4 @@
-import type { OrderRules } from "./types"
+import type { OrderRules, Tier } from "./types"
 
 //Game Loop
 const TICKS_PER_SECOND = 10
@@ -15,10 +15,11 @@ const ORDER_MIN_AMOUNT = 2
 const ORDER_MAX_AMOUNT = 6
 const MAX_OPEN_ORDERS = 2 //step keeps this many orders open
 
-//Upgrades (Survival)
+//Upgrades
 const ORDERS_PER_UPGRADE = 10 //an upgrade offer comes after every this many filled orders
 const UPGRADE_CHOICES = 3 //upgrades shown on one offer
-const MIN_MODIFIER_PCT = 25 //floor for every percentage modifier
+// Upgrade tiers, weakest first. Tiered upgrades list one amount per tier in this order.
+const TIERS: readonly Tier[] = ["common", "uncommon", "rare", "epic", "legendary"]
 
 // Fixed order rules for Timed and Puzzle. Survival reads its rules from difficulty.json.
 const DEFAULT_ORDER_RULES: OrderRules = {
@@ -39,5 +40,5 @@ export {
     MAX_OPEN_ORDERS,
     ORDERS_PER_UPGRADE,
     UPGRADE_CHOICES,
-    MIN_MODIFIER_PCT
+    TIERS
 }

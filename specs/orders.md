@@ -33,7 +33,7 @@ These are starting values for tuning. With them, every order can be filled with 
 | `crops`  | `CropTable`  | Crops that orders can ask for                                              |
 | `rules`  | `OrderRules` | Time limit and amount range. Defaults to `DEFAULT_ORDER_RULES` (constants) |
 
-Returns the new order and the new RNG state, which the caller must store back into `GameState.rngState`.
+Returns the new order and the new RNG state, which the caller must store back into `GameState.rng.orders`. Orders draw only from that stream, never from `rng.upgrades`.
 
 Rules:
 

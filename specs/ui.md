@@ -56,11 +56,16 @@ The Timed length comes from `TIMED_MODE_TICKS`, so it stays right if the constan
 Shown over the board while `state.upgradeOffer` is not `null` (Survival only).
 
 - A shade covers the board and swallows clicks, like the pause shade. The plant picker closes when it opens.
-- Title `Choose an upgrade`, and one card per offered upgrade, side by side.
-- Each card's text (`upgradeCardText`): name, the one-line description, and how many the player will have after picking it out of the most allowed, e.g. `Green thumb
-Crops grow 15% faster
-1 / 3`.
-- Clicking a card sends `chooseUpgrade` through `act()`, so it is logged; the view closes and time resumes.
+- Title `Choose an upgrade`, and one card per offered card, side by side.
+- Each card's text (`upgradeCardText`): name, tier, the one-line description with the tier's values filled in, and how many copies the player will have after picking it out of `maxCopies`, e.g. `Fast growth
+Rare
+Crops grow 7% faster
+2 / 5`. Non-tiered upgrades show their tier the same way.
+- The card's frame is coloured by tier, one colour per tier, so the tier reads at a glance.
+- **Untargeted card:** clicking it sends `chooseUpgrade` through `act()`, so it is logged; the view closes and time resumes.
+- **Targeted card:** clicking it moves to a second step instead of picking. The title becomes `Choose a plot` or `Choose a crop`.
+    - One button per target in `validTargets`, in that order: `Plot 1`, `Plot 2`, … for plot upgrades (`targetText`), crop ids for crop upgrades.
+    - Clicking a target sends `chooseUpgrade { upgradeId, target }` through `act()`. A **Back** button returns to the cards without sending anything.
 - The game loop does not step while an offer is open. Pause still works on top of it.
 
 ## End of run (GameOverView)
@@ -87,10 +92,12 @@ Shown over the board as soon as `status` is `'ended'`.
 - `statRows`: the exact rows for Timed, and for Survival; Timed has no Level, Lives or Coins rows.
 - `gameOverTitle` and `gameOverText` for each mode.
 - `debugText` includes the mode.
-- `upgradeCardText` shows name, description and the stack count after picking.
+- `upgradeCardText` shows name, tier, description with that tier's values (a tiered and a non-tiered example, and one with two effects) and the copy count after picking.
 - `buyLifeText` shows the price with the `lifePricePct` modifier applied.
 
 ## Open items
+
+- [ ] Plot upgrades: pick the plot on the board itself (valid plots highlighted, the rest greyed out) instead of a row of `Plot N` buttons, once a plot upgrade can be offered.
 
 - [ ] Combo multiplier and rush waves in Timed (Day 5), with a combo row in the HUD and best combo on the summary.
 - [ ] High score per mode on the mode select (Day 5 saves).

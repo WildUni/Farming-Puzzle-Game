@@ -13,6 +13,10 @@ import {
     heartsText,
     buyLifeText,
     upgradeCardText,
+    upgradeDescription,
+    targetTitle,
+    targetText,
+    tierName,
     gameOverText,
     gameOverTitle,
     modeName,
@@ -24,7 +28,7 @@ import { createGame } from "../sim/main"
 import { buildCropTable } from "../sim/plot"
 import { lifePrice, levelFor, DIFFICULTY } from "../sim/difficulty"
 import { TIMED_MODE_TICKS, ORDER_TICKS } from "../sim/game_constants"
-import { UPGRADES, scalePct } from "../sim/upgrades"
+import { UPGRADES, effectAmount, scalePct } from "../sim/upgrades"
 import type { GameState, Order } from "../sim/types"
 
 const crops = buildCropTable([
@@ -165,19 +169,63 @@ describe("buyLifeText", () => {
     })
 
     it("applies the life price upgrade", () => {
-        const state = { ...game("survival"), upgrades: ["haggler"] }
-        const price = scalePct(lifePrice(0), 100 + UPGRADES.haggler.amount)
+        const upgrades = [{ id: "lifeDiscount", tier: "epic" as const, target: null }]
+        const state = { ...game("survival"), upgrades }
+        const pct = 100 + effectAmount(UPGRADES.upgrades.lifeDiscount, 0, "epic")
+        const price = scalePct(lifePrice(0), pct)
         expect(buyLifeText(state)).toBe(`Buy life\n${price} coins`)
     })
 })
 
 describe("upgradeCardText", () => {
-    it("shows name, description and the stack count after picking", () => {
-        const def = UPGRADES.fastGrowth
-        expect(upgradeCardText(def, [])).toBe(`${def.name}\n${def.text}\n1 / ${def.maxStacks}`)
-        expect(upgradeCardText(def, ["fastGrowth", "tips"])).toBe(
-            `${def.name}\n${def.text}\n2 / ${def.maxStacks}`
+    const own = (id: string) => ({ id, tier: "common" as const, target: null })
+
+    it("shows name, tier, the tier's values and the copy count after picking", () => {
+        const def = UPGRADES.upgrades.fastGrowth
+        const pct = -effectAmount(def, 0, "rare")
+        expect(upgradeCardText(def, "rare", [])).toBe(
+            `Fast growth
+Rare
+Crops grow ${pct}% faster
+1 / ${def.maxCopies}`
         )
+        expect(upgradeCardText(def, "rare", [own("fastGrowth"), own("bigTips")])).toBe(
+            `Fast growth
+Rare
+Crops grow ${pct}% faster
+2 / ${def.maxCopies}`
+        )
+    })
+
+    it("fills every effect of a two-effect upgrade", () => {
+        const def = UPGRADES.upgrades.favoriteCrop
+        const grow = -effectAmount(def, 0, "legendary")
+        const bonus = effectAmount(def, 1, "legendary")
+        expect(upgradeDescription(def, "legendary")).toBe(
+            `One crop grows ${grow}% faster and yields +${bonus}`
+        )
+    })
+
+    it("shows a non-tiered upgrade at its own tier", () => {
+        const def = UPGRADES.upgrades.extraPlot
+        expect(upgradeCardText(def, "rare", [])).toBe(
+            `Extra plot
+Rare
+One more plot to plant on
+1 / ${def.maxCopies}`
+        )
+    })
+})
+
+describe("upgrade target text", () => {
+    it("names the step and each target", () => {
+        expect(targetTitle(UPGRADES.upgrades.favoriteCrop)).toBe("Choose a crop")
+        expect(targetText("carrot")).toBe("carrot")
+        expect(targetText(0)).toBe("Plot 1")
+    })
+
+    it("capitalises tier names", () => {
+        expect(tierName("legendary")).toBe("Legendary")
     })
 })
 

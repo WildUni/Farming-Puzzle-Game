@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { seedRNG, nextValue, randomInt, pick } from "./mulberry"
+import { seedRNG, seedStream, nextValue, randomInt, pick } from "./mulberry"
 
 describe("mulberry RNG", () => {
     //hand written tests
@@ -97,5 +97,40 @@ describe("pick", () => {
 
     it("throws on an empty list", () => {
         expect(() => pick(seedRNG(1), [])).toThrow()
+    })
+})
+
+describe("seedStream", () => {
+    it("is deterministic", () => {
+        expect(seedStream(42, 1)).toBe(seedStream(42, 1))
+    })
+
+    it("gives different states for different salts, and differs from seedRNG", () => {
+        expect(seedStream(42, 1)).not.toBe(seedStream(42, 2))
+        expect(seedStream(42, 1)).not.toBe(seedRNG(42))
+        expect(seedStream(42, 1)).not.toBe(seedStream(43, 1))
+    })
+
+    it("returns an unsigned 32-bit integer", () => {
+        for (const seed of [0, 1, -1, 2 ** 32 - 1]) {
+            const s = seedStream(seed, 1)
+            expect(Number.isInteger(s)).toBe(true)
+            expect(s).toBeGreaterThanOrEqual(0)
+            expect(s).toBeLessThan(2 ** 32)
+        }
+    })
+
+    it("doesn't line up with the seed's own stream", () => {
+        let a = seedRNG(7)
+        let b = seedStream(7, 1)
+        let same = 0
+        for (let i = 0; i < 1000; i++) {
+            const [va, na] = nextValue(a)
+            const [vb, nb] = nextValue(b)
+            if (va === vb) same += 1
+            a = na
+            b = nb
+        }
+        expect(same).toBe(0)
     })
 })

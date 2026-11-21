@@ -3,6 +3,7 @@ import { replay } from "./verification"
 import { createGame, applyAction, step } from "./main"
 import { buildCropTable } from "./plot"
 import { canFulfill } from "./orders"
+import { UPGRADES, validTargets } from "./upgrades"
 import { TIMED_MODE_TICKS } from "./game_constants"
 import type { Action, Crop, CropTable, GameConfig, GameState, LogEntry } from "./types"
 
@@ -16,13 +17,24 @@ const crops: CropTable = buildCropTable(cropList)
 const survival: GameConfig = { mode: "survival", allowPowerUps: false }
 const timed: GameConfig = { mode: "timed", allowPowerUps: false }
 
-// Picks this tick's moves: take the first upgrade on an open offer, harvest every ready
+// The pick for an open offer: the card at `index` (or the first), with its first valid target.
+function pickCard(state: GameState, index = 0): Action {
+    const offer = state.upgradeOffer!
+    const card = offer[Math.min(index, offer.length - 1)]
+    if (UPGRADES.upgrades[card.id].target === null) {
+        return { type: "chooseUpgrade", upgradeId: card.id }
+    }
+    const [target] = validTargets(state.upgrades, card.id, state.plots.length, crops)
+    return { type: "chooseUpgrade", upgradeId: card.id, target: target! }
+}
+
+// Picks this tick's moves: take the first card on an open offer, harvest every ready
 // plot, deliver every order it can, then plant every empty plot with the crop the first
 // open order wants.
 function botMoves(state: GameState): Action[] {
     const moves: Action[] = []
     if (state.upgradeOffer !== null) {
-        moves.push({ type: "chooseUpgrade", upgradeId: state.upgradeOffer[0] })
+        moves.push(pickCard(state))
     }
     state.plots.forEach((p, plot) => {
         if (p.state === "ready") moves.push({ type: "harvest", plot })
@@ -38,6 +50,13 @@ function botMoves(state: GameState): Action[] {
 // A weaker player: like botMoves, but only ever plants garlic.
 function garlicOnly(state: GameState): Action[] {
     return botMoves(state).map((a): Action => (a.type === "plant" ? { ...a, cropId: "garlic" } : a))
+}
+
+// Like botMoves, but always picks a targeted card when one is on the offer.
+function targetPicker(state: GameState): Action[] {
+    if (state.upgradeOffer === null) return botMoves(state)
+    const i = state.upgradeOffer.findIndex((c) => UPGRADES.upgrades[c.id].target !== null)
+    return [pickCard(state, Math.max(0, i)), ...botMoves(state).slice(1)]
 }
 
 // Like botMoves, but first buys a life whenever it can afford one.
@@ -292,6 +311,38 @@ describe("replay: rejects bad logs", () => {
         })
     })
 
+    it("replays runs with targeted picks equal", () => {
+        let targeted = 0
+        for (const seed of [1, 2, 3]) {
+            const { state, log } = play(seed, survival, 100_000, targetPicker)
+            targeted += log.filter(
+                (e) => e.action.type === "chooseUpgrade" && e.action.target !== undefined
+            ).length
+            expect(replayState(seed, survival, log, state.tick, crops)).toEqual(state)
+        }
+        expect(targeted).toBeGreaterThan(0)
+    })
+
+    it("replays runs with Bumper harvest equal", () => {
+        // Always takes Bumper harvest when it is offered.
+        const bumperPicker = (state: GameState): Action[] => {
+            if (state.upgradeOffer === null) return botMoves(state)
+            const i = state.upgradeOffer.findIndex((c) => c.id === "bumperHarvest")
+            return [pickCard(state, Math.max(0, i)), ...botMoves(state).slice(1)]
+        }
+        let withBumper = 0
+        for (const seed of [1, 2, 3]) {
+            const fresh = createGame(seed, survival)
+            const { state, log } = play(seed, survival, 100_000, bumperPicker)
+            if (state.upgrades.some((u) => u.id === "bumperHarvest")) {
+                withBumper += 1
+                expect(state.rng.harvest).not.toBe(fresh.rng.harvest)
+            }
+            expect(replayState(seed, survival, log, state.tick, crops)).toEqual(state)
+        }
+        expect(withBumper).toBeGreaterThan(0)
+    })
+
     it("doesn't reproduce a run under a different seed", () => {
         const { state, log } = play(3, survival, 1500)
         const other = replay(4, survival, log, state.tick, crops)
@@ -327,12 +378,9 @@ describe("replay: upgrade offers", () => {
 
     it("replays once the offer is answered on its tick", () => {
         const { state, log } = playUntilOffer(1)
-        const pick: LogEntry = {
-            tick: state.tick,
-            action: { type: "chooseUpgrade", upgradeId: state.upgradeOffer![0] }
-        }
+        const pick: LogEntry = { tick: state.tick, action: pickCard(state) }
         const result = replayState(1, survival, [...log, pick], state.tick + 50, crops)
-        expect(result.upgrades).toEqual([state.upgradeOffer![0]])
+        expect(result.upgrades.map((u) => u.id)).toEqual([state.upgradeOffer![0].id])
         expect(result.tick).toBe(state.tick + 50)
     })
 })

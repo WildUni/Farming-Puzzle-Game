@@ -6,6 +6,16 @@ function seedRNG(seed: RNGSeed): RNGState {
 }
 
 /**
+ * Starting state for a separate stream from the same run seed (see specs/mulberry.md).
+ * Mixes the salt into the seed and takes the first output as a whole number, so each
+ * stream starts at a scattered position on the generator's cycle.
+ */
+function seedStream(seed: RNGSeed, salt: number): RNGState {
+    const mixed = (seed ^ Math.imul(salt, 0x9e3779b9)) >>> 0
+    return Math.floor(nextValue(mixed)[0] * 4294967296) >>> 0
+}
+
+/**
  * Advance the mulberry32 RNG once (pure: no hidden state).
  * Returns a float in [0, 1) and the next state to store back into GameState.
  */
@@ -33,4 +43,4 @@ function pick<T>(state: RNGState, list: readonly T[]): [T, RNGState] {
     return [list[index], next]
 }
 
-export { seedRNG, nextValue, randomInt, pick }
+export { seedRNG, seedStream, nextValue, randomInt, pick }

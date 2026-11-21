@@ -6,12 +6,13 @@ Shared types for the simulation. Contains only types, so it is exported with `ex
 
 ### Basic values
 
-| Type         | Definition                          | Meaning                                                 |
-| ------------ | ----------------------------------- | ------------------------------------------------------- |
-| `RNGSeed`    | `number`                            | The seed a run starts from                              |
-| `RNGState`   | `number`                            | The generator's current position, stored in `GameState` |
-| `GameMode`   | `'survival' \| 'timed' \| 'puzzle'` | Which mode the run is in                                |
-| `GameStatus` | `'running' \| 'ended'`              | Whether `step` should keep advancing the game           |
+| Type         | Definition                                                    | Meaning                                                         |
+| ------------ | ------------------------------------------------------------- | --------------------------------------------------------------- |
+| `RNGSeed`    | `number`                                                      | The seed a run starts from                                      |
+| `RNGState`   | `number`                                                      | One generator's current position, stored in `GameState.rng`     |
+| `RNGStreams` | `{ orders: RNGState; upgrades: RNGState; harvest: RNGState }` | One generator per system, so their draws don't shift each other |
+| `GameMode`   | `'survival' \| 'timed' \| 'puzzle'`                           | Which mode the run is in                                        |
+| `GameStatus` | `'running' \| 'ended'`                                        | Whether `step` should keep advancing the game                   |
 
 ### `Crop` and `CropTable`
 
@@ -74,24 +75,24 @@ How `step` creates orders at the current difficulty: how many it keeps open, eac
 
 Everything that changes during a run. If `step` or `replay` would give a different result without a value, it belongs here.
 
-| Field                             | Meaning                                                                          |
-| --------------------------------- | -------------------------------------------------------------------------------- |
-| `mode`                            | The run's `GameMode`                                                             |
-| `status`                          | `'running'` until the run ends                                                   |
-| `tick`                            | Current tick, starting at 0                                                      |
-| `rngState`                        | Generator state. Every random draw reads it and stores the new state back        |
-| `plots`                           | One `Plot` per plot                                                              |
-| `inventory`                       | Crop id → amount held. Missing ids mean 0                                        |
-| `orders`                          | Open orders                                                                      |
-| `nextOrderId`                     | Id for the next order created                                                    |
-| `score`                           | Points so far                                                                    |
-| `ordersCompleted`, `ordersFailed` | Run counters                                                                     |
-| `lives`                           | Lives left (Survival). The run ends at 0. Always 0 in other modes                |
-| `coins`                           | In-run coins, earned by filling orders in Survival. Reset every run              |
-| `livesBought`                     | Lives bought this run. Sets the next life's price                                |
-| `upgrades`                        | Upgrade ids picked this run, in order. Repeats are stacks                        |
-| `upgradeOffer`                    | Upgrade ids on offer while the player chooses, else `null`. Time stops while set |
-| `offersMade`                      | Upgrade offers made this run. Sets when the next one is due                      |
+| Field                             | Meaning                                                                             |
+| --------------------------------- | ----------------------------------------------------------------------------------- |
+| `mode`                            | The run's `GameMode`                                                                |
+| `status`                          | `'running'` until the run ends                                                      |
+| `tick`                            | Current tick, starting at 0                                                         |
+| `rng`                             | `RNGStreams`. Each random draw reads its system's stream and stores it back         |
+| `plots`                           | One `Plot` per plot                                                                 |
+| `inventory`                       | Crop id → amount held. Missing ids mean 0                                           |
+| `orders`                          | Open orders                                                                         |
+| `nextOrderId`                     | Id for the next order created                                                       |
+| `score`                           | Points so far                                                                       |
+| `ordersCompleted`, `ordersFailed` | Run counters                                                                        |
+| `lives`                           | Lives left (Survival). The run ends at 0. Always 0 in other modes                   |
+| `coins`                           | In-run coins, earned by filling orders in Survival. Reset every run                 |
+| `livesBought`                     | Lives bought this run. Sets the next life's price                                   |
+| `upgrades`                        | `OwnedUpgrade` copies picked this run (id, tier, target), in pick order             |
+| `upgradeOffer`                    | `OfferCard`s (id, tier) while the player chooses, else `null`. Time stops while set |
+| `offersMade`                      | Upgrade offers made this run. Sets when the next one is due                         |
 
 The Survival level and the next life's price are worked out from `ordersCompleted` and `livesBought` (see [difficulty.md](difficulty.md)), so they are not stored. The same goes for the upgrade `Modifiers`, which are added up from `upgrades` (see [upgrades.md](upgrades.md)).
 
@@ -113,19 +114,20 @@ type Action =
     | { type: "harvest"; plot: number }
     | { type: "deliver"; orderId: number }
     | { type: "buyLife" }
-    | { type: "chooseUpgrade"; upgradeId: string }
+    | { type: "chooseUpgrade"; upgradeId: string; target?: number | string }
 ```
 
 One player move, passed to `applyAction` (see [main.md](main.md)).
 
 - `plot` is an index into `GameState.plots`.
 - `orderId` is an `Order.id`, not a position in the list, so it stays correct when other orders are removed.
-- `upgradeId` must be one of the ids in `GameState.upgradeOffer`.
+- `upgradeId` must be the id of one of the cards in `GameState.upgradeOffer`.
+- `target` is a plot index or crop id, required for targeted upgrades and left out for the rest (see [upgrades.md](upgrades.md)).
 - Plain data only, so actions can be stored in the log and saved as JSON.
 
-### `Modifiers`, `ModifierStat`, `UpgradeDef`, `UpgradeTable`
+### Upgrade types
 
-Upgrade types, described in [upgrades.md](upgrades.md). `Modifiers` is never stored in `GameState`; it is worked out from `GameState.upgrades`.
+`Tier`, `Pool`, `Modifiers`, `ModifierStat`, `StatDef`, `TierDef`, `UpgradeEffect`, `UpgradeDef`, `UpgradeConfig`, `UpgradeTarget`, `OwnedUpgrade` and `OfferCard`, described in [upgrades.md](upgrades.md). `Modifiers` is never stored in `GameState`; it is worked out from `GameState.upgrades`. `UpgradeTable` is replaced by `UpgradeConfig`.
 
 ### `LogEntry`
 
@@ -157,3 +159,4 @@ Input to `calcScore` (see [scoring.md](scoring.md)).
 - [x] Add Survival fields (`lives`, `coins`, `livesBought`). The life price is derived from `livesBought` instead of stored.
 - [x] Store the ready tick on growing plots (`readyAt`).
 - [ ] Add plot modifiers (fertilizer, weeds, blocked) as a `modifiers` list when needed.
+- [ ] Replace `rngState` with `rng: RNGStreams`, and the upgrade fields with `OwnedUpgrade[]` / `OfferCard[]` (upgrades phase 1).

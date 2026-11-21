@@ -1,50 +1,89 @@
-[
-    {
-        "id": "extraPlot",
-        "name": "Extra plot",
-        "text": "One more plot to plant in",
-        "stat": "extraPlots",
-        "amount": 1,
-        "maxStacks": 2
+{
+    "stats": {
+        "extraPlots": { "base": 0, "min": 0, "max": 2 },
+        "growthPct": { "base": 100, "min": 20, "max": 100 },
+        "yieldBonus": { "base": 0, "min": 0, "max": 3 },
+        "bumperChance": { "base": 0, "min": 0, "max": 50 },
+        "orderTimePct": { "base": 100, "min": 100, "max": 200 },
+        "coinsPerOrder": { "base": 0, "min": 0, "max": 20 },
+        "lifePricePct": { "base": 100, "min": 25, "max": 100 }
     },
-    {
-        "id": "fastGrowth",
-        "name": "Green thumb",
-        "text": "Crops grow 15% faster",
-        "stat": "growthPct",
-        "amount": -15,
-        "maxStacks": 3
+    "tiers": {
+        "common": { "weight": 40, "sellPrice": 5 },
+        "uncommon": { "weight": 30, "sellPrice": 10 },
+        "rare": { "weight": 15, "sellPrice": 20 },
+        "epic": { "weight": 10, "sellPrice": 35 },
+        "legendary": { "weight": 5, "sellPrice": 60 }
     },
-    {
-        "id": "bigHarvest",
-        "name": "Big harvest",
-        "text": "+1 crop from every harvest",
-        "stat": "yieldBonus",
-        "amount": 1,
-        "maxStacks": 3
-    },
-    {
-        "id": "patientCustomers",
-        "name": "Patient folk",
-        "text": "New orders wait 15% longer",
-        "stat": "orderTimePct",
-        "amount": 15,
-        "maxStacks": 3
-    },
-    {
-        "id": "tips",
-        "name": "Tips",
-        "text": "+2 coins for every order",
-        "stat": "coinsPerOrder",
-        "amount": 2,
-        "maxStacks": 3
-    },
-    {
-        "id": "haggler",
-        "name": "Haggler",
-        "text": "Lives cost 15% less",
-        "stat": "lifePricePct",
-        "amount": -15,
-        "maxStacks": 3
-    }
-]
+    "upgrades": [
+        {
+            "id": "fastGrowth",
+            "name": "Fast growth",
+            "text": "Crops grow {0}% faster",
+            "pools": ["survival", "timed"],
+            "maxCopies": 5,
+            "sellable": true,
+            "effects": [{ "stat": "growthPct", "perTier": [-2, -4, -7, -12, -20] }]
+        },
+        {
+            "id": "patientCustomers",
+            "name": "Patient customers",
+            "text": "New orders wait {0}% longer",
+            "pools": ["survival", "timed"],
+            "maxCopies": 5,
+            "sellable": true,
+            "effects": [{ "stat": "orderTimePct", "perTier": [3, 6, 10, 15, 25] }]
+        },
+        {
+            "id": "bigTips",
+            "name": "Big tips",
+            "text": "+{0} coins for every order",
+            "pools": ["survival", "timed"],
+            "maxCopies": 5,
+            "sellable": true,
+            "effects": [{ "stat": "coinsPerOrder", "perTier": [1, 2, 3, 5, 8] }]
+        },
+        {
+            "id": "lifeDiscount",
+            "name": "Life discount",
+            "text": "Lives cost {0}% less",
+            "pools": ["survival"],
+            "maxCopies": 5,
+            "sellable": true,
+            "effects": [{ "stat": "lifePricePct", "perTier": [-3, -6, -10, -15, -25] }]
+        },
+        {
+            "id": "bumperHarvest",
+            "name": "Bumper harvest",
+            "text": "{0}% chance of +1 crop per harvest",
+            "pools": ["survival", "timed"],
+            "maxCopies": 5,
+            "sellable": true,
+            "effects": [{ "stat": "bumperChance", "perTier": [5, 8, 12, 18, 25] }]
+        },
+        {
+            "id": "favoriteCrop",
+            "name": "Favorite crop",
+            "text": "One crop grows {0}% faster and yields +{1}",
+            "pools": ["survival", "timed"],
+            "maxCopies": 3,
+            "sellable": true,
+            "target": "crop",
+            "targetRule": "stackable",
+            "effects": [
+                { "stat": "growthPct", "perTier": [-3, -6, -10, -15, -25] },
+                { "stat": "yieldBonus", "perTier": [1, 1, 1, 2, 3] }
+            ]
+        },
+        {
+            "id": "extraPlot",
+            "name": "Extra plot",
+            "text": "One more plot to plant on",
+            "pools": ["shop"],
+            "tier": "rare",
+            "maxCopies": 2,
+            "sellable": false,
+            "effects": [{ "stat": "extraPlots", "amount": 1 }]
+        }
+    ]
+}
