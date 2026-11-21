@@ -17,22 +17,28 @@ import { TICKS_PER_SECOND, TIMED_MODE_TICKS } from "../sim/game_constants"
 import { progress } from "../sim/plot"
 import { timeLeft } from "../sim/orders"
 import { runLevel } from "../sim/difficulty"
-import { lifePriceFor } from "../sim/main"
+import { lifePriceFor, maxLivesFor } from "../sim/main"
 import { copyCount, effectAmount } from "../sim/upgrades"
 import { POWER_UPS, durationFor } from "../sim/powerups"
 import { EVENTS, shieldedPlots } from "../sim/events"
 import { fogged } from "../sim/effects"
 
-const MAX_HEARTS = 5 // more lives than this show as a count
+const MAX_HEARTS = 5 // a cap above this shows lives as a count
 
-// Lives as hearts: one per life up to MAX_HEARTS, then "♥ xN".
-function heartsText(lives: number): string {
-    if (lives <= 0) return "none"
-    return lives <= MAX_HEARTS ? "♥".repeat(lives) : `♥ x${lives}`
+// Lives as hearts: a full heart per life and an empty one up to the cap `max`, e.g. "♥♥♡".
+// Past MAX_HEARTS, "♥ xN".
+function heartsText(lives: number, max: number = lives): string {
+    const held = Math.max(0, lives)
+    const cap = Math.max(held, max)
+    if (cap > MAX_HEARTS) return `♥ x${held}`
+    if (cap === 0) return "none"
+    return "♥".repeat(held) + "♡".repeat(cap - held)
 }
 
-// Label on the buy-life button, with the next life's price (upgrades applied).
+// Label on the buy-life button: the next life's price (upgrades applied), or "Lives full" at
+// the cap.
 function buyLifeText(state: GameState): string {
+    if (state.lives >= maxLivesFor(state)) return "Lives full"
     return `Buy life\n${lifePriceFor(state)} coins`
 }
 
@@ -155,13 +161,19 @@ function orderText(order: Order, state: GameState): string {
     )
     const time = isFogged(state) ? "?:??" : formatClock(timeLeft(order, state.tick))
     lines.push(`value ${order.value}   ${time}`)
-    return `Order #${order.id}\n${lines.join("\n")}`
+    return `${orderTitle(order)}\n${lines.join("\n")}`
+}
+
+// First line of an order card. "SMALL" marks an order Small order halved.
+function orderTitle(order: Order): string {
+    return order.small ? `Order #${order.id}  SMALL` : `Order #${order.id}`
 }
 
 // Text on the Sneak peek card: the order that comes next, with its crops and value.
 function nextOrderText(order: Order): string {
     const lines = Object.entries(order.required).map(([cropId, amount]) => `${cropId} x${amount}`)
-    return `Next order\n${lines.join("\n")}\nvalue ${order.value}`
+    const title = order.small ? "Next order  SMALL" : "Next order"
+    return `${title}\n${lines.join("\n")}\nvalue ${order.value}`
 }
 
 // Rows for the stats table, in display order. Inventory lists every crop, even at 0.
@@ -170,7 +182,7 @@ function statRows(state: GameState, crops: CropTable): [string, string][] {
         state.mode === "survival"
             ? [
                   ["Level", String(runLevel(state) + 1)],
-                  ["Lives", heartsText(state.lives)],
+                  ["Lives", heartsText(state.lives, maxLivesFor(state))],
                   ["Coins", String(state.coins)]
               ]
             : []

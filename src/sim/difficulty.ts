@@ -79,7 +79,14 @@ function validateDifficulty(raw: unknown): DifficultyConfig {
         return { orderTimeMultiplier: mult, maxOpenOrders, minAmount, maxAmount, eventGapSeconds }
     })
 
-    return { startLives, maxLives, coinsPerOrder, lifePrice: { base, growth }, ordersPerLevel, levels }
+    return {
+        startLives,
+        maxLives,
+        coinsPerOrder,
+        lifePrice: { base, growth },
+        ordersPerLevel,
+        levels
+    }
 }
 
 const DIFFICULTY: DifficultyConfig = validateDifficulty(rawDifficulty)

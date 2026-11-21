@@ -90,9 +90,10 @@ Returns a **new** state, or `null` if the move is not allowed. A `null` result m
 **`buyLife`** `{ type: 'buyLife' }`
 
 - Survival only. Returns `null` in other modes.
+- Returns `null` at the cap: `lives >= maxLivesFor(state)`.
 - The price is `lifePriceFor(state)`. Returns `null` if `coins` is below it.
 - Takes the price from `coins`, adds 1 to `lives` and 1 to `livesBought`. Nothing else changes.
-- There is no cap on lives. The rising price is the limit.
+- Lives are capped at `maxLivesFor(state)`: `DIFFICULTY.maxLives` (3) plus Extra heart's `extraLives`. The rising price is a second limit.
 
 **`chooseUpgrade`** `{ type: 'chooseUpgrade', upgradeId, target? }`
 
@@ -110,7 +111,11 @@ Returns a **new** state, or `null` if the move is not allowed. A `null` result m
 
 ### `withUpgrade(state: GameState, copy: OwnedUpgrade): GameState`
 
-Appends `copy` to `upgrades` (a new array) and adds empty plots if `extraPlots` went up, as `chooseUpgrade` describes. In Survival, if `extraLives` went up (Extra heart), adds that many lives. `chooseUpgrade` and the debug menu (see [debug.md](debug.md)) both use it.
+Appends `copy` to `upgrades` (a new array) and adds empty plots if `extraPlots` went up, as `chooseUpgrade` describes. In Survival, if `extraLives` went up (Extra heart), the cap goes up by that much and that many lives are added, filling the new hearts.
+
+### `maxLivesFor(state: GameState): number`
+
+The most lives a Survival run can hold: `DIFFICULTY.maxLives + modifiersFor(upgrades).extraLives`. `buyLife`, `canBuyLife`, the hearts and the buy button all use it. `chooseUpgrade` and the debug menu (see [debug.md](debug.md)) both use it.
 
 ### `nextOrderPreview(state: GameState, crops: CropTable): Order | null`
 
@@ -122,7 +127,7 @@ Price of the next life with upgrades applied: `scalePct(lifePrice(livesBought), 
 
 ### `canBuyLife(state: GameState): boolean`
 
-`true` when `buyLife` would succeed: the run is Survival, not ended, no upgrade offer is open, and `coins >= lifePriceFor(state)`. The buy button uses it, so the screen and the rules can't disagree.
+`true` when `buyLife` would succeed: the run is Survival, not ended, no upgrade offer is open, `lives < maxLivesFor(state)`, and `coins >= lifePriceFor(state)`. The buy button uses it, so the screen and the rules can't disagree.
 
 ### `orderRules(state: GameState): OrderRules`
 
@@ -152,7 +157,7 @@ Returns a **new** state. The steps run in this order, each one using the result 
     - **Timed:** `tick >= TIMED_MODE_TICKS`. Ticks `0` to `TIMED_MODE_TICKS − 1` are playable.
     - **Survival:** `lives` is 0. Once ended, `applyAction` refuses every action, including `buyLife`.
     - **Puzzle:** no end condition yet (see Open items).
-7. **New orders:** with `rules = orderRules(state)`, while fewer than `rules.maxOpenOrders` orders are open, create one with `createOrder(nextOrderId, tick, rng.orders, crops, rules)`, add it to the **end** of `orders`, store the returned state in `rng.orders`, and add 1 to `nextOrderId`. **Small order:** with `smallOrderChance` above 0, each new order then draws `randomInt(rng.shrink, 0, 99)`; below the chance, every amount becomes `ceil(amount / 2)` and the value stays. **Second wind:** while `secondWind` is `true`, the first order made uses `orderTicks = scalePct(rules.orderTicks, secondWindPct)`, and `secondWind` becomes `false`. This also creates the first orders, on tick 1, and refills a slot the tick after an order is delivered or failed. If more orders are open than `maxOpenOrders` allows, none are removed; no new ones are made until the count drops.
+7. **New orders:** with `rules = orderRules(state)`, while fewer than `rules.maxOpenOrders` orders are open, create one with `createOrder(nextOrderId, tick, rng.orders, crops, rules)`, add it to the **end** of `orders`, store the returned state in `rng.orders`, and add 1 to `nextOrderId`. **Small order:** with `smallOrderChance` above 0, each new order then draws `randomInt(rng.shrink, 0, 99)`; below the chance, every amount becomes `ceil(amount / 2)`, the value stays, and the order's `small` is set to `true` so the screen can mark it. **Second wind:** while `secondWind` is `true`, the first order made uses `orderTicks = scalePct(rules.orderTicks, secondWindPct)`, and `secondWind` becomes `false`. This also creates the first orders, on tick 1, and refills a slot the tick after an order is delivered or failed. If more orders are open than `maxOpenOrders` allows, none are removed; no new ones are made until the count drops.
 8. **Event announcement:** if `allowEvents`, no event is announced or running and `tick >= nextEventAt`, `announceEvent(state)` picks the next event from `rng.events` and stores it in `event`; if nothing is eligible, `nextEventAt = tick + gapTicks(state)`. Skipped when the run ended on this step.
 9. **Upgrade offer (Survival):** if `ordersCompleted >= (offersMade + 1) × ORDERS_PER_UPGRADE`, `rollOffer(state, "survival", crops)` picks the offer from `rng.upgrades`, `upgradeOffer` is set to it (or stays `null` if nothing is eligible), the new state is stored in `rng.upgrades` and `offersMade` goes up by 1.
 
@@ -204,8 +209,9 @@ Returns a **new** state. The steps run in this order, each one using the result 
 
 - Takes the price, adds a life and counts the purchase.
 - Buying several lives in a row charges the config's price sequence.
+- Refused at the cap; Extra heart raises the cap by one.
 - Returns `null` when coins are one short of the price, and in Timed.
-- `canBuyLife` agrees with `applyAction` in each of these cases, and is `false` once the run has ended.
+- `canBuyLife` agrees with `applyAction` in each of these cases, and is `false` once the run has ended or lives are at the cap.
 
 **Full flow**
 

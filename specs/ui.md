@@ -36,20 +36,20 @@ The Timed length comes from `TIMED_MODE_TICKS`, so it stays right if the constan
 
 `statRows(state, crops)` gives the rows, in order. The two modes show different stats:
 
-| Row    | Survival                        | Timed                                |
-| ------ | ------------------------------- | ------------------------------------ |
-| Mode   | `Survival`                      | `Timed`                              |
-| Time   | `Time`: counts **up** from 0:00 | `Time left`: counts **down** to 0:00 |
-| Score  | yes                             | yes                                  |
-| Level  | yes, counted from 1             | no                                   |
-| Lives  | yes, as hearts (`heartsText`)   | no                                   |
-| Coins  | yes                             | no                                   |
-| Filled | yes                             | yes                                  |
-| Failed | yes                             | yes                                  |
-| Crops  | one row per crop, sorted        | one row per crop, sorted             |
+| Row    | Survival                                                   | Timed                                |
+| ------ | ---------------------------------------------------------- | ------------------------------------ |
+| Mode   | `Survival`                                                 | `Timed`                              |
+| Time   | `Time`: counts **up** from 0:00                            | `Time left`: counts **down** to 0:00 |
+| Score  | yes                                                        | yes                                  |
+| Level  | yes, counted from 1                                        | no                                   |
+| Lives  | yes, as full and empty hearts up to the cap (`heartsText`) | no                                   |
+| Coins  | yes                                                        | no                                   |
+| Filled | yes                                                        | yes                                  |
+| Failed | yes                                                        | yes                                  |
+| Crops  | one row per crop, sorted                                   | one row per crop, sorted             |
 
 - Timed has no lives, coins or levels (see [main.md](main.md)), so those rows are left out instead of showing zeros.
-- The **Buy life** button only shows in Survival.
+- The **Buy life** button only shows in Survival. At the lives cap it reads `Lives full` and is disabled.
 
 ## Upgrade pick (UpgradePickView)
 
@@ -110,6 +110,10 @@ Drawn by `PlotsView` from the state, on top of the plot's own colour:
 
 While `isFogged(state)` (a `fog` effect is working): growing plots show `?` instead of their percentage and their growth bar is hidden (`plotText(plot, now, fog)`), and order cards show `?:??` instead of the time left and hide their countdown bar. Crop names, amounts and values stay visible.
 
+## Small orders (OrdersView)
+
+An order Small order halved has `SMALL` after its number on the first line of its card (`Order #4  SMALL`), and so does a Sneak peek card for one (`Next order  SMALL`).
+
 ## Sneak peek (OrdersView)
 
 With Sneak peek, a dimmed card under the open orders shows `nextOrderPreview(state, crops)` as `Next order`, one `crop xN` line per crop, and its value (`nextOrderText`). It takes no clicks. Hidden without the upgrade.
@@ -169,6 +173,8 @@ Three sections, top to bottom:
 - `activeEffectText` shows the name and seconds left, rounding up: `1s` with one tick left, `10s` with 100.
 - `isFogged` follows the fog effect's working ticks; `plotText` shows `?` for a growing crop in fog; `orderText` shows `?:??` in fog.
 - `nextOrderText` lists the next order's crops and value.
+- `orderText` and `nextOrderText` add `SMALL` to the title of a halved order.
+- `heartsText(lives, max)` shows a full heart per life and an empty one up to the cap; `buyLifeText` says `Lives full` at the cap.
 - `plotOverlays` marks every plot Worms are working on.
 - The Level row and the game-over level follow `runLevel` (Steady pace).
 

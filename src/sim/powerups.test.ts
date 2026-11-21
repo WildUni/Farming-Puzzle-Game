@@ -333,7 +333,8 @@ describe("power-ups: second batch rules", () => {
             required: { garlic: 1 },
             value: 2,
             expiresAt: 500,
-            timeLimit: 500
+            timeLimit: 500,
+            small: false
         })
         const s = state({ orders: [order(7), order(2)], powerUps: ["finishOne", "readyAll"] })
         expect(powerUpTargets(s, 0)).toEqual([2, 7])

@@ -6,6 +6,7 @@ import {
     canBuyLife,
     orderRules,
     lifePriceFor,
+    maxLivesFor,
     withUpgrade,
     nextOrderPreview
 } from "./main"
@@ -71,6 +72,7 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
         value: 24,
         expiresAt: 600,
         timeLimit: 600,
+        small: false,
         ...overrides
     }
 }
@@ -167,7 +169,7 @@ describe("applyAction: every action", () => {
             makeState({ orders: [makeOrder()], inventory: { carrot: 3 } }),
             { type: "deliver", orderId: 0 }
         ],
-        ["buyLife", makeState({ coins: 1000 }), { type: "buyLife" }],
+        ["buyLife", makeState({ coins: 1000, lives: 1 }), { type: "buyLife" }],
         [
             "chooseUpgrade",
             makeState({ upgradeOffer: OFFER }),
@@ -343,7 +345,7 @@ describe("applyAction: buyLife", () => {
 
     it("takes the price, adds a life and counts the purchase", () => {
         const price = lifePrice(0)
-        const state = makeState({ coins: price + 3, orders: [makeOrder()], score: 40 })
+        const state = makeState({ coins: price + 3, orders: [makeOrder()], score: 40, lives: 1 })
         const next = apply(state, buy)
         expect(next.coins).toBe(3)
         expect(next.lives).toBe(state.lives + 1)
@@ -357,24 +359,36 @@ describe("applyAction: buyLife", () => {
     })
 
     it("charges the config's price sequence for lives bought in a row", () => {
-        let state = makeState({ coins: 100_000 })
+        // Lose a life after each purchase, so the cap never stops the next one.
+        let state = makeState({ coins: 100_000, lives: 1 })
         const paid: number[] = []
         for (let i = 0; i < 6; i++) {
             const next = apply(state, buy)
+            expect(next.lives).toBe(2)
             paid.push(state.coins - next.coins)
-            state = next
+            state = { ...next, lives: 1 }
         }
         expect(paid).toEqual([0, 1, 2, 3, 4, 5].map((n) => lifePrice(n)))
-        expect(state.lives).toBe(DIFFICULTY.startLives + 6)
         expect(state.livesBought).toBe(6)
     })
 
+    it("is refused at the lives cap, which Extra heart raises", () => {
+        expect(maxLivesFor(makeState())).toBe(DIFFICULTY.maxLives)
+        const full = makeState({ coins: 1000, lives: DIFFICULTY.maxLives })
+        expect(applyAction(full, buy, crops)).toBeNull()
+        expect(canBuyLife(full)).toBe(false)
+        expect(canBuyLife({ ...full, lives: DIFFICULTY.maxLives - 1 })).toBe(true)
+        const hearty = { ...full, upgrades: [own("extraHeart", "rare")] }
+        expect(maxLivesFor(hearty)).toBe(DIFFICULTY.maxLives + 1)
+        expect(apply(hearty, buy).lives).toBe(DIFFICULTY.maxLives + 1)
+    })
+
     it("returns null when coins are one short", () => {
-        const short = makeState({ livesBought: 2, coins: lifePrice(2) - 1 })
+        const short = makeState({ livesBought: 2, coins: lifePrice(2) - 1, lives: 1 })
         expect(applyAction(short, buy, crops)).toBeNull()
         expect(canBuyLife(short)).toBe(false)
 
-        const exact = makeState({ livesBought: 2, coins: lifePrice(2) })
+        const exact = makeState({ livesBought: 2, coins: lifePrice(2), lives: 1 })
         expect(canBuyLife(exact)).toBe(true)
         expect(apply(exact, buy).coins).toBe(0)
     })
@@ -1012,8 +1026,8 @@ describe("upgrades: modifiers change the rules", () => {
         expect(price).toBeLessThan(lifePrice(0))
         expect(lifePriceFor(makeState({ upgrades }))).toBe(price)
 
-        expect(canBuyLife(makeState({ upgrades, coins: price - 1 }))).toBe(false)
-        const state = makeState({ upgrades, coins: price })
+        expect(canBuyLife(makeState({ upgrades, coins: price - 1, lives: 1 }))).toBe(false)
+        const state = makeState({ upgrades, coins: price, lives: 1 })
         expect(canBuyLife(state)).toBe(true)
         expect(apply(state, { type: "buyLife" }).coins).toBe(0)
     })
@@ -1266,7 +1280,9 @@ describe("upgrades: rules added with the second batch", () => {
                 const [cropId, n] = Object.entries(plain.orders[i].required)[0]
                 const got = o.required[cropId]
                 expect([n, Math.ceil(n / 2)]).toContain(got)
-                if (got !== n) halved++
+                expect(o.small).toBe(got !== n)
+                expect(plain.orders[i].small).toBe(false)
+                if (o.small) halved++
                 expect(o.value).toBe(plain.orders[i].value)
             })
         }
@@ -1290,7 +1306,7 @@ describe("upgrades: rules added with the second batch", () => {
     it("Early bird pays its coins only with at least half the time left", () => {
         const upgrades = [own("earlyBird", "legendary")]
         const bonus = effectAmount(UPGRADES.upgrades.earlyBird, 0, "legendary")
-        const order = makeOrder({ expiresAt: 600, timeLimit: 600 })
+        const order = makeOrder({ expiresAt: 600, timeLimit: 600, small: false })
         const at = (tick: number) =>
             apply(makeState({ tick, orders: [order], inventory: { carrot: 3 }, upgrades }), {
                 type: "deliver",
@@ -1309,10 +1325,11 @@ describe("upgrades: rules added with the second batch", () => {
         expect(orderRules(slow)).toEqual(orderRulesFor(0))
     })
 
-    it("Extra heart adds a life when picked in Survival, and none in Timed", () => {
+    it("Extra heart raises the cap and fills the new heart in Survival, and none in Timed", () => {
         const s = makeState({ upgradeOffer: [card("extraHeart", "rare")] })
         const next = apply(s, { type: "chooseUpgrade", upgradeId: "extraHeart" })
         expect(next.lives).toBe(s.lives + 1)
+        expect(maxLivesFor(next)).toBe(maxLivesFor(s) + 1)
         const t = withUpgrade(makeTimed(), own("extraHeart", "rare"))
         expect(t.lives).toBe(0)
         // Past the cap (2) a copy adds nothing.

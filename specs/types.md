@@ -49,6 +49,7 @@ type Order = {
     value: number
     expiresAt: number
     timeLimit: number
+    small: boolean
 }
 ```
 
@@ -56,6 +57,7 @@ type Order = {
 - `required`: crop id → amount needed.
 - `value`: score awarded when the order is filled.
 - `expiresAt`: the last tick the order can be filled. It fails on tick `expiresAt + 1`.
+- `small`: `true` when Small order halved its amounts (see [upgrades.md](upgrades.md)), so the order card can say so. `false` for every other order.
 - `timeLimit`: the ticks the order was given when created (`expiresAt − createdTick`). Time limits change with the Survival level, so the countdown bar reads this instead of `ORDER_TICKS`.
 
 ### `OrderRules`

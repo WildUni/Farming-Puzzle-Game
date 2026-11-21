@@ -14,6 +14,7 @@ import shipped from "../data/difficulty.json"
 // A small valid config, so tests don't depend on the tuned numbers.
 const config: DifficultyConfig = {
     startLives: 3,
+    maxLives: 5,
     coinsPerOrder: 4,
     lifePrice: { base: 10, growth: 1.5 },
     ordersPerLevel: 3,
@@ -64,6 +65,8 @@ describe("validateDifficulty", () => {
         ["startLives 0", broken((c) => (c.startLives = 0))],
         ["startLives fractional", broken((c) => (c.startLives = 2.5))],
         ["startLives missing", broken((c) => delete (c as Partial<DifficultyConfig>).startLives)],
+        ["maxLives below startLives", broken((c) => (c.maxLives = c.startLives - 1))],
+        ["maxLives missing", broken((c) => delete (c as Partial<DifficultyConfig>).maxLives)],
         ["coinsPerOrder negative", broken((c) => (c.coinsPerOrder = -1))],
         ["coinsPerOrder text", broken((c) => (c.coinsPerOrder = "4" as unknown as number))],
         ["lifePrice missing", broken((c) => delete (c as Partial<DifficultyConfig>).lifePrice)],

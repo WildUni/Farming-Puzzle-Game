@@ -92,7 +92,8 @@ describe("orderText", () => {
             required: { garlic: 4 },
             value: 8,
             expiresAt: 600,
-            timeLimit: 600
+            timeLimit: 600,
+            small: false
         }
         const state = { ...game("timed"), tick: 100, inventory: { garlic: 2 } }
         expect(orderText(order, state)).toBe("Order #3\ngarlic x4  (have 2)\nvalue 8   0:50")
@@ -147,7 +148,7 @@ describe("statRows", () => {
             ["Time", "1:00"],
             ["Score", "30"],
             ["Level", "2"],
-            ["Lives", "♥♥"],
+            ["Lives", "♥♥♡"],
             ["Coins", "9"],
             ["Filled", String(DIFFICULTY.ordersPerLevel)],
             ["Failed", "0"],
@@ -171,17 +172,28 @@ describe("heartsText", () => {
         expect(heartsText(5)).toBe("♥♥♥♥♥")
         expect(heartsText(7)).toBe("♥ x7")
     })
+
+    it("shows empty hearts up to the cap", () => {
+        expect(heartsText(1, 3)).toBe("♥♡♡")
+        expect(heartsText(0, 3)).toBe("♡♡♡")
+        expect(heartsText(3, 3)).toBe("♥♥♥")
+        expect(heartsText(2, 6)).toBe("♥ x2")
+    })
 })
 
 describe("buyLifeText", () => {
     it("shows the next life's price", () => {
-        const state = { ...game("survival"), livesBought: 2 }
+        const state = { ...game("survival"), livesBought: 2, lives: 1 }
         expect(buyLifeText(state)).toBe(`Buy life\n${lifePrice(2)} coins`)
+    })
+
+    it("says Lives full at the cap", () => {
+        expect(buyLifeText({ ...game("survival"), lives: DIFFICULTY.maxLives })).toBe("Lives full")
     })
 
     it("applies the life price upgrade", () => {
         const upgrades = [{ id: "lifeDiscount", tier: "epic" as const, target: null }]
-        const state = { ...game("survival"), upgrades }
+        const state = { ...game("survival"), upgrades, lives: 1 }
         const pct = 100 + effectAmount(UPGRADES.upgrades.lifeDiscount, 0, "epic")
         const price = scalePct(lifePrice(0), pct)
         expect(buyLifeText(state)).toBe(`Buy life\n${price} coins`)
@@ -279,7 +291,8 @@ describe("orderTimeFraction and isOrderUrgent", () => {
         required: { garlic: 2 },
         value: 4,
         expiresAt: ORDER_TICKS,
-        timeLimit: ORDER_TICKS
+        timeLimit: ORDER_TICKS,
+        small: false
     }
 
     it("runs from 1 when the order opens to 0 on its last tick", () => {
@@ -289,10 +302,10 @@ describe("orderTimeFraction and isOrderUrgent", () => {
     })
 
     it("measures against the order's own time limit", () => {
-        const long: Order = { ...order, expiresAt: 100 + 900, timeLimit: 900 }
+        const long: Order = { ...order, expiresAt: 100 + 900, timeLimit: 900, small: false }
         expect(orderTimeFraction(long, 100)).toBe(1)
         expect(orderTimeFraction(long, 550)).toBe(0.5)
-        const short: Order = { ...order, expiresAt: 200, timeLimit: 200 }
+        const short: Order = { ...order, expiresAt: 200, timeLimit: 200, small: false }
         expect(orderTimeFraction(short, 0)).toBe(1)
         expect(isOrderUrgent(short, 150)).toBe(true)
     })
@@ -478,9 +491,23 @@ describe("second batch text: fog, worms, sneak peek, steady pace", () => {
             required: { garlic: 3 },
             value: 6,
             expiresAt: 600,
-            timeLimit: 600
+            timeLimit: 600,
+            small: false
         }
         expect(orderText(order, fogged(12))).toBe("Order #2\ngarlic x3  (have 0)\nvalue 6   ?:??")
+    })
+
+    it("marks an order Small order halved", () => {
+        const order: Order = {
+            id: 4,
+            required: { garlic: 2 },
+            value: 8,
+            expiresAt: 600,
+            timeLimit: 600,
+            small: true
+        }
+        expect(orderText(order, game("survival")).split("\n")[0]).toBe("Order #4  SMALL")
+        expect(nextOrderText(order).split("\n")[0]).toBe("Next order  SMALL")
     })
 
     it("nextOrderText lists the next order's crops and value", () => {
@@ -489,7 +516,8 @@ describe("second batch text: fog, worms, sneak peek, steady pace", () => {
             required: { carrot: 2 },
             value: 16,
             expiresAt: 0,
-            timeLimit: 1
+            timeLimit: 1,
+            small: false
         }
         expect(nextOrderText(order)).toBe("Next order\ncarrot x2\nvalue 16")
     })
