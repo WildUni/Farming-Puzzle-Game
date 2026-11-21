@@ -263,21 +263,25 @@ function announceEvent(
         rng = afterPlot
     }
 
+    return [buildEvent(state, def, plot), rng]
+}
+
+// The RunEvent for `def` announced now on `plot`: warning, length and amount with the run's
+// modifiers applied. announceEvent and the debug menu both use it.
+function buildEvent(state: GameState, def: EventDef, plot: number | null): RunEvent {
+    const m = modifiersFor(state.upgrades)
     const startsAt = state.tick + def.warnTicks + m.warnBonusSeconds * TICKS_PER_SECOND
     const length =
         def.durationTicks === null ? 0 : scalePct(def.durationTicks, pctOf(m, def.durationStat))
     const amount = baseAmount(def.effect)
-    return [
-        {
-            id,
-            announcedAt: state.tick,
-            startsAt,
-            endsAt: startsAt + length,
-            plot,
-            amount: amount === null ? null : scalePct(amount, pctOf(m, def.amountStat))
-        },
-        rng
-    ]
+    return {
+        id: def.id,
+        announcedAt: state.tick,
+        startsAt,
+        endsAt: startsAt + length,
+        plot,
+        amount: amount === null ? null : scalePct(amount, pctOf(m, def.amountStat))
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -346,5 +350,6 @@ export {
     eventTargets,
     eligibleEvents,
     announceEvent,
+    buildEvent,
     startEvent
 }

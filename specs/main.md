@@ -105,6 +105,10 @@ Returns a **new** state, or `null` if the move is not allowed. A `null` result m
 - Removes `powerUps[slot]` (the others keep their order) and fires its effect: Ready one makes the target plot ready, Growth boost runs `cutGrowth` on every plot, Coin bag adds coins, and a lasting power-up goes through `startEffect` with `durationFor(def, upgrades)` ticks.
 - Draws nothing. See [powerups.md](powerups.md) for the full rules and [effects.md](effects.md) for what each effect does.
 
+### `withUpgrade(state: GameState, copy: OwnedUpgrade): GameState`
+
+Appends `copy` to `upgrades` (a new array) and adds empty plots if `extraPlots` went up, as `chooseUpgrade` describes. `chooseUpgrade` and the debug menu (see [debug.md](debug.md)) both use it.
+
 ### `lifePriceFor(state: GameState): number`
 
 Price of the next life with upgrades applied: `scalePct(lifePrice(livesBought), lifePricePct)`. `buyLife`, `canBuyLife` and the buy button all use it.

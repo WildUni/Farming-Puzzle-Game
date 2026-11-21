@@ -204,8 +204,8 @@ function parseSeed(text: string): number | undefined | null {
 }
 
 // Line shown in the debug overlay.
-function debugText(state: GameState, seed: number, paused: boolean): string {
-    const pause = paused ? "  PAUSED" : ""
+function debugText(state: GameState, seed: number, paused: boolean, debugged = false): string {
+    const pause = (paused ? "  PAUSED" : "") + (debugged ? "  DEBUGGED" : "")
     return `tick ${state.tick}  seed ${seed}  ${state.mode}${pause}\nR restart  L log  P pause`
 }
 

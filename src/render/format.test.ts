@@ -327,6 +327,13 @@ describe("debugText", () => {
         expect(debugText(game("survival"), 7, false)).toContain("tick 0  seed 7  survival\n")
         expect(debugText(game("timed"), 7, true)).toContain("PAUSED")
     })
+
+    it("marks a run changed by the debug menu", () => {
+        expect(debugText(game("timed"), 7, false)).not.toContain("DEBUGGED")
+        expect(debugText(game("timed"), 7, false, true)).toContain(
+            "tick 0  seed 7  timed  DEBUGGED\n"
+        )
+    })
 })
 
 describe("power-up text", () => {

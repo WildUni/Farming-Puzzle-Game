@@ -14,6 +14,7 @@ import { GameOverView } from "../views/GameOverView"
 import { UpgradePickView } from "../views/UpgradePickView"
 import { PowerUpBar } from "../views/PowerUpBar"
 import { EventBanner } from "../views/EventBanner"
+import { DebugPanel } from "../views/DebugPanel"
 import { POWER_UPS, powerUpTargets } from "../../sim/powerups"
 
 const MS_PER_TICK = 1000 / TICKS_PER_SECOND
@@ -45,6 +46,8 @@ export class Game extends Scene {
     private upgradePick: UpgradePickView
     private powerUpBar: PowerUpBar
     private eventBanner: EventBanner
+    private debugPanel: DebugPanel | null // dev builds only
+    private debugged: boolean // the debug menu changed this run, so its log won't replay
     private debug: GameObjects.Text
 
     constructor() {
@@ -71,6 +74,7 @@ export class Game extends Scene {
         this.paused = false
         this.pickerPlot = null
         this.choosingSlot = null
+        this.debugged = false
 
         this.orders = new OrdersView(this, (id) => this.onOrderClick(id))
         this.stats = new StatsView(this, this.crops)
@@ -100,6 +104,10 @@ export class Game extends Scene {
         )
         this.powerUpBar = new PowerUpBar(this, (slot) => this.onPowerUpClick(slot))
         this.eventBanner = new EventBanner(this)
+        this.debugPanel = import.meta.env.DEV
+            ? new DebugPanel(this.crops, (change) => this.applyDebug(change))
+            : null
+        this.events.once("shutdown", () => this.debugPanel?.destroy())
         this.gameOver = new GameOverView(
             this,
             () => this.restartNewSeed(),
@@ -118,6 +126,7 @@ export class Game extends Scene {
         })
         keys.on("keydown-R", () => this.scene.restart({ seed: this.seed, mode: this.mode }))
         keys.on("keydown-L", () => this.printLog())
+        keys.on("keydown-BACKTICK", () => this.debugPanel?.toggle())
 
         this.render()
     }
@@ -155,7 +164,8 @@ export class Game extends Scene {
         this.buyLife.update(this.state)
         this.upgradePick.update(this.state)
         this.gameOver.update(this.state)
-        this.debug.setText(debugText(this.state, this.seed, this.paused))
+        this.debug.setText(debugText(this.state, this.seed, this.paused, this.debugged))
+        this.debugPanel?.update(this.state)
     }
 
     // The game-over panel's Restart: a fresh run on a new random seed.
@@ -176,8 +186,21 @@ export class Game extends Scene {
 
     // Prints what's needed to replay this run: the seed and every logged action.
     private printLog(): void {
+        if (this.debugged) {
+            console.warn("This run was changed by the debug menu, so this log won't replay.")
+        }
         console.log(`Action log (seed ${this.seed}, tick ${this.state.tick}):`)
         console.log(JSON.stringify({ seed: this.seed, log: this.log }))
+    }
+
+    // Debug menu changes skip applyAction and the log, so the run is marked debugged.
+    private applyDebug(change: (state: GameState) => GameState | null): boolean {
+        const next = change(this.state)
+        if (next === null) return false
+        this.state = next
+        this.debugged = true
+        this.render()
+        return true
     }
 
     // Every player move goes through here so it is checked by the sim and logged for replay.

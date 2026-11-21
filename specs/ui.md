@@ -121,7 +121,27 @@ Shown over the board as soon as `status` is `'ended'`.
 
 ## Debug overlay
 
-`debugText` also shows the mode: `tick 0  seed 7  survival`.
+`debugText` also shows the mode: `tick 0  seed 7  survival`. After the debug menu changes the run it adds `  DEBUGGED`, since the run can no longer be replayed.
+
+## Debug menu
+
+A panel of plain HTML controls fixed to the right edge of the page, beside the canvas, for testing by hand. It only exists in the dev build (`import.meta.env.DEV`); a production build has no panel and no key for it.
+
+- A small **Debug** tab on the right edge opens and closes it; so does the backtick key (`` ` ``). It starts closed. It closes when the Game scene ends or restarts.
+- It never pauses the game. Pause (P) works as usual, and the menu works while paused.
+- Every change goes through [debug.md](debug.md)'s functions. A refused change leaves the run alone and the status line says `Not allowed`.
+
+Three sections, top to bottom:
+
+| Section   | Controls                                                                                                                                                                                                      |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Events    | Event list (name and good/bad); a plot list, shown only for plot events, listing `eventTargets`; a **Skip warning** checkbox; a **Trigger** button                                                            |
+| Upgrades  | Upgrade list (all upgrades, by name); a tier list (every tier, or only the upgrade's own); a target list, shown only for targeted upgrades, listing `validTargets` as `Plot N` or crop ids; an **Add** button |
+| Power-ups | Power-up list; an **Add** button                                                                                                                                                                              |
+
+- The plot and target lists follow the state, so they only offer choices the debug functions accept. A button is disabled when its section has nothing to offer (for example, Moles with every plot empty, or power-ups with every slot full).
+- The status line at the bottom says what the last click did, for example `Added Frost cover (rare)` or `Triggered Moles → Plot 2`.
+- Once any change is accepted, the run is marked debugged: `debugText` shows it, and the L key prints a warning that the log won't replay before printing it.
 
 ## Tests (`format.test.ts`)
 
@@ -129,7 +149,7 @@ Shown over the board as soon as `status` is `'ended'`.
 - `modeName` and `modeButtonText` for each mode; the Timed description follows `TIMED_MODE_TICKS`.
 - `statRows`: the exact rows for Timed, and for Survival; Timed has no Level, Lives or Coins rows.
 - `gameOverTitle` and `gameOverText` for each mode.
-- `debugText` includes the mode.
+- `debugText` includes the mode, and `DEBUGGED` only when the run was changed by the debug menu.
 - `upgradeCardText` shows name, tier, description with that tier's values (a tiered and a non-tiered example, and one with two effects) and the copy count after picking.
 - `buyLifeText` shows the price with the `lifePricePct` modifier applied.
 - `powerUpButtonText` gives the name, then the text with `{seconds}` filled from `durationFor`, with and without Long-lasting.

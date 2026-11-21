@@ -13,6 +13,7 @@ One spec per module in `src/sim/`. Each spec says what the module is for, what i
 | `src/sim/effects.ts`        | [effects.md](effects.md)               | Instant and lasting effects that move crops' and orders' clocks        |
 | `src/sim/powerups.ts`       | [powerups.md](powerups.md)             | Power-ups: drops from harvests, held slots, using them                 |
 | `src/sim/events.ts`         | [events.md](events.md)                 | Events: scheduling, warnings, and what each event does                 |
+| `src/sim/debug.ts`          | [debug.md](debug.md)                   | Cheats for the debug menu: start events, add upgrades and power-ups    |
 | `src/sim/plot.ts`           | [plot.md](plot.md)                     | Rules for a single plot, plus the crop table                           |
 | `src/sim/orders.ts`         | [orders.md](orders.md)                 | Rules for a single order: creating, filling, expiring                  |
 | `src/sim/scoring.ts`        | [scoring.md](scoring.md)               | Score calculation                                                      |

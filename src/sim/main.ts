@@ -6,7 +6,8 @@ import type {
     Action,
     CropTable,
     OrderRules,
-    Pool
+    Pool,
+    OwnedUpgrade
 } from "./types"
 import { randomInt, seedRNG, seedStream } from "./mulberry"
 import {
@@ -204,19 +205,9 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
                 const valid = validTargets(state.upgrades, card.id, state.plots.length, crops)
                 if (target === null || !valid.includes(target)) return null
             }
-            const upgrades = [...state.upgrades, { id: card.id, tier: card.tier, target }]
-            // plots.length always equals START_PLOTS + extraPlots (clamped), so a pick past
-            // the cap adds nothing.
-            const wanted = START_PLOTS + modifiersFor(upgrades).extraPlots
-            const added = Array.from(
-                { length: Math.max(0, wanted - state.plots.length) },
-                (): Plot => ({ state: "empty" })
-            )
             return {
-                ...state,
-                upgrades,
-                upgradeOffer: null,
-                plots: added.length > 0 ? [...state.plots, ...added] : state.plots
+                ...withUpgrade(state, { id: card.id, tier: card.tier, target }),
+                upgradeOffer: null
             }
         }
 
@@ -258,6 +249,21 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
         default:
             // An unknown action type (from a bad log) is refused, not thrown.
             return null
+    }
+}
+
+// Adds one owned copy, plus any plots it adds: plots.length always equals
+// START_PLOTS + extraPlots (clamped), so a copy past the cap adds no plot.
+function withUpgrade(state: GameState, copy: OwnedUpgrade): GameState {
+    const upgrades = [...state.upgrades, copy]
+    const wanted = START_PLOTS + modifiersFor(upgrades).extraPlots
+    const added = Array.from({ length: Math.max(0, wanted - state.plots.length) }, (): Plot => ({
+        state: "empty"
+    }))
+    return {
+        ...state,
+        upgrades,
+        plots: added.length > 0 ? [...state.plots, ...added] : state.plots
     }
 }
 
@@ -370,4 +376,4 @@ function announceDue(state: GameState): GameState {
     return { ...state, rng, event }
 }
 
-export { createGame, applyAction, step, canBuyLife, orderRules, lifePriceFor }
+export { createGame, applyAction, step, canBuyLife, orderRules, lifePriceFor, withUpgrade }

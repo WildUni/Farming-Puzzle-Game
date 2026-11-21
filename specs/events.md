@@ -193,6 +193,10 @@ Rules:
 - Draws only from `rng.events`.
 - Every number the event uses is fixed here, so the banner can show it and an upgrade picked during the warning doesn't change an event already announced. `blockStat` is the one exception: it is rolled when the event starts (see below).
 
+### `buildEvent(state: GameState, def: EventDef, plot: number | null): RunEvent`
+
+Step 5 of `announceEvent` on its own: the `RunEvent` for `def` announced on `state.tick`. The debug menu uses it too (see [debug.md](debug.md)).
+
 ## In `main.ts` (see [main.md](main.md))
 
 ### Starting and ending (step 2 of `step`)
