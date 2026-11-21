@@ -252,7 +252,8 @@ All three are marked `"needs": ["powerUps"]`, so they are never offered in a run
 - [ ] Tune drop chance, weights, slot count, lengths and amounts after playtesting.
 - [x] Ready all, Finish one, Finish all, Gold rush, Clean slate, Good omen.
 - [ ] Still to come: Combo freeze (Timed combos), Merchant call (the shop), Giant order (needs a "no new orders until this one is done" rule and its mode penalties).
-- [ ] Gold rush: keep "orders pay more for 15 s", or tie the bonus to one chosen order as the design doc says?
+- [ ] Gold rush: keep "+5 coins per order for 15 s", or double coins for 15 s instead? (Also in the design doc's open questions.)
+- [ ] Finish all: is "no score, coins and filled count still given, rarest drop" the right way to keep it from skipping the puzzle? (Also in the design doc's open questions.)
 - [ ] Buying power-ups in the shop, and pre-run power-ups paid with meta currency.
 - [ ] Should a drop with full slots replace the oldest held power-up, or offer a swap, instead of being lost?
 - [ ] Should a used Growth boost with nothing growing be refused instead of spent?

@@ -15,6 +15,7 @@ type LevelRow = {
 
 type DifficultyConfig = {
     startLives: number
+    maxLives: number // Survival lives can't go above this, plus Extra heart
     coinsPerOrder: number
     lifePrice: { base: number; growth: number }
     ordersPerLevel: number
@@ -47,6 +48,7 @@ function validateDifficulty(raw: unknown): DifficultyConfig {
     if (!isObject(raw)) fail("config", "an object")
 
     const startLives = wholeAtLeast(raw, "startLives", 1, "startLives")
+    const maxLives = wholeAtLeast(raw, "maxLives", startLives, "maxLives")
     const coinsPerOrder = wholeAtLeast(raw, "coinsPerOrder", 0, "coinsPerOrder")
     const ordersPerLevel = wholeAtLeast(raw, "ordersPerLevel", 1, "ordersPerLevel")
 
@@ -77,7 +79,7 @@ function validateDifficulty(raw: unknown): DifficultyConfig {
         return { orderTimeMultiplier: mult, maxOpenOrders, minAmount, maxAmount, eventGapSeconds }
     })
 
-    return { startLives, coinsPerOrder, lifePrice: { base, growth }, ordersPerLevel, levels }
+    return { startLives, maxLives, coinsPerOrder, lifePrice: { base, growth }, ordersPerLevel, levels }
 }
 
 const DIFFICULTY: DifficultyConfig = validateDifficulty(rawDifficulty)

@@ -600,7 +600,7 @@
         {
             "id": "extraHeart",
             "name": "Extra heart",
-            "text": "+{0} life",
+            "text": "+{0} max life, filled",
             "pools": ["survival"],
             "tier": "rare",
             "maxCopies": 2,

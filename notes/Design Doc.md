@@ -239,3 +239,5 @@ Paid coins, bought with real money, carry over between runs and are separate fro
 - [ ] Plot-targeted upgrades: for now only one of each per plot, and they can't be sold. If they become sellable, what is the tradeoff? For example, a limit on upgrades per plot, with same-type upgrades allowed to stack on one plot.
 - [ ] Stat caps and copy limits: the cap for each stat, and the max copies for each non-tiered upgrade.
 - [ ] Fake merchant: how long do fake upgrades last? (Keen eye can reveal it.)
+- [ ] Finish all: for now it gives no score, still counts the orders as filled and pays their coins, and is the rarest power-up. Is that the right way to stop it skipping the puzzle?
+- [ ] Gold rush: for now every order pays +5 coins for 15 s (the same effect as Generous customer). Should it double coins for 15 s instead?

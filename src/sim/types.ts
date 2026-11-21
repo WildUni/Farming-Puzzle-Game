@@ -40,6 +40,7 @@ type Order = {
     value: number
     expiresAt: number // last tick the order can be filled; fails on the tick after
     timeLimit: number // ticks the order was given when created
+    small: boolean // Small order halved its amounts
 }
 
 // How step creates orders at the current difficulty.

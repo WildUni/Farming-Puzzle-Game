@@ -23,7 +23,8 @@ function createOrder(
         required: { [cropId]: amount },
         value: amount * crops[cropId].value,
         expiresAt: now + rules.orderTicks,
-        timeLimit: rules.orderTicks
+        timeLimit: rules.orderTicks,
+        small: false
     }
     return [order, afterAmount]
 }

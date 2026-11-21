@@ -103,12 +103,18 @@ function lifePriceFor(state: GameState): number {
     return scalePct(lifePrice(state.livesBought), modifiersFor(state.upgrades).lifePricePct)
 }
 
+// Most lives a Survival run can hold: DIFFICULTY.maxLives plus Extra heart's extraLives.
+function maxLivesFor(state: GameState): number {
+    return DIFFICULTY.maxLives + modifiersFor(state.upgrades).extraLives
+}
+
 // True when a buyLife action would succeed. The buy button uses this.
 function canBuyLife(state: GameState): boolean {
     return (
         state.mode === "survival" &&
         state.status === "running" &&
         state.upgradeOffer === null &&
+        state.lives < maxLivesFor(state) &&
         state.coins >= lifePriceFor(state)
     )
 }
@@ -301,7 +307,7 @@ function completeOrder(state: GameState, order: Order, scored: boolean): GameSta
 
 // Adds one owned copy, plus any plots and lives it adds: plots.length always equals
 // START_PLOTS + extraPlots (clamped), so a copy past the cap adds no plot. In Survival, a rise
-// in extraLives (Extra heart) adds that many lives.
+// in extraLives (Extra heart) raises the lives cap and fills the new hearts.
 function withUpgrade(state: GameState, copy: OwnedUpgrade): GameState {
     const before = modifiersFor(state.upgrades).extraLives
     const upgrades = [...state.upgrades, copy]
@@ -341,7 +347,7 @@ function makeOrder(
     const required = Object.fromEntries(
         Object.entries(order.required).map(([cropId, n]) => [cropId, Math.ceil(n / 2)])
     )
-    return [{ ...order, required }, afterOrders, afterShrink]
+    return [{ ...order, required, small: true }, afterOrders, afterShrink]
 }
 
 // The rules for the next new order: Second wind stretches its time after a lost life.
@@ -519,6 +525,7 @@ export {
     canBuyLife,
     orderRules,
     lifePriceFor,
+    maxLivesFor,
     withUpgrade,
     nextOrderPreview
 }
