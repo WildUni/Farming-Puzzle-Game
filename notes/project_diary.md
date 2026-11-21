@@ -34,6 +34,14 @@
 * Added survial mode: base number of lives, scaling difficulty with time: more orders, less time.
 * Added mode selection to the base screen.
 * Updated end condition checks based on mode
-* 
 
 ## 11/20
+* Added claude.md file
+* Added readyAt field for plots for upgrades.
+* Expanded on the idea of upgrades, power ups, and events
+* Came up with a list of upgrades and poewr ups + upgrade tiering
+* Came up with a list events
+* Separated good/bad events
+* Added a storage limit on the amt of crops player can hold (?)
+* Added a shop event for players to spend their in-run gold (?)
+
