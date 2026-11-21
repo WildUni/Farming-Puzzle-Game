@@ -48,7 +48,23 @@ function rawConfig(): Record<string, unknown> {
             frostDurationPct: { base: 100, min: 25, max: 100 },
             crowDurationPct: { base: 100, min: 25, max: 100 },
             moleBlockChance: { base: 0, min: 0, max: 75 },
-            shielded: { base: 0, min: 0, max: 1 }
+            shielded: { base: 0, min: 0, max: 1 },
+            bumperExtra: { base: 1, min: 1, max: 4 },
+            smallOrderChance: { base: 0, min: 0, max: 50 },
+            sneakPeek: { base: 0, min: 0, max: 1 },
+            crowBan: { base: 0, min: 0, max: 1 },
+            earlyBirdCoins: { base: 0, min: 0, max: 15 },
+            levelPacePct: { base: 100, min: 100, max: 200 },
+            extraLives: { base: 0, min: 0, max: 2 },
+            lastStandGrowthPct: { base: 100, min: 50, max: 100 },
+            secondChance: { base: 0, min: 0, max: 50 },
+            secondWindPct: { base: 100, min: 100, max: 200 },
+            wormBonusPct: { base: 100, min: 100, max: 300 },
+            neighborReplant: { base: 0, min: 0, max: 1 },
+            birdPlotsPct: { base: 100, min: 34, max: 100 },
+            rotPct: { base: 100, min: 25, max: 100 },
+            fogDurationPct: { base: 100, min: 25, max: 100 },
+            emergencyTimePct: { base: 100, min: 100, max: 200 }
         },
         tiers: {
             common: { weight: 40, sellPrice: 1 },
@@ -288,7 +304,23 @@ describe("modifiersFor", () => {
             frostDurationPct: 100,
             crowDurationPct: 100,
             moleBlockChance: 0,
-            shielded: 0
+            shielded: 0,
+            bumperExtra: 1,
+            smallOrderChance: 0,
+            sneakPeek: 0,
+            crowBan: 0,
+            earlyBirdCoins: 0,
+            levelPacePct: 100,
+            extraLives: 0,
+            lastStandGrowthPct: 100,
+            secondChance: 0,
+            secondWindPct: 100,
+            wormBonusPct: 100,
+            neighborReplant: 0,
+            birdPlotsPct: 100,
+            rotPct: 100,
+            fogDurationPct: 100,
+            emergencyTimePct: 100
         })
     })
 
@@ -457,7 +489,7 @@ describe("eligibleUpgrades", () => {
         const ids = Object.values(UPGRADES.upgrades)
             .filter((d) => d.needs.includes("events"))
             .map((d) => d.id)
-        expect(ids).toHaveLength(10)
+        expect(ids).toHaveLength(17)
         for (const id of ids) {
             expect(off).not.toContain(id)
             expect(on).toContain(id)

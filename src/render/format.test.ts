@@ -11,6 +11,8 @@ import {
     timerText,
     plotText,
     orderText,
+    nextOrderText,
+    isFogged,
     statRows,
     cropButtonText,
     orderTimeFraction,
@@ -440,5 +442,77 @@ describe("event text", () => {
             ["fast", "shield"]
         ])
         expect(plotOverlays({ ...s, tick: 20, event: null })).toEqual([[], [], [], ["shield"]])
+    })
+})
+
+describe("second batch text: fog, worms, sneak peek, steady pace", () => {
+    const fog: ActiveEffect = {
+        source: "fog",
+        effect: { kind: "fog" },
+        startedAt: 10,
+        endsAt: 20,
+        exclude: []
+    }
+    const fogged = (tick: number): GameState => ({
+        ...game("survival"),
+        tick,
+        activeEffects: [fog]
+    })
+
+    it("isFogged is true only while fog works", () => {
+        expect(isFogged(fogged(10))).toBe(true)
+        expect(isFogged(fogged(20))).toBe(false)
+        expect(isFogged(game("survival"))).toBe(false)
+    })
+
+    it("plotText hides growth in fog", () => {
+        const growing = { state: "growing" as const, cropId: "garlic", plantedAt: 0, readyAt: 100 }
+        expect(plotText(growing, 50, true)).toBe("garlic\n?")
+        expect(plotText(growing, 50)).toBe("garlic\n50%")
+        expect(plotText({ state: "ready", cropId: "garlic" }, 50, true)).toBe("garlic\nREADY")
+    })
+
+    it("orderText hides the time left in fog", () => {
+        const order: Order = {
+            id: 2,
+            required: { garlic: 3 },
+            value: 6,
+            expiresAt: 600,
+            timeLimit: 600
+        }
+        expect(orderText(order, fogged(12))).toBe("Order #2\ngarlic x3  (have 0)\nvalue 6   ?:??")
+    })
+
+    it("nextOrderText lists the next order's crops and value", () => {
+        const order: Order = {
+            id: 9,
+            required: { carrot: 2 },
+            value: 16,
+            expiresAt: 0,
+            timeLimit: 1
+        }
+        expect(nextOrderText(order)).toBe("Next order\ncarrot x2\nvalue 16")
+    })
+
+    it("plotOverlays marks plots Worms are working on", () => {
+        const worms: ActiveEffect = {
+            source: "worms",
+            effect: { kind: "harvestBonus", crops: 1 },
+            startedAt: 10,
+            endsAt: 20,
+            exclude: []
+        }
+        const s = { ...game("survival"), tick: 12, activeEffects: [worms] }
+        expect(plotOverlays(s)).toEqual([["worms"], ["worms"], ["worms"], ["worms"]])
+    })
+
+    it("the Level row and game-over text follow Steady pace", () => {
+        const s: GameState = {
+            ...game("survival"),
+            ordersCompleted: DIFFICULTY.ordersPerLevel,
+            upgrades: [{ id: "steadyPace", tier: "legendary", target: null }]
+        }
+        expect(statRows(s, crops)).toContainEqual(["Level", "1"])
+        expect(gameOverText(s)).toContain("Level reached 1")
     })
 })

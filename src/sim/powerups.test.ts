@@ -84,9 +84,15 @@ describe("validatePowerUps", () => {
     it("accepts the shipped powerups.json", () => {
         expect(() => validatePowerUps(rawPowerUps)).not.toThrow()
         expect(Object.keys(POWER_UPS.powerUps).sort()).toEqual([
+            "cleanSlate",
             "coinBag",
+            "finishAll",
+            "finishOne",
+            "goldRush",
+            "goodOmen",
             "growthBoost",
             "orderFreeze",
+            "readyAll",
             "readyOne"
         ])
     })
@@ -134,10 +140,19 @@ describe("validatePowerUps", () => {
 })
 
 describe("dropTable", () => {
-    it("lists the mode's ids, sorted; Coin bag is Survival only", () => {
-        expect(dropTable("survival")).toEqual(["coinBag", "growthBoost", "orderFreeze", "readyOne"])
-        expect(dropTable("timed")).toEqual(["growthBoost", "orderFreeze", "readyOne"])
-        expect(dropTable("survival", config)).toEqual(["coins", "freeze", "ready"])
+    it("lists the run's ids, sorted; Coin bag and Gold rush are Survival only", () => {
+        const both = ["cleanSlate", "finishAll", "finishOne", "growthBoost", "orderFreeze"]
+        const timed = state({ mode: "timed" })
+        expect(dropTable(state())).toEqual(
+            [...both, "coinBag", "goldRush", "readyAll", "readyOne"].sort()
+        )
+        expect(dropTable(timed)).toEqual([...both, "readyAll", "readyOne"].sort())
+        expect(dropTable(state(), config)).toEqual(["coins", "freeze", "ready"])
+    })
+
+    it("leaves out Good omen unless events are on", () => {
+        expect(dropTable(state())).not.toContain("goodOmen")
+        expect(dropTable(state({ allowEvents: true }))).toContain("goodOmen")
     })
 })
 
@@ -261,5 +276,86 @@ describe("durationFor", () => {
         const upgrades: OwnedUpgrade[] = [{ id: "longLasting", tier: "legendary", target: null }]
         expect(durationFor(freeze, upgrades)).toBe(scalePct(freeze.durationTicks!, 150))
         expect(durationFor(POWER_UPS.powerUps.coinBag, [])).toBeNull()
+    })
+})
+
+describe("power-ups: second batch rules", () => {
+    // The small config plus one power-up made of `fields`.
+    function withPowerUp(fields: Record<string, unknown>): Record<string, unknown> {
+        const raw = rawConfig()
+        const list = raw.powerUps as Record<string, unknown>[]
+        const extra = {
+            id: "extra",
+            name: "Extra",
+            text: "Extra",
+            modes: ["survival"],
+            weight: 1,
+            ...fields
+        }
+        return { powerUps: [...list, extra] }
+    }
+
+    it("accepts each new kind", () => {
+        const kinds: Record<string, unknown>[] = [
+            { effect: { kind: "finishAll" } },
+            { effect: { kind: "clearField" } },
+            { effect: { kind: "fillOrder" }, target: "order" },
+            { effect: { kind: "fillAllOrders" } },
+            { effect: { kind: "goodEvent" }, needs: ["events"] },
+            { effect: { kind: "deliverBonus", coins: 2 }, seconds: 3 }
+        ]
+        for (const k of kinds) expect(() => validatePowerUps(withPowerUp(k))).not.toThrow()
+        const read = validatePowerUps(withPowerUp({ effect: { kind: "finishAll" } }))
+        expect(read.powerUps.extra.needs).toEqual([])
+        expect(read.powerUps.extra.target).toBeNull()
+    })
+
+    const bad: [string, Record<string, unknown>][] = [
+        ["fillOrder without an order target", { effect: { kind: "fillOrder" } }],
+        ["an order target on another effect", { effect: { kind: "finishAll" }, target: "order" }],
+        ["an order target on finishGrowth", { effect: { kind: "finishGrowth" }, target: "order" }],
+        ["goodEvent without needs events", { effect: { kind: "goodEvent" } }],
+        ["an unknown need", { effect: { kind: "finishAll" }, needs: ["shop"] }],
+        ["a repeated need", { effect: { kind: "finishAll" }, needs: ["events", "events"] }],
+        ["deliverBonus of 0 coins", { effect: { kind: "deliverBonus", coins: 0 }, seconds: 3 }],
+        ["deliverBonus without seconds", { effect: { kind: "deliverBonus", coins: 2 } }],
+        ["an event-only kind", { effect: { kind: "rotStorage", pct: 10 } }]
+    ]
+    for (const [name, fields] of bad) {
+        it(`throws for ${name}`, () => {
+            expect(() => validatePowerUps(withPowerUp(fields))).toThrow()
+        })
+    }
+
+    it("Finish one targets open orders' ids, ascending", () => {
+        const order = (id: number) => ({
+            id,
+            required: { garlic: 1 },
+            value: 2,
+            expiresAt: 500,
+            timeLimit: 500
+        })
+        const s = state({ orders: [order(7), order(2)], powerUps: ["finishOne", "readyAll"] })
+        expect(powerUpTargets(s, 0)).toEqual([2, 7])
+        expect(powerUpTargets(s, 1)).toEqual([])
+        expect(canUsePowerUp(s, 0, 7)).toBe(true)
+        expect(canUsePowerUp(s, 0, 3)).toBe(false)
+        expect(canUsePowerUp(s, 0, null)).toBe(false)
+        expect(canUsePowerUp(s, 1, null)).toBe(true)
+    })
+
+    it("Good omen needs events on and no event announced or running", () => {
+        const event = {
+            id: "frost",
+            announcedAt: 0,
+            startsAt: 5,
+            endsAt: 9,
+            plot: null,
+            amount: null
+        }
+        expect(canUsePowerUp(state({ powerUps: ["goodOmen"] }), 0, null)).toBe(false)
+        const on = state({ powerUps: ["goodOmen"], allowEvents: true })
+        expect(canUsePowerUp(on, 0, null)).toBe(true)
+        expect(canUsePowerUp({ ...on, event }, 0, null)).toBe(false)
     })
 })

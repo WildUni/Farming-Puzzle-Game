@@ -33,6 +33,57 @@
             "modes": ["survival"],
             "weight": 20,
             "effect": { "kind": "grantCoins", "amount": 10 }
+        },
+        {
+            "id": "readyAll",
+            "name": "Ready all",
+            "text": "Every growing crop is ready now",
+            "modes": ["survival", "timed"],
+            "weight": 8,
+            "effect": { "kind": "finishAll" }
+        },
+        {
+            "id": "finishOne",
+            "name": "Finish one",
+            "text": "Fill one order without crops",
+            "modes": ["survival", "timed"],
+            "weight": 6,
+            "target": "order",
+            "effect": { "kind": "fillOrder" }
+        },
+        {
+            "id": "finishAll",
+            "name": "Finish all",
+            "text": "Fill every order, for no score",
+            "modes": ["survival", "timed"],
+            "weight": 2,
+            "effect": { "kind": "fillAllOrders" }
+        },
+        {
+            "id": "goldRush",
+            "name": "Gold rush",
+            "text": "Orders pay +5 coins for {seconds} s",
+            "modes": ["survival"],
+            "weight": 10,
+            "seconds": 15,
+            "effect": { "kind": "deliverBonus", "coins": 5 }
+        },
+        {
+            "id": "cleanSlate",
+            "name": "Clean slate",
+            "text": "Clear every plot to replant",
+            "modes": ["survival", "timed"],
+            "weight": 8,
+            "effect": { "kind": "clearField" }
+        },
+        {
+            "id": "goodOmen",
+            "name": "Good omen",
+            "text": "Call a good event now",
+            "modes": ["survival", "timed"],
+            "weight": 10,
+            "needs": ["events"],
+            "effect": { "kind": "goodEvent" }
         }
     ]
 }

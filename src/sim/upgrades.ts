@@ -43,7 +43,23 @@ const MODIFIER_STATS: readonly ModifierStat[] = [
     "frostDurationPct",
     "crowDurationPct",
     "moleBlockChance",
-    "shielded"
+    "shielded",
+    "bumperExtra",
+    "smallOrderChance",
+    "sneakPeek",
+    "crowBan",
+    "earlyBirdCoins",
+    "levelPacePct",
+    "extraLives",
+    "lastStandGrowthPct",
+    "secondChance",
+    "secondWindPct",
+    "wormBonusPct",
+    "neighborReplant",
+    "birdPlotsPct",
+    "rotPct",
+    "fogDurationPct",
+    "emergencyTimePct"
 ]
 
 // Stats read per plot and crop (by plant and harvest), so targeted upgrades may use them.
@@ -362,6 +378,14 @@ function scalePct(base: number, pct: number): number {
     return Math.max(1, Math.round((base * pct) / 100))
 }
 
+// The growthPct a crop planted now on `plot` gets: growthPct there, and on a Survival run's
+// last life also Last stand's lastStandGrowthPct (the two multiply, rounded to a whole %).
+function plantGrowthPct(state: GameState, plot: number, cropId: string): number {
+    const { growthPct } = modifiersAt(state.upgrades, { plot, cropId })
+    if (state.mode !== "survival" || state.lives !== 1) return growthPct
+    return scalePct(growthPct, modifiersFor(state.upgrades).lastStandGrowthPct)
+}
+
 // ---------------------------------------------------------------------------------------------
 // Eligibility
 
@@ -488,6 +512,7 @@ export {
     modifiersFor,
     modifiersAt,
     scalePct,
+    plantGrowthPct,
     copyCount,
     validTargets,
     eligibleUpgrades,

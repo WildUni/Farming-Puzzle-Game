@@ -45,7 +45,7 @@ function mapSame<T>(list: T[], f: (item: T, i: number) => T): T[] {
 
 // What lasting effects do on one tick: drop the ones that ended, then move each growing crop by
 // the growthRate shifts that don't exclude its plot, and every open order by the orderRate shifts.
-// Action effects (blockHarvest, deliverBonus) move nothing.
+// Action effects (blockHarvest, deliverBonus, harvestBonus, fog) move nothing.
 function tickEffects(
     active: ActiveEffect[],
     plots: Plot[],
@@ -117,6 +117,16 @@ function finishGrowth(plot: Plot): Plot | null {
     return { state: "ready", cropId: plot.cropId }
 }
 
+// Every growing crop becomes ready now. Returns `plots` itself when nothing was growing.
+function finishAll(plots: Plot[]): Plot[] {
+    return mapSame(plots, (p) => finishGrowth(p) ?? p)
+}
+
+// Every plot becomes empty. Returns `plots` itself when every plot already was.
+function clearField(plots: Plot[]): Plot[] {
+    return mapSame(plots, (p) => (p.state === "empty" ? p : { state: "empty" }))
+}
+
 // A growing or ready crop is lost. null for an empty plot, so the caller knows nothing happened.
 function stealCrop(plot: Plot): Plot | null {
     if (plot.state === "empty") return null
@@ -144,6 +154,22 @@ function deliverBonusAt(active: ActiveEffect[], now: number): number {
     )
 }
 
+// Extra crops a harvest of `plot` on tick `now` gets from working harvestBonus effects (Worms).
+function harvestBonusAt(active: ActiveEffect[], plot: number, now: number): number {
+    return active.reduce(
+        (sum, a) =>
+            a.effect.kind === "harvestBonus" && working(a, now) && !a.exclude.includes(plot)
+                ? sum + a.effect.crops
+                : sum,
+        0
+    )
+}
+
+// True while a fog effect works: the screen hides growth and order timers.
+function fogged(active: ActiveEffect[], now: number): boolean {
+    return active.some((a) => a.effect.kind === "fog" && working(a, now))
+}
+
 export {
     rateShift,
     shiftPlot,
@@ -154,5 +180,9 @@ export {
     finishGrowth,
     stealCrop,
     harvestBlocked,
-    deliverBonusAt
+    deliverBonusAt,
+    harvestBonusAt,
+    fogged,
+    finishAll,
+    clearField
 }

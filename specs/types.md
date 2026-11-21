@@ -6,13 +6,13 @@ Shared types for the simulation. Contains only types, so it is exported with `ex
 
 ### Basic values
 
-| Type         | Definition                                                                                       | Meaning                                                         |
-| ------------ | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
-| `RNGSeed`    | `number`                                                                                         | The seed a run starts from                                      |
-| `RNGState`   | `number`                                                                                         | One generator's current position, stored in `GameState.rng`     |
-| `RNGStreams` | `{ orders: RNGState; upgrades: RNGState; harvest: RNGState; drops: RNGState; events: RNGState }` | One generator per system, so their draws don't shift each other |
-| `GameMode`   | `'survival' \| 'timed' \| 'puzzle'`                                                              | Which mode the run is in                                        |
-| `GameStatus` | `'running' \| 'ended'`                                                                           | Whether `step` should keep advancing the game                   |
+| Type         | Definition                                                                        | Meaning                                                         |
+| ------------ | --------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `RNGSeed`    | `number`                                                                          | The seed a run starts from                                      |
+| `RNGState`   | `number`                                                                          | One generator's current position, stored in `GameState.rng`     |
+| `RNGStreams` | `{ orders; upgrades; harvest; drops; events; lives; shrink }`, each an `RNGState` | One generator per system, so their draws don't shift each other |
+| `GameMode`   | `'survival' \| 'timed' \| 'puzzle'`                                               | Which mode the run is in                                        |
+| `GameStatus` | `'running' \| 'ended'`                                                            | Whether `step` should keep advancing the game                   |
 
 ### `Crop` and `CropTable`
 
@@ -99,6 +99,7 @@ Everything that changes during a run. If `step` or `replay` would give a differe
 | `allowEvents`                     | Copied from `GameConfig.allowEvents`, so the rules can read it                      |
 | `event`                           | The announced or running `RunEvent`, else `null` (see [events.md](events.md))       |
 | `nextEventAt`                     | First tick a new event may be announced on                                          |
+| `secondWind`                      | Survival: a life was lost and the next new order hasn't been made yet (Second wind) |
 
 The Survival level and the next life's price are worked out from `ordersCompleted` and `livesBought` (see [difficulty.md](difficulty.md)), so they are not stored. The same goes for the upgrade `Modifiers`, which are added up from `upgrades` (see [upgrades.md](upgrades.md)).
 
@@ -130,7 +131,7 @@ One player move, passed to `applyAction` (see [main.md](main.md)).
 - `orderId` is an `Order.id`, not a position in the list, so it stays correct when other orders are removed.
 - `upgradeId` must be the id of one of the cards in `GameState.upgradeOffer`.
 - `target` is a plot index or crop id, required for targeted upgrades and left out for the rest (see [upgrades.md](upgrades.md)).
-- `slot` is an index into `GameState.powerUps`. `usePowerUp`'s `target` is a plot index, required only for power-ups with `target: "plot"` (see [powerups.md](powerups.md)).
+- `slot` is an index into `GameState.powerUps`. `usePowerUp`'s `target` is a plot index for power-ups with `target: "plot"`, an order id for ones with `target: "order"`, and left out for the rest (see [powerups.md](powerups.md)).
 - Plain data only, so actions can be stored in the log and saved as JSON.
 
 ### Upgrade types

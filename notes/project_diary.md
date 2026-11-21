@@ -45,3 +45,9 @@
 * Added a storage limit on the amt of crops player can hold (?)
 * Added a shop event for players to spend their in-run gold (?)
 
+## 11/21
+* Separated RNG state into two, one for orders, and one for upgrades.
+* Decided that the number of the same type of upgrade is capped.
+* plot-targted upgrades of the same type cannot be stacked on the same plot
+* Decided that some upgrades could be sold in the shop to allow players to cycle upgrades
+* 

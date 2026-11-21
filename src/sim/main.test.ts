@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest"
-import { createGame, applyAction, step, canBuyLife, orderRules, lifePriceFor } from "./main"
+import {
+    createGame,
+    applyAction,
+    step,
+    canBuyLife,
+    orderRules,
+    lifePriceFor,
+    withUpgrade,
+    nextOrderPreview
+} from "./main"
 import { buildCropTable, updateGrowth } from "./plot"
 import { createOrder } from "./orders"
 import { nextValue, randomInt, seedRNG, seedStream } from "./mulberry"
@@ -12,9 +21,17 @@ import {
     ORDERS_PER_UPGRADE,
     UPGRADE_CHOICES
 } from "./game_constants"
-import { DIFFICULTY, lifePrice, levelFor, orderRulesFor } from "./difficulty"
-import { UPGRADES, effectAmount, modifiersFor, rollOffer, scalePct } from "./upgrades"
+import { DIFFICULTY, lifePrice, levelFor, orderRulesFor, runLevel } from "./difficulty"
+import {
+    UPGRADES,
+    effectAmount,
+    eligibleUpgrades,
+    modifiersFor,
+    rollOffer,
+    scalePct
+} from "./upgrades"
 import { EVENTS } from "./events"
+import { POWER_UPS } from "./powerups"
 import type {
     Action,
     Crop,
@@ -101,8 +118,11 @@ describe("createGame", () => {
             upgrades: seedStream(1, 1),
             harvest: seedStream(1, 2),
             drops: seedStream(1, 3),
-            events: seedStream(1, 4)
+            events: seedStream(1, 4),
+            lives: seedStream(1, 5),
+            shrink: seedStream(1, 6)
         })
+        expect(g.secondWind).toBe(false)
         expect(g.allowEvents).toBe(false)
         expect(g.event).toBeNull()
         expect(g.nextEventAt).toBe(EVENTS.firstEventTicks)
@@ -1196,5 +1216,228 @@ describe("power-ups: drops and use", () => {
         }
         expect(b.rng.orders).toBe(a.rng.orders)
         expect(b.nextOrderId).toBe(a.nextOrderId)
+    })
+})
+
+describe("upgrades: rules added with the second batch", () => {
+    // Steps until some order is open and returns that state.
+    function withOrders(s: GameState): GameState {
+        let t = s
+        while (t.orders.length === 0) t = step(t, crops)
+        return t
+    }
+
+    it("Bigger bumper adds more crops when the bumper roll hits", () => {
+        const ready: Plot = { state: "ready", cropId: "garlic" }
+        const upgrades = [
+            own("bumperHarvest", "legendary"),
+            own("bumperHarvest", "legendary"),
+            own("biggerBumper", "legendary")
+        ] // 50% chance, 1 + 3 crops on a hit
+        const amounts = new Set<number>()
+        for (let seed = 0; seed < 40; seed++) {
+            const s = { ...createGame(seed, config), plots: [ready], upgrades }
+            amounts.add(apply(s, { type: "harvest", plot: 0 }).inventory.garlic)
+        }
+        expect(amounts).toEqual(new Set([crops.garlic.yield, crops.garlic.yield + 4]))
+    })
+
+    it("Bigger bumper is only offered once Bumper harvest is owned", () => {
+        const s = makeState()
+        expect(eligibleUpgrades(s, "survival", crops)).not.toContain("biggerBumper")
+        const owned = makeState({ upgrades: [own("bumperHarvest")] })
+        expect(eligibleUpgrades(owned, "survival", crops)).toContain("biggerBumper")
+    })
+
+    it("Small order halves new orders' amounts on a hit, from rng.shrink only", () => {
+        const chance = [own("smallOrder", "legendary"), own("smallOrder", "legendary")] // 50%
+        let halved = 0
+        for (let seed = 0; seed < 40; seed++) {
+            const plain = step(createGame(seed, timed), crops)
+            const small = step({ ...createGame(seed, timed), upgrades: chance }, crops)
+            expect(small.rng.orders).toBe(plain.rng.orders)
+            expect(small.rng.shrink).toBe(
+                [...Array(plain.orders.length)].reduce(
+                    (r: number) => nextValue(r)[1],
+                    plain.rng.shrink
+                )
+            )
+            small.orders.forEach((o, i) => {
+                const [cropId, n] = Object.entries(plain.orders[i].required)[0]
+                const got = o.required[cropId]
+                expect([n, Math.ceil(n / 2)]).toContain(got)
+                if (got !== n) halved++
+                expect(o.value).toBe(plain.orders[i].value)
+            })
+        }
+        expect(halved).toBeGreaterThan(0)
+        // Without the upgrade the stream never moves.
+        expect(step(createGame(1, timed), crops).rng.shrink).toBe(createGame(1, timed).rng.shrink)
+    })
+
+    it("Sneak peek shows the order step creates next", () => {
+        let s = withOrders(makeTimed({ upgrades: [own("sneakPeek", "rare")] }))
+        expect(nextOrderPreview(makeTimed(), crops)).toBeNull()
+        const preview = nextOrderPreview(s, crops)!
+        expect(preview.id).toBe(s.nextOrderId)
+        s = { ...s, orders: s.orders.slice(1) } // free a slot
+        const next = step(s, crops)
+        const made = next.orders[next.orders.length - 1]
+        expect(made.id).toBe(preview.id)
+        expect(made.required).toEqual(preview.required)
+    })
+
+    it("Early bird pays its coins only with at least half the time left", () => {
+        const upgrades = [own("earlyBird", "legendary")]
+        const bonus = effectAmount(UPGRADES.upgrades.earlyBird, 0, "legendary")
+        const order = makeOrder({ expiresAt: 600, timeLimit: 600 })
+        const at = (tick: number) =>
+            apply(makeState({ tick, orders: [order], inventory: { carrot: 3 }, upgrades }), {
+                type: "deliver",
+                orderId: 0
+            }).coins
+        expect(at(300)).toBe(DIFFICULTY.coinsPerOrder + bonus)
+        expect(at(301)).toBe(DIFFICULTY.coinsPerOrder)
+    })
+
+    it("Steady pace slows the Survival level", () => {
+        const at = DIFFICULTY.ordersPerLevel
+        expect(runLevel(makeState({ ordersCompleted: at }))).toBe(1)
+        const slow = makeState({ ordersCompleted: at, upgrades: [own("steadyPace", "legendary")] })
+        expect(runLevel(slow)).toBe(levelFor(Math.floor((at * 100) / 125)))
+        expect(runLevel(slow)).toBe(0)
+        expect(orderRules(slow)).toEqual(orderRulesFor(0))
+    })
+
+    it("Extra heart adds a life when picked in Survival, and none in Timed", () => {
+        const s = makeState({ upgradeOffer: [card("extraHeart", "rare")] })
+        const next = apply(s, { type: "chooseUpgrade", upgradeId: "extraHeart" })
+        expect(next.lives).toBe(s.lives + 1)
+        const t = withUpgrade(makeTimed(), own("extraHeart", "rare"))
+        expect(t.lives).toBe(0)
+        // Past the cap (2) a copy adds nothing.
+        const two = [own("extraHeart", "rare"), own("extraHeart", "rare")]
+        expect(withUpgrade(makeState({ upgrades: two }), own("extraHeart", "rare")).lives).toBe(
+            DIFFICULTY.startLives
+        )
+    })
+
+    it("Last stand speeds crops planted on the last life only", () => {
+        const upgrades = [own("lastStand", "legendary")]
+        const plantAt = (lives: number) =>
+            apply(makeState({ lives, upgrades }), { type: "plant", plot: 0, cropId: "pumpkin" })
+                .plots[0]
+        expect(plantAt(2)).toMatchObject({ readyAt: crops.pumpkin.growTicks })
+        expect(plantAt(1)).toMatchObject({ readyAt: scalePct(crops.pumpkin.growTicks, 75) })
+    })
+
+    it("Second chance sometimes keeps the life, rolling once per failed order", () => {
+        const upgrades = [own("secondChance", "legendary"), own("secondChance", "legendary")]
+        const outcomes = new Set<number>()
+        for (let seed = 0; seed < 40; seed++) {
+            const s = {
+                ...createGame(seed, config),
+                tick: 100,
+                orders: [makeOrder({ expiresAt: 100 })],
+                upgrades
+            }
+            const next = step(s, crops)
+            expect(next.ordersFailed).toBe(1)
+            expect(next.rng.lives).toBe(nextValue(s.rng.lives)[1])
+            outcomes.add(next.lives)
+        }
+        expect(outcomes).toEqual(new Set([DIFFICULTY.startLives, DIFFICULTY.startLives - 1]))
+        const plain = { ...makeState({ tick: 100, orders: [makeOrder({ expiresAt: 100 })] }) }
+        expect(step(plain, crops).rng.lives).toBe(plain.rng.lives)
+    })
+
+    it("Second wind gives the first new order after a lost life a longer timer", () => {
+        const upgrades = [own("secondWind", "legendary")]
+        const s = makeState({ tick: 100, orders: [makeOrder({ expiresAt: 100 })], upgrades })
+        const next = step(s, crops)
+        expect(next.lives).toBe(s.lives - 1)
+        const rules = orderRules(next)
+        expect(next.orders[0].timeLimit).toBe(scalePct(rules.orderTicks, 150))
+        expect(next.secondWind).toBe(false)
+        const after = step({ ...next, orders: [] }, crops)
+        expect(after.orders[0].timeLimit).toBe(rules.orderTicks)
+    })
+})
+
+describe("power-ups: second batch", () => {
+    const on: GameConfig = { mode: "survival", allowPowerUps: true, allowEvents: true }
+    const growingPlot: Plot = { state: "growing", cropId: "garlic", plantedAt: 0, readyAt: 80 }
+    const readyPlot: Plot = { state: "ready", cropId: "garlic" }
+
+    function holding(powerUps: string[], overrides: Partial<GameState> = {}): GameState {
+        return { ...createGame(1, on), powerUps, ...overrides }
+    }
+
+    it("Ready all makes every growing crop ready", () => {
+        const s = holding(["readyAll"], { plots: [growingPlot, { state: "empty" }, growingPlot] })
+        const next = apply(s, { type: "usePowerUp", slot: 0 })
+        expect(next.plots).toEqual([readyPlot, { state: "empty" }, readyPlot])
+        expect(next.powerUps).toEqual([])
+    })
+
+    it("Clean slate empties every plot", () => {
+        const s = holding(["cleanSlate"], { plots: [growingPlot, readyPlot] })
+        const next = apply(s, { type: "usePowerUp", slot: 0 })
+        expect(next.plots).toEqual([{ state: "empty" }, { state: "empty" }])
+    })
+
+    it("Finish one fills the chosen order without crops, paying as a delivery", () => {
+        const orders = [makeOrder({ id: 3 }), makeOrder({ id: 5, value: 40 })]
+        const s = holding(["finishOne"], { orders, inventory: { carrot: 1 } })
+        expect(applyAction(s, { type: "usePowerUp", slot: 0 }, crops)).toBeNull()
+        expect(applyAction(s, { type: "usePowerUp", slot: 0, target: 4 }, crops)).toBeNull()
+        const next = apply(s, { type: "usePowerUp", slot: 0, target: 5 })
+        expect(next.orders.map((o) => o.id)).toEqual([3])
+        expect(next.score).toBe(40)
+        expect(next.ordersCompleted).toBe(1)
+        expect(next.coins).toBe(DIFFICULTY.coinsPerOrder)
+        expect(next.inventory).toEqual({ carrot: 1 })
+    })
+
+    it("Finish all fills every order for coins but no score", () => {
+        const orders = [makeOrder({ id: 1 }), makeOrder({ id: 2 })]
+        const next = apply(holding(["finishAll"], { orders }), { type: "usePowerUp", slot: 0 })
+        expect(next.orders).toEqual([])
+        expect(next.ordersCompleted).toBe(2)
+        expect(next.score).toBe(0)
+        expect(next.coins).toBe(2 * DIFFICULTY.coinsPerOrder)
+    })
+
+    it("Gold rush adds coins to deliveries for its length", () => {
+        const def = POWER_UPS.powerUps.goldRush
+        const s = apply(holding(["goldRush"]), { type: "usePowerUp", slot: 0 })
+        expect(s.activeEffects).toEqual([
+            {
+                source: "goldRush",
+                effect: def.effect,
+                startedAt: 0,
+                endsAt: def.durationTicks,
+                exclude: []
+            }
+        ])
+        const stocked = { ...s, orders: [makeOrder()], inventory: { carrot: 3 } }
+        expect(apply(stocked, { type: "deliver", orderId: 0 }).coins).toBe(
+            DIFFICULTY.coinsPerOrder + 5
+        )
+    })
+
+    it("Good omen announces a good event now from rng.events, only with no event on", () => {
+        const s = holding(["goodOmen"])
+        const next = apply(s, { type: "usePowerUp", slot: 0 })
+        expect(next.event).not.toBeNull()
+        expect(EVENTS.events[next.event!.id].kind).toBe("good")
+        expect(next.event!.announcedAt).toBe(s.tick)
+        expect(next.rng.events).not.toBe(s.rng.events)
+        expect(next.rng.orders).toBe(s.rng.orders)
+        expect(applyAction(next, { type: "usePowerUp", slot: 0 }, crops)).toBeNull()
+        const busy = holding(["goodOmen"], { event: next.event })
+        expect(applyAction(busy, { type: "usePowerUp", slot: 0 }, crops)).toBeNull()
+        const off = holding(["goodOmen"], { allowEvents: false })
+        expect(applyAction(off, { type: "usePowerUp", slot: 0 }, crops)).toBeNull()
     })
 })

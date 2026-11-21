@@ -6,9 +6,11 @@ import {
     shieldedPlots,
     eventTargets,
     eligibleEvents,
-    announceEvent
+    announceEvent,
+    rotStorage
 } from "./events"
-import { createGame, applyAction, step } from "./main"
+import { debugEvent } from "./debug"
+import { createGame, applyAction, step, orderRules } from "./main"
 import { buildCropTable } from "./plot"
 import { nextValue } from "./mulberry"
 import { TICKS_PER_SECOND } from "./game_constants"
@@ -132,12 +134,19 @@ describe("validateEvents", () => {
     it("accepts the shipped events.json", () => {
         expect(() => validateEvents(rawEvents)).not.toThrow()
         expect(Object.keys(EVENTS.events).sort()).toEqual([
+            "birds",
             "crows",
+            "emergencyOrder",
+            "fog",
             "frost",
             "generousCustomer",
+            "helpfulNeighbor",
             "moles",
             "rainShower",
-            "sunnySpell"
+            "rot",
+            "slowDay",
+            "sunnySpell",
+            "worms"
         ])
     })
 
@@ -223,12 +232,11 @@ describe("shieldedPlots / eventTargets / eligibleEvents", () => {
     it("Generous customer is Survival only; Moles needs a plot with a crop", () => {
         expect(eligibleEvents(game(), "good")).toContain("generousCustomer")
         expect(eligibleEvents(createGame(1, timedOn), "good")).not.toContain("generousCustomer")
-        expect(eligibleEvents(game(), "bad")).toEqual(["crows", "frost"])
-        expect(eligibleEvents(game({ plots: [ready, empty, empty, empty] }), "bad")).toEqual([
-            "crows",
-            "frost",
-            "moles"
-        ])
+        const always = ["birds", "crows", "emergencyOrder", "fog", "frost", "rot"]
+        expect(eligibleEvents(game(), "bad")).toEqual(always)
+        expect(eligibleEvents(game({ plots: [ready, empty, empty, empty] }), "bad")).toEqual(
+            [...always, "moles"].sort()
+        )
     })
 })
 
@@ -327,7 +335,8 @@ describe("events in step", () => {
     })
 
     it("never runs two events at once over a long run", () => {
-        let s = createGame(5, on)
+        // Plenty of lives, so Emergency orders and unfilled orders don't end the run early.
+        let s: GameState = { ...createGame(5, on), lives: 1000 }
         let current: RunEvent | null = null
         let seen = 0
         for (let i = 0; i < 6000 && s.status === "running"; i++) {
@@ -440,5 +449,215 @@ describe("events in step", () => {
         const b = stepN(createGame(9, on), 3000)
         expect(b.rng.orders).toBe(a.rng.orders)
         expect(b.nextOrderId).toBe(a.nextOrderId)
+    })
+})
+
+// The shipped event `id` built with the run's modifiers (as announceEvent would) and moved to
+// start on the next step.
+function builtNext(state: GameState, id: string, plot: number | null = null): GameState {
+    const s = debugEvent(state, id, { plot, skipWarning: true })!
+    return { ...s, nextEventAt: Number.MAX_SAFE_INTEGER }
+}
+
+describe("validateEvents: new effect kinds and banStat", () => {
+    // The small config plus one instant event made of `fields`.
+    function withEvent(fields: Record<string, unknown>): Record<string, unknown> {
+        const raw = rawConfig()
+        const events = raw.events as Record<string, unknown>[]
+        const extra = {
+            id: "extra",
+            name: "Extra",
+            kind: "bad",
+            modes: ["survival"],
+            weight: 1,
+            warnSeconds: 1,
+            ...fields
+        }
+        return { ...raw, events: [...events, extra] }
+    }
+
+    it("accepts each new kind", () => {
+        const kinds: Record<string, unknown>[] = [
+            { effect: { kind: "harvestBonus", crops: 1 }, seconds: 3, amountStat: "wormBonusPct" },
+            { effect: { kind: "fog" }, seconds: 3, durationStat: "fogDurationPct" },
+            { effect: { kind: "harvestAll" } },
+            { effect: { kind: "seedPlots", plots: 2 }, amountStat: "birdPlotsPct" },
+            { effect: { kind: "addOrder", timePct: 50 }, amountStat: "emergencyTimePct" },
+            { effect: { kind: "rotStorage", pct: 30 }, amountStat: "rotPct" },
+            { effect: { kind: "blockHarvest" }, seconds: 2, banStat: "crowBan" }
+        ]
+        for (const k of kinds) expect(() => validateEvents(withEvent(k))).not.toThrow()
+    })
+
+    const bad: [string, Record<string, unknown>][] = [
+        ["harvestBonus of 0 crops", { effect: { kind: "harvestBonus", crops: 0 }, seconds: 3 }],
+        ["seedPlots of 0 plots", { effect: { kind: "seedPlots", plots: 0 } }],
+        ["addOrder over 100%", { effect: { kind: "addOrder", timePct: 101 } }],
+        ["rotStorage of 0%", { effect: { kind: "rotStorage", pct: 0 } }],
+        ["rotStorage over 100%", { effect: { kind: "rotStorage", pct: 101 } }],
+        ["a power-up-only kind", { effect: { kind: "fillOrder" } }],
+        ["fog without seconds", { effect: { kind: "fog" } }],
+        ["an amountStat on fog", { effect: { kind: "fog" }, seconds: 2, amountStat: "rotPct" }],
+        ["a banStat not ending in Ban", { effect: { kind: "fog" }, seconds: 2, banStat: "rotPct" }],
+        ["a banStat that isn't a stat", { effect: { kind: "fog" }, seconds: 2, banStat: "xBan" }]
+    ]
+    for (const [name, fields] of bad) {
+        it(`throws for ${name}`, () => {
+            expect(() => validateEvents(withEvent(fields))).toThrow()
+        })
+    }
+
+    it("reads banStat, and null when it is left out", () => {
+        expect(EVENTS.events.crows.banStat).toBe("crowBan")
+        expect(EVENTS.events.frost.banStat).toBeNull()
+    })
+})
+
+describe("Pest control and a forced kind", () => {
+    it("Pest control stops Crows from being announced", () => {
+        expect(eligibleEvents(game(), "bad")).toContain("crows")
+        const banned = game({ upgrades: [own("pestControl", "epic")] })
+        expect(eligibleEvents(banned, "bad")).not.toContain("crows")
+    })
+
+    it("a forced kind skips the kind roll and only uses that kind", () => {
+        for (let seed = 0; seed < 30; seed++) {
+            const s = createGame(seed, on)
+            const [event, rng] = announceEvent(s, EVENTS, "good")
+            expect(EVENTS.events[event!.id].kind).toBe("good")
+            expect(rng).toBe(advance(s.rng.events, 1))
+        }
+    })
+
+    it("a forced kind with nothing eligible gives null and draws nothing", () => {
+        const s = game()
+        const onlyBad: EventConfig = { ...config, events: { frost: config.events.frost } }
+        expect(announceEvent(s, onlyBad, "good")).toEqual([null, s.rng.events])
+    })
+})
+
+describe("new events in step", () => {
+    it("Slow day runs order timers at half speed for its length", () => {
+        const length = EVENTS.events.slowDay.durationTicks!
+        let s = step(game(), crops)
+        const order = s.orders[0]
+        s = builtNext(s, "slowDay")
+        const end = stepN(s, length + 5)
+        const o = end.orders.find((x) => x.id === order.id)!
+        expect(o.expiresAt).toBe(order.expiresAt + Math.trunc(length / 2))
+    })
+
+    it("Worms add crops to harvests while they work, scaled by Worm farm", () => {
+        const plain = step(builtNext(game({ plots: [ready, ready] }), "worms"), crops)
+        const got = applyAction(plain, { type: "harvest", plot: 0 }, crops)!
+        expect(got.inventory.garlic).toBe(crops.garlic.yield + 1)
+
+        const farm = [own("wormFarm", "legendary")] // +200%: 3 crops
+        const big = step(builtNext(game({ plots: [ready], upgrades: farm }), "worms"), crops)
+        expect(applyAction(big, { type: "harvest", plot: 0 }, crops)!.inventory.garlic).toBe(
+            crops.garlic.yield + 3
+        )
+
+        const after = stepN(plain, EVENTS.events.worms.durationTicks!)
+        expect(applyAction(after, { type: "harvest", plot: 0 }, crops)!.inventory.garlic).toBe(
+            crops.garlic.yield
+        )
+    })
+
+    it("Helpful neighbor harvests every ready crop, and Good neighbors replant them", () => {
+        const s = builtNext(
+            game({ plots: [ready, growing(500), ready, empty], inventory: { garlic: 1 } }),
+            "helpfulNeighbor"
+        )
+        const next = step(s, crops)
+        expect(next.inventory.garlic).toBe(1 + 2 * crops.garlic.yield)
+        expect(next.plots.map((p) => p.state)).toEqual(["empty", "growing", "empty", "empty"])
+        expect(next.rng.harvest).toBe(s.rng.harvest)
+        expect(next.rng.drops).toBe(s.rng.drops)
+
+        const good = step(
+            builtNext(
+                game({ plots: [ready, empty], upgrades: [own("goodNeighbors", "rare")] }),
+                "helpfulNeighbor"
+            ),
+            crops
+        )
+        expect(good.plots[0]).toEqual({
+            state: "growing",
+            cropId: "garlic",
+            plantedAt: good.tick,
+            readyAt: good.tick + crops.garlic.growTicks
+        })
+    })
+
+    it("Birds seed empty, unshielded plots, two draws each", () => {
+        const s = builtNext(
+            game({
+                plots: [empty, empty, ready, empty, empty],
+                upgrades: [own("greenhouse", "epic", 4)]
+            }),
+            "birds"
+        )
+        const next = step(s, crops)
+        const seeded = next.plots.flatMap((p, i) => (p.state === "growing" ? [i] : []))
+        expect(seeded).toHaveLength(3)
+        expect(seeded).not.toContain(4)
+        expect(next.plots[2]).toEqual(ready)
+        expect(next.rng.events).toBe(advance(s.rng.events, 6))
+    })
+
+    it("Birds seed fewer plots with Bird net, and never more than are free", () => {
+        const net = [own("birdNet", "legendary"), own("birdNet", "legendary")] // 34%: 1 plot
+        const s = builtNext(game({ plots: [empty, empty, empty, empty], upgrades: net }), "birds")
+        expect(step(s, crops).plots.filter((p) => p.state === "growing")).toHaveLength(1)
+        const one = builtNext(game({ plots: [empty, ready, ready, ready] }), "birds")
+        const after = step(one, crops)
+        expect(after.plots[0].state).toBe("growing")
+        expect(after.rng.events).toBe(advance(one.rng.events, 2))
+    })
+
+    it("Emergency order adds an order past the limit, with a shorter timer", () => {
+        let s = step(game(), crops)
+        const open = s.orders.length
+        s = builtNext(s, "emergencyOrder")
+        const next = step(s, crops)
+        expect(next.orders).toHaveLength(open + 1)
+        const extra = next.orders[next.orders.length - 1]
+        const full = orderRules(next).orderTicks
+        expect(extra.id).toBe(s.nextOrderId)
+        expect(extra.timeLimit).toBe(scalePct(full, 50))
+        expect(next.rng.orders).toBe(s.rng.orders)
+
+        const calm = builtNext(
+            { ...step(game(), crops), upgrades: [own("calmNerves", "legendary")] },
+            "emergencyOrder"
+        )
+        const longer = step(calm, crops)
+        expect(longer.orders[longer.orders.length - 1].timeLimit).toBe(scalePct(full, 75))
+    })
+
+    it("Rot removes a share of each stored crop, rounding down; Root cellar saves some", () => {
+        expect(rotStorage({ garlic: 10, pumpkin: 3, carrot: 1 }, 30)).toEqual({
+            garlic: 7,
+            pumpkin: 3,
+            carrot: 1
+        })
+        expect(rotStorage({ garlic: 2 }, 100)).toEqual({})
+        const s = builtNext(game({ inventory: { garlic: 10 } }), "rot")
+        expect(step(s, crops).inventory).toEqual({ garlic: 7 })
+        const cellar = builtNext(
+            game({ inventory: { garlic: 10 }, upgrades: [own("rootCellar", "legendary")] }),
+            "rot"
+        )
+        expect(step(cellar, crops).inventory).toEqual({ garlic: 9 })
+    })
+
+    it("Fog works for its length, shortened by Lantern", () => {
+        const length = EVENTS.events.fog.durationTicks!
+        const s = step(builtNext(game(), "fog"), crops)
+        expect(s.activeEffects.map((a) => a.effect.kind)).toEqual(["fog"])
+        expect(s.activeEffects[0].endsAt - s.tick).toBe(length)
+        const lit = step(builtNext(game({ upgrades: [own("lantern", "legendary")] }), "fog"), crops)
+        expect(lit.activeEffects[0].endsAt - lit.tick).toBe(scalePct(length, 50))
     })
 })

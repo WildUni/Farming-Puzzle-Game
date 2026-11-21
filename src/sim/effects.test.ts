@@ -9,7 +9,11 @@ import {
     finishGrowth,
     stealCrop,
     harvestBlocked,
-    deliverBonusAt
+    deliverBonusAt,
+    harvestBonusAt,
+    fogged,
+    finishAll,
+    clearField
 } from "./effects"
 import { progress, updateGrowth } from "./plot"
 import { isExpired, timeLeft } from "./orders"
@@ -297,5 +301,61 @@ describe("plot exclusion and action effects", () => {
         expect(deliverBonusAt([a, b], 10)).toBe(2)
         expect(deliverBonusAt([a], 10)).toBe(0)
         expect(deliverBonusAt([], 3)).toBe(0)
+    })
+})
+
+describe("finishAll / clearField / harvestBonusAt / fogged", () => {
+    const ready: Plot = { state: "ready", cropId: "garlic" }
+    const empty: Plot = { state: "empty" }
+
+    it("finishAll readies every growing crop and keeps the rest", () => {
+        const plots = [growing(0, 50), empty, ready]
+        expect(finishAll(plots)).toEqual([{ state: "ready", cropId: "garlic" }, empty, ready])
+        const none = [empty, ready]
+        expect(finishAll(none)).toBe(none)
+    })
+
+    it("clearField empties every plot, and returns the same array when all are empty", () => {
+        expect(clearField([growing(0, 50), ready, empty])).toEqual([empty, empty, empty])
+        const none = [empty, empty]
+        expect(clearField(none)).toBe(none)
+    })
+
+    const worms = (startedAt: number, endsAt: number, exclude: number[] = []): ActiveEffect => ({
+        source: "worms",
+        effect: { kind: "harvestBonus", crops: 2 },
+        startedAt,
+        endsAt,
+        exclude
+    })
+
+    it("harvestBonusAt sums working bonuses, skipping excluded plots", () => {
+        expect(harvestBonusAt([worms(10, 20)], 0, 10)).toBe(2)
+        expect(harvestBonusAt([worms(10, 20)], 0, 19)).toBe(2)
+        expect(harvestBonusAt([worms(10, 20)], 0, 20)).toBe(0)
+        expect(harvestBonusAt([worms(10, 20)], 0, 9)).toBe(0)
+        expect(harvestBonusAt([worms(10, 20, [1])], 1, 15)).toBe(0)
+        expect(harvestBonusAt([], 0, 15)).toBe(0)
+    })
+
+    it("fogged is true only while a fog effect works", () => {
+        const fog: ActiveEffect = {
+            source: "fog",
+            effect: { kind: "fog" },
+            startedAt: 5,
+            endsAt: 8,
+            exclude: []
+        }
+        expect(fogged([fog], 5)).toBe(true)
+        expect(fogged([fog], 8)).toBe(false)
+        expect(fogged([worms(0, 99)], 5)).toBe(false)
+    })
+
+    it("tickEffects moves nothing for harvestBonus and fog, and drops them once ended", () => {
+        const plots = [growing(0, 50)]
+        const fog: ActiveEffect = { ...worms(0, 3), source: "fog", effect: { kind: "fog" } }
+        const r = tickEffects([worms(0, 3), fog], plots, [], 2)
+        expect(r.plots).toBe(plots)
+        expect(tickEffects([worms(0, 3), fog], plots, [], 4).active).toEqual([])
     })
 })

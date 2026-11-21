@@ -1,10 +1,10 @@
 # powerups.ts
 
-Power-ups: one-shot items the player holds and uses when they choose. They drop at random from harvests, sit in a few slots, and are used with the `usePowerUp` action. Each one fires one effect from [effects.md](effects.md), either instant (Ready one, Growth boost, Coin bag) or lasting (Order freeze).
+Power-ups: one-shot items the player holds and uses when they choose. They drop at random from harvests, sit in a few slots, and are used with the `usePowerUp` action. Each one fires one effect from [effects.md](effects.md), either instant (Ready one, Growth boost, Coin bag, …) or lasting (Order freeze, Gold rush).
 
 What each power-up does lives in **`src/data/powerups.json`**. Which ones the player holds lives in **`GameState.powerUps`**, and lasting effects they started live in **`GameState.activeEffects`**.
 
-This spec is the first slice: four power-ups, harvest drops and held slots. Buying them in the shop, Good omen (which needs events) and pre-run power-ups come later (see Open items).
+This spec covers ten power-ups, harvest drops and held slots. Buying them in the shop and pre-run power-ups come later, as do the power-ups that need a system that doesn't exist yet (see Open items).
 
 ## Concepts
 
@@ -31,16 +31,17 @@ This spec is the first slice: four power-ups, harvest drops and held slots. Buyi
 }
 ```
 
-| Field     | Required     | Meaning                                                                                               |
-| --------- | ------------ | ----------------------------------------------------------------------------------------------------- |
-| `id`      | yes          | Unique id, stored in `GameState.powerUps`                                                             |
-| `name`    | yes          | Button title                                                                                          |
-| `text`    | yes          | Second line on the slot button. `{seconds}` is replaced by the length after `powerUpDurationPct`      |
-| `modes`   | yes          | Non-empty list of `survival`, `timed`, no repeats. It only drops in these modes                       |
-| `weight`  | yes          | Relative chance of this power-up when a drop happens. Whole number `>= 1`                             |
-| `seconds` | lasting only | How long its effect lasts, in seconds. Whole number `>= 1`. Turned into ticks with `TICKS_PER_SECOND` |
-| `effect`  | yes          | One `Effect` from [effects.md](effects.md)                                                            |
-| `target`  | no           | `"plot"` when the player chooses a plot on use. Required exactly when the effect is `finishGrowth`    |
+| Field     | Required     | Meaning                                                                                                                                                           |
+| --------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`      | yes          | Unique id, stored in `GameState.powerUps`                                                                                                                         |
+| `name`    | yes          | Button title                                                                                                                                                      |
+| `text`    | yes          | Second line on the slot button. `{seconds}` is replaced by the length after `powerUpDurationPct`                                                                  |
+| `modes`   | yes          | Non-empty list of `survival`, `timed`, no repeats. It only drops in these modes                                                                                   |
+| `weight`  | yes          | Relative chance of this power-up when a drop happens. Whole number `>= 1`                                                                                         |
+| `seconds` | lasting only | How long its effect lasts, in seconds. Whole number `>= 1`. Turned into ticks with `TICKS_PER_SECOND`                                                             |
+| `effect`  | yes          | One `Effect` from [effects.md](effects.md)                                                                                                                        |
+| `target`  | no           | `"plot"` when the player chooses a plot on use (required exactly for `finishGrowth`), `"order"` when they choose an open order (required exactly for `fillOrder`) |
+| `needs`   | no           | Game systems the run must have on for it to drop or be used: `"powerUps"`, `"events"`. Required to include `"events"` for `goodEvent`                             |
 
 ### Shipped power-ups
 
@@ -52,8 +53,14 @@ All numbers are placeholders until playtesting.
 | `growthBoost` | Growth boost | survival, timed | 30     | `cutGrowth` 50 ticks (5 s) | –     | –      |
 | `orderFreeze` | Order freeze | survival, timed | 20     | `orderRate` 0%             | 10 s  | –      |
 | `coinBag`     | Coin bag     | survival        | 20     | `grantCoins` 10            | –     | –      |
+| `readyAll`    | Ready all    | survival, timed | 8      | `finishAll`                | –     | –      |
+| `finishOne`   | Finish one   | survival, timed | 6      | `fillOrder`                | –     | order  |
+| `finishAll`   | Finish all   | survival, timed | 2      | `fillAllOrders`            | –     | –      |
+| `goldRush`    | Gold rush    | survival        | 10     | `deliverBonus` 5 coins     | 15 s  | –      |
+| `cleanSlate`  | Clean slate  | survival, timed | 8      | `clearField`               | –     | –      |
+| `goodOmen`    | Good omen    | survival, timed | 10     | `goodEvent` (needs events) | –     | –      |
 
-Coin bag is Survival only because coins have no use in Timed until the shop exists.
+Coin bag and Gold rush are Survival only because coins have no use in Timed until the shop exists. Gold rush is "orders pay more for a while" rather than the design doc's "the current order pays extra", so it reuses Generous customer's effect. Finish all is the rarest and gives no score (the design doc's "skips the puzzle" concern); it still counts the orders as filled and pays their coins.
 
 ## Types (in [types.md](types.md))
 
@@ -66,12 +73,13 @@ type PowerUpDef = {
     weight: number
     durationTicks: number | null // seconds × TICKS_PER_SECOND for lasting effects, null for instant
     effect: Effect
-    target: "plot" | null
+    target: "plot" | "order" | null
+    needs: GameSystem[]
 }
 type PowerUpConfig = { powerUps: Record<string, PowerUpDef> } // id -> definition
 ```
 
-`seconds` becomes `durationTicks`, and a missing `target` becomes `null`, so every `PowerUpDef` has the same shape.
+`seconds` becomes `durationTicks`, a missing `target` becomes `null` and a missing `needs` becomes `[]`, so every `PowerUpDef` has the same shape.
 
 ## Exports
 
@@ -83,9 +91,10 @@ Checks a parsed JSON value and returns it in the typed shape. Throws an `Error` 
 - `id`, `name` or `text` is not a non-empty string, or an `id` is used twice.
 - `modes` is empty, has a repeat, or has a value other than `survival` or `timed`.
 - `weight` is not a whole number `>= 1`.
-- `effect` is not an object with a known `kind`, is one only events use (`blockHarvest`, `deliverBonus`, `stealCrop`), or its numbers break the rules in [effects.md](effects.md#types-in-typesmd).
+- `effect` is not an object with a known `kind`, is one only events use (`blockHarvest`, `stealCrop`, `harvestBonus`, `fog`, `harvestAll`, `seedPlots`, `addOrder`, `rotStorage`), or its numbers break the rules in [effects.md](effects.md#types-in-typesmd).
 - `seconds` is missing for a lasting effect, present for an instant one, or not a whole number `>= 1`.
-- `target` is not `"plot"` when present; it is missing on a `finishGrowth` power-up or present on any other.
+- `target` is not `"plot"` or `"order"` when present; `"plot"` is missing on a `finishGrowth` power-up or present on any other; `"order"` is missing on a `fillOrder` power-up or present on any other.
+- `needs` has a repeat or a value that is not a `GameSystem`, or leaves out `"events"` on a `goodEvent` power-up.
 - `{seconds}` appears in the text of an instant power-up.
 
 A bad file is a setup mistake, so this throws instead of returning `null`.
@@ -94,17 +103,17 @@ A bad file is a setup mistake, so this throws instead of returning `null`.
 
 `powerups.json` passed through `validatePowerUps` once, when the module loads. Every function below takes an optional last argument `config: PowerUpConfig = POWER_UPS`, so tests can use their own power-ups.
 
-### `dropTable(mode: GameMode, config?): string[]`
+### `dropTable(state: GameState, config?): string[]`
 
-Ids that can drop in `mode`, sorted, so the result doesn't depend on the order in the JSON.
+Ids that can drop in this run, sorted, so the result doesn't depend on the order in the JSON: in `modes` for the run's mode, with every system in `needs` on. So Good omen never drops with events off.
 
 ### `rollDrop(state: GameState, config?): [string | null, RNGState]`
 
 The drop roll for one harvest, from `state.rng.drops`. Returns the dropped id (or `null`) and the new state of the stream.
 
-1. If `state.allowPowerUps` is `false`, `dropChance` (from `modifiersFor(upgrades)`) is 0, or `dropTable(mode)` is empty: `[null, rng.drops]`, no draw.
+1. If `state.allowPowerUps` is `false`, `dropChance` (from `modifiersFor(upgrades)`) is 0, or `dropTable(state)` is empty: `[null, rng.drops]`, no draw.
 2. Otherwise, draw `roll = randomInt(rng.drops, 0, 99)`. If `roll >= dropChance`: `null`, one draw.
-3. Otherwise, draw `r = randomInt(0, W − 1)`, where `W` is the sum of the weights in `dropTable(mode)`. Walking the sorted ids and subtracting each weight, the id where `r` drops below its weight is the drop. Two draws.
+3. Otherwise, draw `r = randomInt(0, W − 1)`, where `W` is the sum of the weights in `dropTable(state)`. Walking the sorted ids and subtracting each weight, the id where `r` drops below its weight is the drop. Two draws.
 
 Rules:
 
@@ -113,11 +122,11 @@ Rules:
 
 ### `canUsePowerUp(state: GameState, slot: number, target: number | null, config?): boolean`
 
-`true` when `usePowerUp { slot, target }` would succeed (see the action below). The power-up buttons use it, so the screen and the rules can't disagree.
+`true` when `usePowerUp { slot, target }` would succeed (see the action below). The power-up buttons use it, so the screen and the rules can't disagree. The one gap: Good omen is allowed here whenever events are on and no event is announced or running, but `usePowerUp` also refuses it if no good event is eligible, which the shipped events never allow (Rain shower and Sunny spell have no target and run in both modes).
 
 ### `powerUpTargets(state: GameState, slot: number, config?): number[]`
 
-For a held power-up with `target: "plot"`: the plot indexes it can be used on, ascending. For `finishGrowth`, the plots that are `growing`. `[]` for an untargeted power-up or a bad slot.
+For a held power-up with `target: "plot"`: the plot indexes it can be used on (the `growing` ones), ascending. For `target: "order"`: the open orders' ids, ascending. `[]` for an untargeted power-up or a bad slot.
 
 ### `durationFor(def: PowerUpDef, upgrades: readonly OwnedUpgrade[]): number | null`
 
@@ -138,18 +147,25 @@ Returns `null` when:
 - the general rules refuse it (run ended, or an upgrade offer is open);
 - `allowPowerUps` is `false`;
 - `slot` is not a whole number from `0` to `powerUps.length − 1`;
-- the power-up has `target: "plot"` and `target` is not in `powerUpTargets(state, slot)`, or it has no target and `target` is given (other than `null`).
+- a system in its `needs` is off;
+- it is Good omen and an event is announced or running, or no good event is eligible;
+- the power-up has a target and `target` is not in `powerUpTargets(state, slot)`, or it has no target and `target` is given (other than `null`).
 
 Otherwise it removes `powerUps[slot]` (a new array) and fires the effect:
 
-| Effect         | What happens                                                                                          |
-| -------------- | ----------------------------------------------------------------------------------------------------- |
-| `finishGrowth` | `plots[target]` becomes ready (`finishGrowth`), so it can be harvested on the same tick               |
-| `cutGrowth`    | `plots = cutGrowth(plots, ticks, tick)`. Allowed even when nothing is growing (the power-up is spent) |
-| `grantCoins`   | `coins += amount`                                                                                     |
-| lasting        | `activeEffects = startEffect(activeEffects, id, effect, tick, durationFor(def, upgrades))`            |
+| Effect          | What happens                                                                                                                                                                                                             |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `finishGrowth`  | `plots[target]` becomes ready (`finishGrowth`), so it can be harvested on the same tick                                                                                                                                  |
+| `cutGrowth`     | `plots = cutGrowth(plots, ticks, tick)`. Allowed even when nothing is growing (the power-up is spent)                                                                                                                    |
+| `grantCoins`    | `coins += amount`                                                                                                                                                                                                        |
+| `finishAll`     | Every growing plot becomes ready (`finishAll`). Allowed with nothing growing                                                                                                                                             |
+| `clearField`    | Every plot becomes empty (`clearField`), growing and ready crops alike                                                                                                                                                   |
+| `fillOrder`     | The order with id `target` is filled as by `deliver`, but takes no crops: removed, `value` added to `score`, `ordersCompleted + 1`, and in Survival the usual coins (base, Big tips, `deliverBonus` effects, Early bird) |
+| `fillAllOrders` | Every open order is filled the same way, in list order, but adds **no** score                                                                                                                                            |
+| `goodEvent`     | `announceEvent(state, EVENTS, "good")`: a good event is announced now, with its usual warning. Stores `rng.events`                                                                                                       |
+| lasting         | `activeEffects = startEffect(activeEffects, id, effect, tick, durationFor(def, upgrades))` (Order freeze, Gold rush)                                                                                                     |
 
-It never draws a random number and never changes `tick`. Using the same lasting power-up while it is active adds its length to the running effect instead of stacking a second one.
+Only Good omen draws a random number (from `rng.events`, like any announcement); no power-up changes `tick`. Using the same lasting power-up while it is active adds its length to the running effect instead of stacking a second one.
 
 ## Upgrades this unlocks (in [upgrades.md](upgrades.md))
 
@@ -217,6 +233,16 @@ All three are marked `"needs": ["powerUps"]`, so they are never offered in a run
 - While an upgrade offer is open, an active Order freeze doesn't use up any of its ticks.
 - Two runs on the same seed where one player uses power-ups and the other doesn't get the same order sequence (`rng.orders` is untouched).
 
+**Second batch (`powerups.test.ts`, `main.test.ts`)**
+
+- `validatePowerUps` accepts each new kind, and throws for `fillOrder` without an order target, an order target on another effect, Good omen without `needs: ["events"]`, an unknown or repeated need, `deliverBonus` with 0 coins or no seconds, and an event-only kind.
+- `dropTable` lists Coin bag and Gold rush in Survival only, and Good omen only with events on.
+- Finish one targets open orders' ids, ascending; Good omen is usable only with events on and no event announced or running.
+- Ready all readies every growing crop; Clean slate empties every plot.
+- Finish one fills the chosen order without crops, scoring and paying like a delivery, and is refused without a target or with an unknown id; Finish all fills every order for coins and no score.
+- Gold rush starts a `deliverBonus` effect that adds 5 coins to deliveries.
+- Good omen announces a good event on the current tick from `rng.events` (never `rng.orders`), and is refused while an event is on or with events off.
+
 **Replay (`verification.test.ts`)**
 
 - Scripted runs with power-ups on, where the player uses every power-up as soon as it can (Ready one on the first valid plot), replay equal in Survival and Timed, and their logs contain `usePowerUp` entries.
@@ -224,7 +250,9 @@ All three are marked `"needs": ["powerUps"]`, so they are never offered in a run
 ## Open items
 
 - [ ] Tune drop chance, weights, slot count, lengths and amounts after playtesting.
-- [ ] More power-ups: Ready all, Finish one, Gold rush, Clean slate, Combo freeze (Timed, with combos), Good omen (with events), Merchant call (with the shop), Giant order.
+- [x] Ready all, Finish one, Finish all, Gold rush, Clean slate, Good omen.
+- [ ] Still to come: Combo freeze (Timed combos), Merchant call (the shop), Giant order (needs a "no new orders until this one is done" rule and its mode penalties).
+- [ ] Gold rush: keep "orders pay more for 15 s", or tie the bonus to one chosen order as the design doc says?
 - [ ] Buying power-ups in the shop, and pre-run power-ups paid with meta currency.
 - [ ] Should a drop with full slots replace the oldest held power-up, or offer a swap, instead of being lost?
 - [ ] Should a used Growth boost with nothing growing be refused instead of spent?

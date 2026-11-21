@@ -139,6 +139,50 @@ Added with [powerups.md](powerups.md). All three have `"needs": ["powerUps"]`.
 
 Added with [events.md](events.md), which lists the ten upgrades (Early warning, Good fortune, Calm skies, Rainmaker, Long summer, Big spender, Frost cover, Crow decoy, Mole traps, Greenhouse) and their ten stats. All have `"needs": ["events"]`. Greenhouse is the first plot-targeted upgrade that can be offered (`oncePerTarget`, not sellable).
 
+### Shipped with the second batch
+
+Every upgrade from the design doc that works with the systems that exist now (orders, plots, coins, lives, events and power-ups). The rest wait for their systems (see [Later phases](#later-phases)).
+
+| id              | name           | pools           | tier   | maxCopies | effects (common → legendary)               | needs  | sellable |
+| --------------- | -------------- | --------------- | ------ | --------- | ------------------------------------------ | ------ | -------- |
+| `biggerBumper`  | Bigger bumper  | survival, timed | tiered | 3         | `bumperExtra` +1, +1, +1, +2, +3           | –      | yes      |
+| `smallOrder`    | Small order    | survival, timed | tiered | 5         | `smallOrderChance` +5, +8, +12, +18, +25   | –      | yes      |
+| `sneakPeek`     | Sneak peek     | survival, timed | rare   | 1         | `sneakPeek` +1                             | –      | yes      |
+| `pestControl`   | Pest control   | survival, timed | epic   | 1         | `crowBan` +1                               | events | yes      |
+| `earlyBird`     | Early bird     | survival        | tiered | 5         | `earlyBirdCoins` +1, +2, +3, +5, +8        | –      | yes      |
+| `steadyPace`    | Steady pace    | survival        | tiered | 5         | `levelPacePct` +5, +8, +12, +18, +25       | –      | yes      |
+| `extraHeart`    | Extra heart    | survival        | rare   | 2         | `extraLives` +1                            | –      | no       |
+| `lastStand`     | Last stand     | survival        | tiered | 3         | `lastStandGrowthPct` −5, −8, −12, −18, −25 | –      | yes      |
+| `secondChance`  | Second chance  | survival        | tiered | 5         | `secondChance` +5, +8, +12, +18, +25       | –      | yes      |
+| `secondWind`    | Second wind    | survival        | tiered | 3         | `secondWindPct` +10, +15, +25, +35, +50    | –      | yes      |
+| `wormFarm`      | Worm farm      | survival, timed | tiered | 3         | `wormBonusPct` +50, +100, +100, +150, +200 | events | yes      |
+| `goodNeighbors` | Good neighbors | survival, timed | rare   | 1         | `neighborReplant` +1                       | events | yes      |
+| `birdNet`       | Bird net       | survival, timed | tiered | 3         | `birdPlotsPct` −10, −15, −20, −25, −33     | events | yes      |
+| `rootCellar`    | Root cellar    | survival, timed | tiered | 3         | `rotPct` −10, −15, −25, −35, −50           | events | yes      |
+| `lantern`       | Lantern        | survival, timed | tiered | 3         | `fogDurationPct` −10, −15, −25, −35, −50   | events | yes      |
+| `calmNerves`    | Calm nerves    | survival, timed | tiered | 3         | `emergencyTimePct` +10, +15, +25, +35, +50 | events | yes      |
+
+Bigger bumper has `"requires": ["bumperHarvest"]`. Early bird is Survival only because only Survival earns coins; Steady pace, Extra heart, Last stand, Second chance and Second wind are Survival only by design. Extra heart is not sellable because it adds lives, like Extra plot adds plots.
+
+| Stat                 | base | min | max | Meaning                                                                                     |
+| -------------------- | ---- | --- | --- | ------------------------------------------------------------------------------------------- |
+| `bumperExtra`        | 1    | 1   | 4   | Crops a Bumper harvest hit adds                                                             |
+| `smallOrderChance`   | 0    | 0   | 50  | % chance a new order asks for half as much                                                  |
+| `sneakPeek`          | 0    | 0   | 1   | 1: the next order is shown before it arrives                                                |
+| `crowBan`            | 0    | 0   | 1   | 1: Crows are never announced (Crows' `banStat`)                                             |
+| `earlyBirdCoins`     | 0    | 0   | 15  | Coins for filling an order with at least half its time left                                 |
+| `levelPacePct`       | 100  | 100 | 200 | % of filled orders a Survival level takes                                                   |
+| `extraLives`         | 0    | 0   | 2   | Lives added on top of the starting lives                                                    |
+| `lastStandGrowthPct` | 100  | 50  | 100 | % of growth time for crops planted on the last life                                         |
+| `secondChance`       | 0    | 0   | 50  | % chance a failed order costs no life                                                       |
+| `secondWindPct`      | 100  | 100 | 200 | % of the time limit of the first new order after a lost life                                |
+| `wormBonusPct`       | 100  | 100 | 300 | Worms' `amountStat`                                                                         |
+| `neighborReplant`    | 0    | 0   | 1   | 1: Helpful neighbor replants what they harvest                                              |
+| `birdPlotsPct`       | 100  | 34  | 100 | Birds' `amountStat` (3 plots: 34% is 1 plot)                                                |
+| `rotPct`             | 100  | 25  | 100 | Rot's `amountStat`                                                                          |
+| `fogDurationPct`     | 100  | 25  | 100 | Fog's `durationStat`                                                                        |
+| `emergencyTimePct`   | 100  | 100 | 200 | Emergency order's `amountStat` (its share of the usual time, capped at 100% by events.json) |
+
 Changes from the old six: `bigHarvest` (flat +1 yield) is replaced by `bumperHarvest`, a chance of 1 extra crop per harvest (see [The harvest roll](#the-harvest-roll)). `haggler` becomes `lifeDiscount` (the new Haggler belongs to the Bulk buyer event). `tips` becomes `bigTips`. `extraPlot` is shop-only, so it is not offered until the shop exists. `"timed"` is already listed in the pools so that turning Timed offers on later is a code change only.
 
 ## Types (in [types.md](types.md))
@@ -264,6 +308,10 @@ The totals at one place: like `modifiersFor`, but step 2 also adds copies whose 
 
 `max(1, round(base × pct / 100))`. Every rule that applies a `…Pct` modifier uses this, so they all round the same way.
 
+### `plantGrowthPct(state: GameState, plot: number, cropId: string): number`
+
+The `growthPct` a crop planted now gets: `modifiersAt(upgrades, { plot, cropId }).growthPct`, and on a Survival run with `lives === 1` that value passed through `scalePct(…, lastStandGrowthPct)`. `plant`, Birds and Good neighbors all plant through it, so every newly planted crop follows the same rule. Crops already growing are not sped up when the player reaches their last life.
+
 ### `copyCount(upgrades: readonly OwnedUpgrade[], id: string): number`
 
 How many copies of `id` are owned, at any tier and on any target.
@@ -342,19 +390,28 @@ The random draws for offers come from `rng.upgrades`, separate from `rng.orders`
 
 Each modifier is read in one place. Changes apply from then on; nothing already made is changed afterwards.
 
-| Modifier             | Read by                                  | Through                                             | Effect                                                                                       |
-| -------------------- | ---------------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `extraPlots`         | `chooseUpgrade`                          | `modifiersFor`                                      | Adds plots when the total goes up                                                            |
-| `growthPct`          | `plant`                                  | `modifiersAt({ plot, cropId })`                     | `readyAt = now + scalePct(growTicks, growthPct)`; crops already growing keep their `readyAt` |
-| `yieldBonus`         | `harvest`                                | `modifiersAt({ plot, cropId })`                     | Adds `crops[cropId].yield + yieldBonus`                                                      |
-| `bumperChance`       | `harvest`                                | `modifiersAt({ plot, cropId })`                     | Adds 1 more crop when the harvest roll is below it (see below)                               |
-| `orderTimePct`       | `orderRules` (Survival)                  | `modifiersFor`                                      | `orderTicks = scalePct(level orderTicks, orderTimePct)` for new orders                       |
-| `coinsPerOrder`      | `deliver` (Survival)                     | `modifiersFor`                                      | Pays `DIFFICULTY.coinsPerOrder + coinsPerOrder`                                              |
-| `lifePricePct`       | `lifePriceFor` / `buyLife`               | `modifiersFor`                                      | Price is `scalePct(lifePrice(livesBought), lifePricePct)`                                    |
-| `dropChance`         | `rollDrop` (on `harvest`)                | `modifiersFor`                                      | % chance of a power-up drop per harvest (see [powerups.md](powerups.md))                     |
-| `powerUpSlots`       | `harvest`                                | `modifiersFor`                                      | A drop is kept only while `powerUps.length < powerUpSlots`                                   |
-| `powerUpDurationPct` | `durationFor` (on `usePowerUp`)          | `modifiersFor`                                      | Lasting power-ups run `scalePct(durationTicks, powerUpDurationPct)` ticks                    |
-| event stats          | `announceEvent`, `gapTicks`, event start | `modifiersFor` (`shielded`: `modifiersAt` per plot) | See the table in [events.md](events.md)                                                      |
+| Modifier             | Read by                                           | Through                                             | Effect                                                                                       |
+| -------------------- | ------------------------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `extraPlots`         | `chooseUpgrade`                                   | `modifiersFor`                                      | Adds plots when the total goes up                                                            |
+| `growthPct`          | `plant`                                           | `modifiersAt({ plot, cropId })`                     | `readyAt = now + scalePct(growTicks, growthPct)`; crops already growing keep their `readyAt` |
+| `yieldBonus`         | `harvest`                                         | `modifiersAt({ plot, cropId })`                     | Adds `crops[cropId].yield + yieldBonus`                                                      |
+| `bumperChance`       | `harvest`                                         | `modifiersAt({ plot, cropId })`                     | Adds 1 more crop when the harvest roll is below it (see below)                               |
+| `orderTimePct`       | `orderRules` (Survival)                           | `modifiersFor`                                      | `orderTicks = scalePct(level orderTicks, orderTimePct)` for new orders                       |
+| `coinsPerOrder`      | `deliver` (Survival)                              | `modifiersFor`                                      | Pays `DIFFICULTY.coinsPerOrder + coinsPerOrder`                                              |
+| `lifePricePct`       | `lifePriceFor` / `buyLife`                        | `modifiersFor`                                      | Price is `scalePct(lifePrice(livesBought), lifePricePct)`                                    |
+| `dropChance`         | `rollDrop` (on `harvest`)                         | `modifiersFor`                                      | % chance of a power-up drop per harvest (see [powerups.md](powerups.md))                     |
+| `powerUpSlots`       | `harvest`                                         | `modifiersFor`                                      | A drop is kept only while `powerUps.length < powerUpSlots`                                   |
+| `powerUpDurationPct` | `durationFor` (on `usePowerUp`)                   | `modifiersFor`                                      | Lasting power-ups run `scalePct(durationTicks, powerUpDurationPct)` ticks                    |
+| event stats          | `announceEvent`, `gapTicks`, event start          | `modifiersFor` (`shielded`: `modifiersAt` per plot) | See the table in [events.md](events.md)                                                      |
+| `bumperExtra`        | `harvest`                                         | `modifiersAt({ plot, cropId })`                     | A bumper hit adds `bumperExtra` crops instead of 1                                           |
+| `smallOrderChance`   | `step` (new orders), `nextOrderPreview`           | `modifiersFor`                                      | One roll from `rng.shrink` per new order; a hit halves every amount, rounding up             |
+| `sneakPeek`          | `nextOrderPreview`                                | `modifiersFor`                                      | Above 0, the screen shows the next order                                                     |
+| `earlyBirdCoins`     | `deliver`, Finish one / Finish all                | `modifiersFor`                                      | Paid in Survival when `2 × timeLeft >= timeLimit`                                            |
+| `levelPacePct`       | `runLevel` (in [difficulty.md](difficulty.md))    | `modifiersFor`                                      | Level is `levelFor(floor(ordersCompleted × 100 / levelPacePct))`                             |
+| `extraLives`         | `withUpgrade`                                     | `modifiersFor`                                      | In Survival, a rise in the total adds that many lives                                        |
+| `lastStandGrowthPct` | `plantGrowthPct` (`plant`, Birds, Good neighbors) | `modifiersFor`                                      | On a Survival run's last life, `growthPct` is scaled by it (`scalePct`)                      |
+| `secondChance`       | `step` (failed orders)                            | `modifiersFor`                                      | One roll from `rng.lives` per failed order; a hit keeps the life                             |
+| `secondWindPct`      | `step` (new orders)                               | `modifiersFor`                                      | After a lost life, the next new order's `orderTicks` is scaled by it                         |
 
 ### The harvest roll
 
@@ -362,9 +419,9 @@ Each modifier is read in one place. Changes apply from then on; nothing already 
 
 - When `bumperChance` (at that plot and crop) is 0, it draws nothing and `rng.harvest` is unchanged. Runs without Bumper harvest never touch the stream.
 - Otherwise it draws once: `roll = randomInt(rng.harvest, 0, 99)`. If `roll < bumperChance`, the harvest adds 1 more crop. The new state is stored in `rng.harvest` either way.
-- The extra crop is added after `yieldBonus`: `crops[cropId].yield + yieldBonus + (bumper ? 1 : 0)`.
+- The extra crops are added after `yieldBonus`: `crops[cropId].yield + yieldBonus + (bumper ? bumperExtra : 0)`, plus any Worms bonus (`harvestBonusAt`, see [effects.md](effects.md)). Bigger bumper raises `bumperExtra` (base 1).
 
-Replay stays exact, because the stream lives in `GameState` and actions are replayed in log order. A later Bigger bumper upgrade would add a stat for the number of extra crops instead of the fixed 1. Lucky drops rolls from its own stream, `rng.drops`, so Bumper harvest never changes which power-ups drop.
+Replay stays exact, because the stream lives in `GameState` and actions are replayed in log order. Lucky drops rolls from its own stream, `rng.drops`, so Bumper harvest never changes which power-ups drop.
 
 Adding a stat means: a `Modifiers` field, an entry under `stats` in `upgrades.json`, and one row here with the one place that reads it. Adding an upgrade that only uses existing stats is a JSON entry and nothing else.
 
@@ -440,6 +497,19 @@ Adding a stat means: a `Modifiers` field, an entry under `stats` in `upgrades.js
 - Each modifier changes its rule as in the table above; a Favorite crop copy changes growth and yield only for its crop.
 - An `extraPlots` pick adds an empty plot; a pick past the cap adds none.
 
+**Second batch (`main.test.ts`, `events.test.ts`, `format.test.ts`)**
+
+- Bigger bumper: a hit adds `bumperExtra` crops instead of 1 (only the two outcomes happen over many seeds); it is only eligible once Bumper harvest is owned.
+- Small order: halves amounts (rounding up) on a hit and keeps the value; draws once per new order from `rng.shrink` only, never moving `rng.orders`; without it the stream never moves.
+- Sneak peek: `nextOrderPreview` is `null` without it, and otherwise has the id and crops of the order `step` creates next.
+- Early bird pays on a delivery with exactly half the time left and not one tick later.
+- Steady pace: `runLevel` and `orderRules` stay on level 1 at `ordersPerLevel` filled orders with +25%.
+- Extra heart adds a life in Survival, none in Timed, and none past its cap.
+- Last stand speeds crops planted with 1 life left, and not with 2.
+- Second chance draws once per failed order from `rng.lives`, keeps the life on some seeds and not others, and never draws without the upgrade.
+- Second wind stretches only the first new order after a lost life.
+- Pest control removes Crows from `eligibleEvents`; Worm farm, Bird net, Root cellar, Lantern and Calm nerves change their event as in [events.md](events.md); Good neighbors replants.
+
 **Replay (`verification.test.ts`)**
 
 - Scripted Survival runs that pick upgrades replay equal, including a targeted pick and runs with Bumper harvest.
@@ -452,7 +522,7 @@ Each later phase adds to this design without changing the stored shapes above.
 1. **Timed offers and rerolls.** `isOfferDue` and `rollOffer` use the mode's pool instead of always `survival`. A `rerollOffer` action pays a rising coin price (`rerollsThisOffer` in state) and redraws the whole offer from `rng.upgrades`, with the same tier weights as a normal roll.
 2. **Shop** (its own `shop.ts` and spec). Stock is drawn from the mode's pool plus `shop`, from `rng.upgrades` or its own stream. `sellUpgrade { index }` removes `upgrades[index]` and pays its tier's `sellPrice`; only `sellable` upgrades, only while the shop is open. Selling frees a copy and, for targeted upgrades, its target.
 3. **More upgrade kinds**, behind a `kind` field: `instant` (Promotion: changes an owned copy's tier and is not stored), `active` (Miracle grow: owning it unlocks a `useAbility` action, its recharge is a stat), `economy` (Interest, Discount card, Free restock: stats read by the shop).
-4. **Upgrades for events, power-ups and storage** ship with those systems. The power-up upgrades are in (see [Shipped with power-ups](#shipped-with-power-ups)); they use `needs` rather than `requires`, since they depend on a system being on, not on another upgrade. The event upgrades use `"events"` the same way. Other chance-based upgrades (Second chance, Lucky drops) draw from a stream of their own, as Bumper harvest does.
+4. **Upgrades for events, power-ups and storage** ship with those systems. Still waiting: Bigger barn, Premium produce, Price floor, Haggler (storage and selling); Keen eye, Interest, Discount card, Free restock, Lucky stars, Promotion, Rich soil, Quick soil, Auto-harvester (shop); Miracle grow (an `active` kind); Four-leaf (Lucky clover); Irrigation, Guard dog (tap actions for Drought and Raccoon); Clear orders (Mix-up); Festival spirit, Weed killer, Loaded coin (tradeoff events); and the Timed pool's Combo keeper, Combo builder, Rush pay, Head start, Grand finale and Double delivery (Timed offers, combos and rush waves). The power-up upgrades are in (see [Shipped with power-ups](#shipped-with-power-ups)); they use `needs` rather than `requires`, since they depend on a system being on, not on another upgrade. The event upgrades use `"events"` the same way. Other chance-based upgrades (Second chance, Lucky drops) draw from a stream of their own, as Bumper harvest does.
 
 ## Open items
 
@@ -464,4 +534,7 @@ Each later phase adds to this design without changing the stored shapes above.
 - [x] Bumper harvest: a third stream, `rng.harvest`, used only by `harvest` and only when `bumperChance` is above 0.
 - [ ] Should `orderTimePct`'s `min` stay at 100? It stops any effect from shortening order timers, which rules out negative effects such as the Fake merchant's.
 - [ ] Pre-run boosts (meta currency, Daily Challenge) as starting entries in `upgrades`, passed through `createGame`.
+- [ ] Extra heart is "+1 life" for now, since lives have no maximum. If a life cap is added, it should raise the cap instead.
+- [ ] Early bird pays only in Survival (Timed earns no coins). Should it pay points in Timed once Timed makes offers?
+- [ ] Sneak peek shows the next order under the current rules; a level-up or Second wind before it arrives can still change its amount or time.
 - [x] Offers use their own random stream (`rng.upgrades`), so they don't shift which orders come next.

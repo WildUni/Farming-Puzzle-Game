@@ -96,6 +96,10 @@ Every function below takes an optional last argument `config: DifficultyConfig =
 
 The level for a run, counted from 0: `floor(ordersCompleted / ordersPerLevel)`, capped at `levels.length − 1`. The level is worked out from `ordersCompleted`, so it is not stored in `GameState`. Players see it counted from 1.
 
+### `runLevel(state: GameState, config?): number`
+
+The Survival level a run is on: `levelFor(floor(ordersCompleted × 100 / levelPacePct))`, with `levelPacePct` from `modifiersFor(upgrades)` (Steady pace; 100 without it). `orderRules` (main), `gapTicks` (events) and the screen read the level through it.
+
 ### `orderRulesFor(level: number, config?): OrderRules`
 
 The order rules at a level. Levels past the end use the last row.
@@ -132,6 +136,10 @@ Price of the next life when `livesBought` lives have already been bought this ru
 **`levelFor`**
 
 - Is 0 at the start, goes up by one every `ordersPerLevel` filled orders, and stops at the last level.
+
+**`runLevel`** (in `main.test.ts`, with Steady pace)
+
+- Equals `levelFor(ordersCompleted)` without Steady pace, and stays a level lower with it.
 
 **`orderRulesFor`**
 

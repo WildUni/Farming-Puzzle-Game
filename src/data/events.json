@@ -54,7 +54,8 @@
             "warnSeconds": 5,
             "seconds": 6,
             "effect": { "kind": "blockHarvest" },
-            "durationStat": "crowDurationPct"
+            "durationStat": "crowDurationPct",
+            "banStat": "crowBan"
         },
         {
             "id": "moles",
@@ -66,6 +67,77 @@
             "target": "plot",
             "effect": { "kind": "stealCrop" },
             "blockStat": "moleBlockChance"
+        },
+        {
+            "id": "slowDay",
+            "name": "Slow day",
+            "kind": "good",
+            "modes": ["survival", "timed"],
+            "weight": 15,
+            "warnSeconds": 3,
+            "seconds": 15,
+            "effect": { "kind": "orderRate", "pct": 50 }
+        },
+        {
+            "id": "worms",
+            "name": "Worms",
+            "kind": "good",
+            "modes": ["survival", "timed"],
+            "weight": 15,
+            "warnSeconds": 3,
+            "seconds": 20,
+            "effect": { "kind": "harvestBonus", "crops": 1 },
+            "amountStat": "wormBonusPct"
+        },
+        {
+            "id": "helpfulNeighbor",
+            "name": "Helpful neighbor",
+            "kind": "good",
+            "modes": ["survival", "timed"],
+            "weight": 10,
+            "warnSeconds": 5,
+            "effect": { "kind": "harvestAll" }
+        },
+        {
+            "id": "birds",
+            "name": "Birds",
+            "kind": "bad",
+            "modes": ["survival", "timed"],
+            "weight": 20,
+            "warnSeconds": 5,
+            "effect": { "kind": "seedPlots", "plots": 3 },
+            "amountStat": "birdPlotsPct"
+        },
+        {
+            "id": "emergencyOrder",
+            "name": "Emergency order",
+            "kind": "bad",
+            "modes": ["survival", "timed"],
+            "weight": 15,
+            "warnSeconds": 5,
+            "effect": { "kind": "addOrder", "timePct": 50 },
+            "amountStat": "emergencyTimePct"
+        },
+        {
+            "id": "rot",
+            "name": "Rot",
+            "kind": "bad",
+            "modes": ["survival", "timed"],
+            "weight": 15,
+            "warnSeconds": 5,
+            "effect": { "kind": "rotStorage", "pct": 30 },
+            "amountStat": "rotPct"
+        },
+        {
+            "id": "fog",
+            "name": "Fog",
+            "kind": "bad",
+            "modes": ["survival", "timed"],
+            "weight": 15,
+            "warnSeconds": 3,
+            "seconds": 10,
+            "effect": { "kind": "fog" },
+            "durationStat": "fogDurationPct"
         }
     ]
 }

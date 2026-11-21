@@ -1,6 +1,6 @@
 import { Scene, GameObjects } from "phaser"
 import type { Action, CropTable, GameMode, GameState, LogEntry } from "../../sim/types"
-import { createGame, applyAction, step } from "../../sim/main"
+import { createGame, applyAction, step, nextOrderPreview } from "../../sim/main"
 import { TICKS_PER_SECOND } from "../../sim/game_constants"
 import { debugText, MAX_SEED } from "../format"
 import { COLORS, MARGIN, TEXT } from "../theme"
@@ -34,7 +34,7 @@ export class Game extends Scene {
     private elapsed: number
     private paused: boolean
     private pickerPlot: number | null // plot the plant picker is open for
-    private choosingSlot: number | null // power-up slot whose plot target is being picked
+    private choosingSlot: number | null // power-up slot whose plot or order target is being picked
 
     private orders: OrdersView
     private stats: StatsView
@@ -153,11 +153,16 @@ export class Game extends Scene {
     }
 
     private render(): void {
-        this.orders.update(this.state)
-        this.stats.update(this.state)
         // Drop target mode once nothing can be targeted (the last growing crop turned ready).
         if (this.choosingSlot !== null && this.targets() === null) this.choosingSlot = null
-        this.plots.update(this.state, this.pickerPlot, this.targets())
+        const aiming = this.choosingSlot === null ? null : this.choosingDef()?.target
+        this.orders.update(
+            this.state,
+            nextOrderPreview(this.state, this.crops),
+            aiming === "order" ? this.targets() : null
+        )
+        this.stats.update(this.state)
+        this.plots.update(this.state, this.pickerPlot, aiming === "plot" ? this.targets() : null)
         this.powerUpBar.update(this.state, this.choosingSlot)
         this.eventBanner.update(this.state)
         this.pause.update(this.paused)
@@ -214,14 +219,21 @@ export class Game extends Scene {
         return true
     }
 
-    // Plots the power-up being aimed can go on, or null when not choosing (or none are valid).
+    // The definition of the power-up being aimed, or null.
+    private choosingDef() {
+        if (this.choosingSlot === null) return null
+        return POWER_UPS.powerUps[this.state.powerUps[this.choosingSlot]] ?? null
+    }
+
+    // Plots or order ids the power-up being aimed can go on, or null when not choosing (or none
+    // are valid).
     private targets(): number[] | null {
         if (this.choosingSlot === null) return null
         const targets = powerUpTargets(this.state, this.choosingSlot)
         return targets.length > 0 ? targets : null
     }
 
-    // Untargeted power-up: use it. Plot power-up: start (or cancel) choosing its plot.
+    // Untargeted power-up: use it. Plot or order power-up: start (or cancel) choosing its target.
     private onPowerUpClick(slot: number): void {
         if (this.paused) return
         const def = POWER_UPS.powerUps[this.state.powerUps[slot]]
@@ -247,8 +259,9 @@ export class Game extends Scene {
         if (this.paused || this.state.status === "ended" || this.state.upgradeOffer !== null) return
         if (this.choosingSlot !== null) {
             const slot = this.choosingSlot
+            const aimsAtPlot = this.choosingDef()?.target === "plot"
             this.choosingSlot = null
-            if (powerUpTargets(this.state, slot).includes(plot)) {
+            if (aimsAtPlot && powerUpTargets(this.state, slot).includes(plot)) {
                 this.act({ type: "usePowerUp", slot, target: plot })
             }
             this.render()
@@ -269,7 +282,18 @@ export class Game extends Scene {
     }
 
     // applyAction refuses the delivery if the inventory is short, so no check is needed here.
+    // While an order power-up is being aimed, a click fills that order (or cancels) instead.
     private onOrderClick(orderId: number): void {
+        if (this.choosingSlot !== null) {
+            const slot = this.choosingSlot
+            const aimsAtOrder = this.choosingDef()?.target === "order"
+            this.choosingSlot = null
+            if (aimsAtOrder && powerUpTargets(this.state, slot).includes(orderId)) {
+                this.act({ type: "usePowerUp", slot, target: orderId })
+            }
+            this.render()
+            return
+        }
         this.act({ type: "deliver", orderId })
     }
 

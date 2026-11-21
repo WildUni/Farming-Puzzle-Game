@@ -23,12 +23,23 @@ type LastingEffect =
     | { kind: "orderRate"; pct: number } // open orders' timers
     | { kind: "blockHarvest" } // harvest is refused
     | { kind: "deliverBonus"; coins: number } // each delivery pays this many more coins (Survival)
+    | { kind: "harvestBonus"; crops: number } // each harvest adds this many more crops (Worms)
+    | { kind: "fog" } // the screen hides growth and order timers; no rule changes
 
 type InstantEffect =
     | { kind: "cutGrowth"; ticks: number } // every growing crop gets this many ticks closer to ready
     | { kind: "finishGrowth" } // one growing crop becomes ready now (targets a plot)
     | { kind: "grantCoins"; amount: number }
     | { kind: "stealCrop" } // one plot's crop is lost (targets a plot)
+    | { kind: "finishAll" } // every growing crop becomes ready now (Ready all)
+    | { kind: "clearField" } // every plot becomes empty (Clean slate)
+    | { kind: "fillOrder" } // one open order is filled without crops (Finish one; targets an order)
+    | { kind: "fillAllOrders" } // every open order is filled without crops, for no score (Finish all)
+    | { kind: "goodEvent" } // a random good event is announced now (Good omen)
+    | { kind: "harvestAll" } // every ready crop is harvested for the player (Helpful neighbor)
+    | { kind: "seedPlots"; plots: number } // random crops are planted on up to this many empty plots (Birds)
+    | { kind: "addOrder"; timePct: number } // one extra order with timePct% of the usual time (Emergency order)
+    | { kind: "rotStorage"; pct: number } // this % of each stored crop is lost, rounded down (Rot)
 
 type Effect = LastingEffect | InstantEffect
 
@@ -41,9 +52,9 @@ type ActiveEffect = {
 }
 ```
 
-`pct`, `ticks`, `amount` and `coins` are whole numbers. `pct >= 0` and `pct !== 100`; `ticks`, `amount` and `coins` are `>= 1`. The files that use effects (`powerups.json`, `events.json`) check this when they load, and each says which kinds it allows.
+`pct`, `ticks`, `amount`, `coins`, `crops`, `plots` and `timePct` are whole numbers. A rate's `pct >= 0` and `pct !== 100`; `ticks`, `amount`, `coins`, `crops` and `plots` are `>= 1`; `addOrder`'s `timePct` and `rotStorage`'s `pct` are from 1 to 100. The files that use effects (`powerups.json`, `events.json`) check this when they load, and each says which kinds it allows.
 
-`growthRate` and `orderRate` are **rate effects**; `blockHarvest` and `deliverBonus` are **action effects**.
+`growthRate` and `orderRate` are **rate effects**; `blockHarvest`, `deliverBonus`, `harvestBonus` and `fog` are **action effects**. The instant kinds that need the whole game state (`fillOrder`, `fillAllOrders`, `goodEvent`, `harvestAll`, `seedPlots`, `addOrder`, `rotStorage`) are carried out in `main.ts` or `events.ts`; `effects.ts` has helpers only for the ones that work on plots or effect lists alone.
 
 ## The rate rule
 
@@ -148,6 +159,22 @@ A growing or ready plot becomes `{ state: "empty" }`. Returns `null` for an empt
 
 The sum of `coins` over `deliverBonus` effects with `startedAt <= now < endsAt`; `0` when there are none. `deliver` adds it in Survival.
 
+### `harvestBonusAt(active: ActiveEffect[], plot: number, now: number): number`
+
+The sum of `crops` over `harvestBonus` effects with `startedAt <= now < endsAt` that don't list `plot` in `exclude`; `0` when there are none. `harvest` adds it (Worms).
+
+### `fogged(active: ActiveEffect[], now: number): boolean`
+
+`true` while some `fog` effect has `startedAt <= now < endsAt`. Only the screen reads it.
+
+### `finishAll(plots: Plot[]): Plot[]`
+
+Every growing plot becomes ready (`finishGrowth`). Returns the same array when nothing was growing.
+
+### `clearField(plots: Plot[]): Plot[]`
+
+Every plot becomes `{ state: "empty" }`. Returns the same array when every plot already was.
+
 `grantCoins` needs no helper: `usePowerUp` adds `amount` to `coins` itself.
 
 ## Rules
@@ -199,6 +226,12 @@ The sum of `coins` over `deliverBonus` effects with `startedAt <= now < endsAt`;
 
 - `cutGrowth` brings every growing crop `ticks` closer, clamped at `now`; a crop brought to `now` is `ready`; empty and ready plots are untouched.
 - `finishGrowth` turns a growing plot ready and returns `null` for empty and ready plots.
+
+**`finishAll` / `clearField` / `harvestBonusAt` / `fogged`**
+
+- `finishAll` readies growing crops only; `clearField` empties everything; both return the same array when nothing changes.
+- `harvestBonusAt` sums working bonuses from `startedAt` to `endsAt − 1` and skips excluded plots; `fogged` follows the same working ticks.
+- `tickEffects` moves nothing for `harvestBonus` and `fog`, and drops them once they end.
 
 **`stealCrop` / `harvestBlocked` / `deliverBonusAt`**
 

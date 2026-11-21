@@ -46,9 +46,9 @@ export class PowerUpBar {
             } else {
                 const def = POWER_UPS.powerUps[id]
                 slot.label.setText(powerUpButtonText(def, state.upgrades))
-                const targets = def.target === "plot" ? powerUpTargets(state, i) : []
+                const targets = def.target !== null ? powerUpTargets(state, i) : []
                 slot.enabled =
-                    def.target === "plot"
+                    def.target !== null
                         ? targets.some((t) => canUsePowerUp(state, i, t))
                         : canUsePowerUp(state, i, null)
             }

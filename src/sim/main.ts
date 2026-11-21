@@ -5,9 +5,11 @@ import type {
     Plot,
     Action,
     CropTable,
+    Order,
     OrderRules,
     Pool,
-    OwnedUpgrade
+    OwnedUpgrade,
+    RNGState
 } from "./types"
 import { randomInt, seedRNG, seedStream } from "./mulberry"
 import {
@@ -17,15 +19,26 @@ import {
     ORDERS_PER_UPGRADE
 } from "./game_constants"
 import { plant, harvest, updateGrowth } from "./plot"
-import { createOrder, fulfill, isExpired } from "./orders"
-import { DIFFICULTY, levelFor, orderRulesFor, lifePrice } from "./difficulty"
-import { UPGRADES, modifiersFor, modifiersAt, scalePct, rollOffer, validTargets } from "./upgrades"
+import { createOrder, fulfill, isExpired, timeLeft } from "./orders"
+import { DIFFICULTY, runLevel, orderRulesFor, lifePrice } from "./difficulty"
+import {
+    UPGRADES,
+    modifiersFor,
+    modifiersAt,
+    plantGrowthPct,
+    scalePct,
+    rollOffer,
+    validTargets
+} from "./upgrades"
 import {
     tickEffects,
     startEffect,
     cutGrowth,
     finishGrowth,
+    finishAll,
+    clearField,
     harvestBlocked,
+    harvestBonusAt,
     deliverBonusAt
 } from "./effects"
 import { EVENTS, announceEvent, gapTicks, startEvent } from "./events"
@@ -36,6 +49,8 @@ const UPGRADE_STREAM_SALT = 1
 const HARVEST_STREAM_SALT = 2
 const DROPS_STREAM_SALT = 3
 const EVENTS_STREAM_SALT = 4
+const LIVES_STREAM_SALT = 5
+const SHRINK_STREAM_SALT = 6
 
 function createGame(seed: RNGSeed, config: GameConfig): GameState {
     return {
@@ -47,7 +62,9 @@ function createGame(seed: RNGSeed, config: GameConfig): GameState {
             upgrades: seedStream(seed, UPGRADE_STREAM_SALT),
             harvest: seedStream(seed, HARVEST_STREAM_SALT),
             drops: seedStream(seed, DROPS_STREAM_SALT),
-            events: seedStream(seed, EVENTS_STREAM_SALT)
+            events: seedStream(seed, EVENTS_STREAM_SALT),
+            lives: seedStream(seed, LIVES_STREAM_SALT),
+            shrink: seedStream(seed, SHRINK_STREAM_SALT)
         },
         plots: Array.from({ length: START_PLOTS }, (): Plot => ({ state: "empty" })),
         inventory: {},
@@ -67,15 +84,16 @@ function createGame(seed: RNGSeed, config: GameConfig): GameState {
         activeEffects: [],
         allowEvents: config.allowEvents,
         event: null,
-        nextEventAt: EVENTS.firstEventTicks
+        nextEventAt: EVENTS.firstEventTicks,
+        secondWind: false
     }
 }
 
-// The rules step uses for new orders: the current level in Survival, fixed otherwise.
-// Survival order timers are scaled by the orderTimePct upgrade modifier.
+// The rules step uses for new orders: the current level in Survival (slowed by Steady pace),
+// fixed otherwise. Survival order timers are scaled by the orderTimePct upgrade modifier.
 function orderRules(state: GameState): OrderRules {
     if (state.mode !== "survival") return DEFAULT_ORDER_RULES
-    const rules = orderRulesFor(levelFor(state.ordersCompleted))
+    const rules = orderRulesFor(runLevel(state))
     const { orderTimePct } = modifiersFor(state.upgrades)
     return { ...rules, orderTicks: scalePct(rules.orderTicks, orderTimePct) }
 }
@@ -115,8 +133,7 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
     switch (action.type) {
         case "plant": {
             if (!isPlotIndex(state, action.plot)) return null
-            const where = { plot: action.plot, cropId: action.cropId }
-            const { growthPct } = modifiersAt(state.upgrades, where)
+            const growthPct = plantGrowthPct(state, action.plot, action.cropId)
             const planted = plant(
                 state.plots[action.plot],
                 action.cropId,
@@ -135,19 +152,22 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
             const result = harvest(state.plots[action.plot])
             if (result === null) return null
             const { plot, cropId } = result
-            const { yieldBonus, bumperChance } = modifiersAt(state.upgrades, {
+            const { yieldBonus, bumperChance, bumperExtra } = modifiersAt(state.upgrades, {
                 plot: action.plot,
                 cropId
             })
             // Bumper harvest: one roll from rng.harvest, only when there is a chance at all.
+            // Bigger bumper raises how many crops a hit adds.
             let bumper = 0
             let rng = state.rng
             if (bumperChance > 0) {
                 const [roll, next] = randomInt(state.rng.harvest, 0, 99)
-                if (roll < bumperChance) bumper = 1
+                if (roll < bumperChance) bumper = bumperExtra
                 rng = { ...state.rng, harvest: next }
             }
-            const amount = crops[cropId].yield + yieldBonus + bumper
+            // Worms add their crops while they work.
+            const worms = harvestBonusAt(state.activeEffects, action.plot, state.tick)
+            const amount = crops[cropId].yield + yieldBonus + bumper + worms
             // Power-up drop: rolled from rng.drops whether or not a slot is free.
             const [drop, dropsRng] = rollDrop(state)
             rng = { ...rng, drops: dropsRng }
@@ -170,18 +190,7 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
             if (order === undefined || isExpired(order, state.tick)) return null
             const inventory = fulfill(order, state.inventory)
             if (inventory === null) return null
-            const pay =
-                DIFFICULTY.coinsPerOrder +
-                modifiersFor(state.upgrades).coinsPerOrder +
-                deliverBonusAt(state.activeEffects, state.tick)
-            return {
-                ...state,
-                inventory,
-                orders: state.orders.filter((o) => o.id !== order.id),
-                score: state.score + order.value,
-                ordersCompleted: state.ordersCompleted + 1,
-                coins: state.mode === "survival" ? state.coins + pay : state.coins
-            }
+            return completeOrder({ ...state, inventory }, order, true)
         }
 
         case "buyLife": {
@@ -230,8 +239,26 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
                     return { ...used, plots: cutGrowth(state.plots, effect.ticks, state.tick) }
                 case "grantCoins":
                     return { ...used, coins: state.coins + effect.amount }
+                case "finishAll":
+                    return { ...used, plots: finishAll(state.plots) }
+                case "clearField":
+                    return { ...used, plots: clearField(state.plots) }
+                case "fillOrder": {
+                    // canUsePowerUp checked the target is an open order's id.
+                    const order = state.orders.find((o) => o.id === target)!
+                    return completeOrder(used, order, true)
+                }
+                case "fillAllOrders":
+                    return state.orders.reduce((s, o) => completeOrder(s, o, false), used)
+                case "goodEvent": {
+                    // canUsePowerUp checked no event is announced or running.
+                    const [event, events] = announceEvent(state, EVENTS, "good")
+                    if (event === null) return null
+                    return { ...used, event, rng: { ...state.rng, events } }
+                }
                 case "growthRate":
                 case "orderRate":
+                case "deliverBonus":
                     return {
                         ...used,
                         activeEffects: startEffect(
@@ -252,19 +279,94 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
     }
 }
 
-// Adds one owned copy, plus any plots it adds: plots.length always equals
-// START_PLOTS + extraPlots (clamped), so a copy past the cap adds no plot.
+// Fills `order`: removes it, adds 1 to ordersCompleted, adds its value to score when `scored`,
+// and in Survival pays coins: the base pay, Big tips, Generous customer / Gold rush, and Early
+// bird when at least half the order's time is left. deliver and the Finish power-ups use it.
+function completeOrder(state: GameState, order: Order, scored: boolean): GameState {
+    const m = modifiersFor(state.upgrades)
+    const early = timeLeft(order, state.tick) * 2 >= order.timeLimit ? m.earlyBirdCoins : 0
+    const pay =
+        DIFFICULTY.coinsPerOrder +
+        m.coinsPerOrder +
+        deliverBonusAt(state.activeEffects, state.tick) +
+        early
+    return {
+        ...state,
+        orders: state.orders.filter((o) => o.id !== order.id),
+        score: scored ? state.score + order.value : state.score,
+        ordersCompleted: state.ordersCompleted + 1,
+        coins: state.mode === "survival" ? state.coins + pay : state.coins
+    }
+}
+
+// Adds one owned copy, plus any plots and lives it adds: plots.length always equals
+// START_PLOTS + extraPlots (clamped), so a copy past the cap adds no plot. In Survival, a rise
+// in extraLives (Extra heart) adds that many lives.
 function withUpgrade(state: GameState, copy: OwnedUpgrade): GameState {
+    const before = modifiersFor(state.upgrades).extraLives
     const upgrades = [...state.upgrades, copy]
-    const wanted = START_PLOTS + modifiersFor(upgrades).extraPlots
+    const after = modifiersFor(upgrades)
+    const wanted = START_PLOTS + after.extraPlots
     const added = Array.from({ length: Math.max(0, wanted - state.plots.length) }, (): Plot => ({
         state: "empty"
     }))
+    const lives =
+        state.mode === "survival"
+            ? state.lives + Math.max(0, after.extraLives - before)
+            : state.lives
     return {
         ...state,
         upgrades,
+        lives,
         plots: added.length > 0 ? [...state.plots, ...added] : state.plots
     }
+}
+
+// Creates one new order: createOrder from `ordersRng` (two draws), then, with Small order, one
+// roll from `shrinkRng` that halves every amount (rounding up) when it hits. Its value stays.
+function makeOrder(
+    state: GameState,
+    id: number,
+    now: number,
+    ordersRng: RNGState,
+    shrinkRng: RNGState,
+    crops: CropTable,
+    rules: OrderRules
+): [Order, RNGState, RNGState] {
+    const [order, afterOrders] = createOrder(id, now, ordersRng, crops, rules)
+    const chance = modifiersFor(state.upgrades).smallOrderChance
+    if (chance <= 0) return [order, afterOrders, shrinkRng]
+    const [roll, afterShrink] = randomInt(shrinkRng, 0, 99)
+    if (roll >= chance) return [order, afterOrders, afterShrink]
+    const required = Object.fromEntries(
+        Object.entries(order.required).map(([cropId, n]) => [cropId, Math.ceil(n / 2)])
+    )
+    return [{ ...order, required }, afterOrders, afterShrink]
+}
+
+// The rules for the next new order: Second wind stretches its time after a lost life.
+function nextOrderRules(state: GameState, rules: OrderRules, secondWind: boolean): OrderRules {
+    if (!secondWind) return rules
+    const pct = modifiersFor(state.upgrades).secondWindPct
+    return { ...rules, orderTicks: scalePct(rules.orderTicks, pct) }
+}
+
+// Sneak peek: the order step would create next, as things stand now (a level-up or another
+// change before it arrives can still change its amount or time). null without Sneak peek, or
+// once the run has ended.
+function nextOrderPreview(state: GameState, crops: CropTable): Order | null {
+    if (state.status === "ended" || modifiersFor(state.upgrades).sneakPeek <= 0) return null
+    const rules = nextOrderRules(state, orderRules(state), state.secondWind)
+    const [order] = makeOrder(
+        state,
+        state.nextOrderId,
+        state.tick,
+        state.rng.orders,
+        state.rng.shrink,
+        crops,
+        rules
+    )
+    return order
 }
 
 // True when the run should end on this tick. Puzzle has no end rule yet.
@@ -302,7 +404,8 @@ function step(state: GameState, crops: CropTable): GameState {
     const tick = state.tick + 1
 
     // 2. Events: the announced one starts on its startsAt tick, and is cleared once it ends
-    let ev = startEvent({ ...state, tick })
+    const ticked: GameState = { ...state, tick }
+    let ev = startEvent(ticked, crops, orderRules(ticked))
     if (ev.event !== null && tick >= ev.event.endsAt) {
         ev = { ...ev, event: null, nextEventAt: tick + gapTicks(ev) }
     }
@@ -317,8 +420,26 @@ function step(state: GameState, crops: CropTable): GameState {
     const open = moved.orders.filter((o) => !isExpired(o, tick))
     const failed = moved.orders.length - open.length
     const ordersFailed = state.ordersFailed + failed
-    // Survival: each failed order costs a life, never going below 0.
-    const lives = state.mode === "survival" ? Math.max(0, state.lives - failed) : state.lives
+    // Survival: each failed order costs a life, never going below 0. Second chance rolls once
+    // per failed order from rng.lives and saves the life when it hits. A lost life turns on
+    // Second wind for the next new order.
+    let lives = state.lives
+    let livesRng = ev.rng.lives
+    let secondWind = ev.secondWind
+    if (state.mode === "survival" && failed > 0) {
+        const chance = modifiersFor(state.upgrades).secondChance
+        let lost = 0
+        for (let i = 0; i < failed; i++) {
+            if (chance > 0) {
+                const [roll, after] = randomInt(livesRng, 0, 99)
+                livesRng = after
+                if (roll < chance) continue
+            }
+            lost += 1
+        }
+        lives = Math.max(0, lives - lost)
+        if (lost > 0) secondWind = true
+    }
 
     const next: GameState = {
         ...ev,
@@ -327,6 +448,8 @@ function step(state: GameState, crops: CropTable): GameState {
         orders: open,
         ordersFailed,
         lives,
+        secondWind,
+        rng: { ...ev.rng, lives: livesRng },
         activeEffects: moved.active
     }
 
@@ -335,21 +458,34 @@ function step(state: GameState, crops: CropTable): GameState {
 
     // 7. New orders, using the rules for the current difficulty
     const rules = orderRules(next)
-    const orders = [...open]
+    const orders = [...next.orders]
     let ordersRng = next.rng.orders
+    let shrinkRng = next.rng.shrink
     let nextOrderId = next.nextOrderId
+    let wind = next.secondWind
     while (orders.length < rules.maxOpenOrders) {
-        const [order, after] = createOrder(nextOrderId, tick, ordersRng, crops, rules)
+        const [order, afterOrders, afterShrink] = makeOrder(
+            next,
+            nextOrderId,
+            tick,
+            ordersRng,
+            shrinkRng,
+            crops,
+            nextOrderRules(next, rules, wind)
+        )
         orders.push(order)
-        ordersRng = after
+        ordersRng = afterOrders
+        shrinkRng = afterShrink
         nextOrderId += 1
+        wind = false
     }
 
     const withOrders: GameState = {
         ...next,
         orders,
         nextOrderId,
-        rng: { ...next.rng, orders: ordersRng }
+        secondWind: wind,
+        rng: { ...next.rng, orders: ordersRng, shrink: shrinkRng }
     }
 
     // 8. Event announcement, from its own stream after the orders
@@ -376,4 +512,13 @@ function announceDue(state: GameState): GameState {
     return { ...state, rng, event }
 }
 
-export { createGame, applyAction, step, canBuyLife, orderRules, lifePriceFor, withUpgrade }
+export {
+    createGame,
+    applyAction,
+    step,
+    canBuyLife,
+    orderRules,
+    lifePriceFor,
+    withUpgrade,
+    nextOrderPreview
+}

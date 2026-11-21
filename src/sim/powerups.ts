@@ -3,6 +3,7 @@
 import type {
     Effect,
     GameMode,
+    GameSystem,
     GameState,
     OwnedUpgrade,
     PowerUpConfig,
@@ -15,7 +16,8 @@ import { modifiersFor, scalePct } from "./upgrades"
 import rawPowerUps from "../data/powerups.json"
 
 const DROP_MODES: readonly GameMode[] = ["survival", "timed"]
-const LASTING_KINDS: readonly string[] = ["growthRate", "orderRate"]
+const LASTING_KINDS: readonly string[] = ["growthRate", "orderRate", "deliverBonus"]
+const GAME_SYSTEMS: readonly GameSystem[] = ["powerUps", "events"]
 
 // ---------------------------------------------------------------------------------------------
 // Validation
@@ -61,6 +63,14 @@ function validateEffect(raw: unknown, at: string): Effect {
             return { kind: "finishGrowth" }
         case "grantCoins":
             return { kind: "grantCoins", amount: wholeAtLeast(raw.amount, 1, `${at}.amount`) }
+        case "deliverBonus":
+            return { kind: "deliverBonus", coins: wholeAtLeast(raw.coins, 1, `${at}.coins`) }
+        case "finishAll":
+        case "clearField":
+        case "fillOrder":
+        case "fillAllOrders":
+        case "goodEvent":
+            return { kind: raw.kind }
         default:
             return fail(`${at}.kind`, "a known effect kind")
     }
@@ -94,13 +104,31 @@ function validatePowerUp(entry: unknown, at: string): PowerUpDef {
         if (text.includes("{seconds}")) fail(`${at}.text`, "free of {seconds} when instant")
     }
 
-    let target: "plot" | null = null
+    let target: "plot" | "order" | null = null
     if (has(entry, "target")) {
-        if (entry.target !== "plot") fail(`${at}.target`, `"plot"`)
-        target = "plot"
+        if (entry.target !== "plot" && entry.target !== "order") {
+            fail(`${at}.target`, `"plot" or "order"`)
+        }
+        target = entry.target
     }
     if ((effect.kind === "finishGrowth") !== (target === "plot")) {
         fail(`${at}.target`, `"plot" exactly when the effect is finishGrowth`)
+    }
+    if ((effect.kind === "fillOrder") !== (target === "order")) {
+        fail(`${at}.target`, `"order" exactly when the effect is fillOrder`)
+    }
+
+    let needs: GameSystem[] = []
+    if (has(entry, "needs")) {
+        const n = entry.needs
+        if (!Array.isArray(n) || !n.every((x) => (GAME_SYSTEMS as unknown[]).includes(x))) {
+            fail(`${at}.needs`, `a list of ${GAME_SYSTEMS.join(", ")}`)
+        }
+        if (new Set(n).size !== n.length) fail(`${at}.needs`, "free of repeats")
+        needs = [...(n as GameSystem[])]
+    }
+    if (effect.kind === "goodEvent" && !needs.includes("events")) {
+        fail(`${at}.needs`, `a list with "events" for a goodEvent power-up`)
     }
 
     return {
@@ -111,7 +139,8 @@ function validatePowerUp(entry: unknown, at: string): PowerUpDef {
         weight,
         durationTicks,
         effect,
-        target
+        target,
+        needs
     }
 }
 
@@ -134,10 +163,16 @@ const POWER_UPS: PowerUpConfig = validatePowerUps(rawPowerUps)
 // ---------------------------------------------------------------------------------------------
 // Drops
 
-// Ids that can drop in `mode`, sorted so the result doesn't depend on the JSON's order.
-function dropTable(mode: GameMode, config: PowerUpConfig = POWER_UPS): string[] {
+// True when every system the power-up needs is on in this run.
+function systemsOn(def: PowerUpDef, state: GameState): boolean {
+    return def.needs.every((n) => (n === "powerUps" ? state.allowPowerUps : state.allowEvents))
+}
+
+// Ids that can drop in this run: in its mode and with every system they need on. Sorted so the
+// result doesn't depend on the JSON's order.
+function dropTable(state: GameState, config: PowerUpConfig = POWER_UPS): string[] {
     return Object.values(config.powerUps)
-        .filter((def) => def.modes.includes(mode))
+        .filter((def) => def.modes.includes(state.mode) && systemsOn(def, state))
         .map((def) => def.id)
         .sort()
 }
@@ -147,7 +182,7 @@ function dropTable(mode: GameMode, config: PowerUpConfig = POWER_UPS): string[] 
 function rollDrop(state: GameState, config: PowerUpConfig = POWER_UPS): [string | null, RNGState] {
     const rng = state.rng.drops
     const { dropChance } = modifiersFor(state.upgrades)
-    const table = dropTable(state.mode, config)
+    const table = dropTable(state, config)
     if (!state.allowPowerUps || dropChance <= 0 || table.length === 0) return [null, rng]
 
     const [roll, afterRoll] = randomInt(rng, 0, 99)
@@ -174,14 +209,16 @@ function heldDef(state: GameState, slot: number, config: PowerUpConfig): PowerUp
     return Object.prototype.hasOwnProperty.call(config.powerUps, id) ? config.powerUps[id] : null
 }
 
-// Plots a held plot power-up can be used on, ascending. [] for untargeted ones and bad slots.
+// Where a held targeted power-up can be used, ascending: growing plots' indexes for a plot
+// power-up, open orders' ids for an order one. [] for untargeted ones and bad slots.
 function powerUpTargets(
     state: GameState,
     slot: number,
     config: PowerUpConfig = POWER_UPS
 ): number[] {
     const def = heldDef(state, slot, config)
-    if (def === null || def.target !== "plot") return []
+    if (def === null || def.target === null) return []
+    if (def.target === "order") return state.orders.map((o) => o.id).sort((a, b) => a - b)
     return state.plots.flatMap((p, i) => (p.state === "growing" ? [i] : []))
 }
 
@@ -196,7 +233,9 @@ function canUsePowerUp(
         return false
     }
     const def = heldDef(state, slot, config)
-    if (def === null) return false
+    if (def === null || !systemsOn(def, state)) return false
+    // Good omen calls an event now, so it waits while another event is announced or running.
+    if (def.effect.kind === "goodEvent" && state.event !== null) return false
     if (def.target === null) return target === null
     return target !== null && powerUpTargets(state, slot, config).includes(target)
 }

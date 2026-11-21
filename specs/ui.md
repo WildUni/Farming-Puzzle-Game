@@ -77,6 +77,7 @@ A row of slot buttons under the plots, in both modes. Hidden when `allowPowerUps
 - A button is enabled only when `canUsePowerUp` is true for it (with any valid target, for a plot power-up), so the screen and the rules can't disagree.
 - **Untargeted power-up:** clicking sends `usePowerUp { slot }` through `act()`.
 - **Plot power-up (Ready one):** clicking enters target mode. The plots in `powerUpTargets` are highlighted and the rest greyed out; clicking a highlighted plot sends `usePowerUp { slot, target }` through `act()`. Clicking the button again, Esc (which pauses otherwise) or a click on a dimmed plot cancels without sending anything. Target mode also ends when no plot is a valid target any more, and when the game pauses, ends or opens an upgrade offer. While in target mode a plot click never plants or harvests.
+- **Order power-up (Finish one):** the same, on the order cards: the cards in `powerUpTargets` (open order ids) are outlined and the rest dimmed; clicking one sends `usePowerUp { slot, target: orderId }`. A click on any card or plot that isn't a valid target cancels. While in target mode an order click never delivers.
 - The bar is covered by the upgrade-pick shade like the rest of the board.
 
 ### Active effects
@@ -102,7 +103,16 @@ Drawn by `PlotsView` from the state, on top of the plot's own colour:
 | Crows running, on each plot not excluded | A crow marker; clicking the plot does nothing |
 | Frost running, on each plot not excluded | A pale blue tint                              |
 | Sunny spell running                      | A warm tint on every plot                     |
+| Worms running, on each plot not excluded | A `WORMS` marker                              |
 | Greenhouse plot (`shieldedPlots`)        | A small shield marker, always                 |
+
+### Fog
+
+While `isFogged(state)` (a `fog` effect is working): growing plots show `?` instead of their percentage and their growth bar is hidden (`plotText(plot, now, fog)`), and order cards show `?:??` instead of the time left and hide their countdown bar. Crop names, amounts and values stay visible.
+
+## Sneak peek (OrdersView)
+
+With Sneak peek, a dimmed card under the open orders shows `nextOrderPreview(state, crops)` as `Next order`, one `crop xN` line per crop, and its value (`nextOrderText`). It takes no clicks. Hidden without the upgrade.
 
 The overlay rules come from `plotOverlays(state)` in `format.ts`, which returns one list of overlay names per plot, so they can be unit tested without Phaser.
 
@@ -157,6 +167,10 @@ Three sections, top to bottom:
 - `eventBannerText` for the warning of an untargeted and a plot event, for a running lasting event, rounding seconds up, and `null` with no event.
 - `plotOverlays` for each row of the overlay table, including a shielded plot left out of Frost and Crows.
 - `activeEffectText` shows the name and seconds left, rounding up: `1s` with one tick left, `10s` with 100.
+- `isFogged` follows the fog effect's working ticks; `plotText` shows `?` for a growing crop in fog; `orderText` shows `?:??` in fog.
+- `nextOrderText` lists the next order's crops and value.
+- `plotOverlays` marks every plot Worms are working on.
+- The Level row and the game-over level follow `runLevel` (Steady pace).
 
 ## Open items
 

@@ -16,11 +16,12 @@ import type {
 import { TICKS_PER_SECOND, TIMED_MODE_TICKS } from "../sim/game_constants"
 import { progress } from "../sim/plot"
 import { timeLeft } from "../sim/orders"
-import { levelFor } from "../sim/difficulty"
+import { runLevel } from "../sim/difficulty"
 import { lifePriceFor } from "../sim/main"
 import { copyCount, effectAmount } from "../sim/upgrades"
 import { POWER_UPS, durationFor } from "../sim/powerups"
 import { EVENTS, shieldedPlots } from "../sim/events"
+import { fogged } from "../sim/effects"
 
 const MAX_HEARTS = 5 // more lives than this show as a count
 
@@ -76,7 +77,7 @@ function gameOverText(state: GameState): string {
     if (state.mode === "survival") {
         lines.push(
             `Time survived ${formatClock(state.tick)}`,
-            `Level reached ${levelFor(state.ordersCompleted) + 1}`
+            `Level reached ${runLevel(state) + 1}`
         )
     } else {
         lines.push(`Orders failed ${state.ordersFailed}`)
@@ -130,25 +131,37 @@ function timerText(state: GameState): string {
         : formatClock(state.tick)
 }
 
-// Label inside a plot square: crop id plus growth, or "empty".
-function plotText(plot: Plot, now: number): string {
+// True while Fog hides growth and order timers.
+function isFogged(state: GameState): boolean {
+    return fogged(state.activeEffects, state.tick)
+}
+
+// Label inside a plot square: crop id plus growth, or "empty". In fog the growth shows as "?".
+function plotText(plot: Plot, now: number, fog = false): string {
     switch (plot.state) {
         case "empty":
             return "empty"
         case "growing":
-            return `${plot.cropId}\n${Math.floor(progress(plot, now) * 100)}%`
+            return `${plot.cropId}\n${fog ? "?" : `${Math.floor(progress(plot, now) * 100)}%`}`
         case "ready":
             return `${plot.cropId}\nREADY`
     }
 }
 
-// Text on an order card: one line per required crop, then value and time left.
+// Text on an order card: one line per required crop, then value and time left ("?:??" in fog).
 function orderText(order: Order, state: GameState): string {
     const lines = Object.entries(order.required).map(
         ([cropId, amount]) => `${cropId} x${amount}  (have ${state.inventory[cropId] ?? 0})`
     )
-    lines.push(`value ${order.value}   ${formatClock(timeLeft(order, state.tick))}`)
+    const time = isFogged(state) ? "?:??" : formatClock(timeLeft(order, state.tick))
+    lines.push(`value ${order.value}   ${time}`)
     return `Order #${order.id}\n${lines.join("\n")}`
+}
+
+// Text on the Sneak peek card: the order that comes next, with its crops and value.
+function nextOrderText(order: Order): string {
+    const lines = Object.entries(order.required).map(([cropId, amount]) => `${cropId} x${amount}`)
+    return `Next order\n${lines.join("\n")}\nvalue ${order.value}`
 }
 
 // Rows for the stats table, in display order. Inventory lists every crop, even at 0.
@@ -156,7 +169,7 @@ function statRows(state: GameState, crops: CropTable): [string, string][] {
     const survival: [string, string][] =
         state.mode === "survival"
             ? [
-                  ["Level", String(levelFor(state.ordersCompleted) + 1)],
+                  ["Level", String(runLevel(state) + 1)],
                   ["Lives", heartsText(state.lives)],
                   ["Coins", String(state.coins)]
               ]
@@ -179,7 +192,8 @@ function cropButtonText(crop: Crop): string {
     return `${crop.id}\n${formatClock(crop.growTicks)}`
 }
 
-export { formatClock, timerText, plotText, orderText, statRows, cropButtonText }
+export { formatClock, timerText, plotText, orderText, nextOrderText, statRows, cropButtonText }
+export { isFogged }
 
 // Share of an order's own time limit still left, from 1 (just opened) to 0 (last tick).
 function orderTimeFraction(order: Order, now: number): number {
@@ -268,10 +282,10 @@ function eventIsGood(state: GameState): boolean {
     return state.event !== null && EVENTS.events[state.event.id].kind === "good"
 }
 
-type PlotOverlay = "target" | "blocked" | "frozen" | "fast" | "shield"
+type PlotOverlay = "target" | "blocked" | "frozen" | "fast" | "worms" | "shield"
 
 // Markers drawn on each plot: the plot a plot event will hit, harvest blocked, growth stopped or
-// slowed, growth sped up, and Greenhouse protection.
+// slowed, growth sped up, extra crops from Worms, and Greenhouse protection.
 function plotOverlays(state: GameState): PlotOverlay[][] {
     const { event, tick } = state
     const shielded = shieldedPlots(state)
@@ -287,6 +301,7 @@ function plotOverlays(state: GameState): PlotOverlay[][] {
         if (here.some((a) => a.effect.kind === "growthRate" && a.effect.pct > 100)) {
             marks.push("fast")
         }
+        if (here.some((a) => a.effect.kind === "harvestBonus")) marks.push("worms")
         if (shielded.includes(i)) marks.push("shield")
         return marks
     })

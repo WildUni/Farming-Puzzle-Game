@@ -99,6 +99,86 @@
             "base": 0,
             "min": 0,
             "max": 1
+        },
+        "bumperExtra": {
+            "base": 1,
+            "min": 1,
+            "max": 4
+        },
+        "smallOrderChance": {
+            "base": 0,
+            "min": 0,
+            "max": 50
+        },
+        "sneakPeek": {
+            "base": 0,
+            "min": 0,
+            "max": 1
+        },
+        "crowBan": {
+            "base": 0,
+            "min": 0,
+            "max": 1
+        },
+        "earlyBirdCoins": {
+            "base": 0,
+            "min": 0,
+            "max": 15
+        },
+        "levelPacePct": {
+            "base": 100,
+            "min": 100,
+            "max": 200
+        },
+        "extraLives": {
+            "base": 0,
+            "min": 0,
+            "max": 2
+        },
+        "lastStandGrowthPct": {
+            "base": 100,
+            "min": 50,
+            "max": 100
+        },
+        "secondChance": {
+            "base": 0,
+            "min": 0,
+            "max": 50
+        },
+        "secondWindPct": {
+            "base": 100,
+            "min": 100,
+            "max": 200
+        },
+        "wormBonusPct": {
+            "base": 100,
+            "min": 100,
+            "max": 300
+        },
+        "neighborReplant": {
+            "base": 0,
+            "min": 0,
+            "max": 1
+        },
+        "birdPlotsPct": {
+            "base": 100,
+            "min": 34,
+            "max": 100
+        },
+        "rotPct": {
+            "base": 100,
+            "min": 25,
+            "max": 100
+        },
+        "fogDurationPct": {
+            "base": 100,
+            "min": 25,
+            "max": 100
+        },
+        "emergencyTimePct": {
+            "base": 100,
+            "min": 100,
+            "max": 200
         }
     },
     "tiers": {
@@ -428,6 +508,242 @@
                     "amount": 1
                 }
             ]
+        },
+        {
+            "id": "biggerBumper",
+            "name": "Bigger bumper",
+            "text": "Bumper harvest gives +{0} more crop",
+            "pools": ["survival", "timed"],
+            "maxCopies": 3,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "bumperExtra",
+                    "perTier": [1, 1, 1, 2, 3]
+                }
+            ],
+            "requires": ["bumperHarvest"]
+        },
+        {
+            "id": "smallOrder",
+            "name": "Small order",
+            "text": "{0}% chance a new order asks for half as much",
+            "pools": ["survival", "timed"],
+            "maxCopies": 5,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "smallOrderChance",
+                    "perTier": [5, 8, 12, 18, 25]
+                }
+            ]
+        },
+        {
+            "id": "sneakPeek",
+            "name": "Sneak peek",
+            "text": "See the next order before it arrives",
+            "pools": ["survival", "timed"],
+            "tier": "rare",
+            "maxCopies": 1,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "sneakPeek",
+                    "amount": 1
+                }
+            ]
+        },
+        {
+            "id": "pestControl",
+            "name": "Pest control",
+            "text": "Crows never come again this run",
+            "pools": ["survival", "timed"],
+            "tier": "epic",
+            "maxCopies": 1,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "crowBan",
+                    "amount": 1
+                }
+            ],
+            "needs": ["events"]
+        },
+        {
+            "id": "earlyBird",
+            "name": "Early bird",
+            "text": "+{0} coins for an order filled with half its time left",
+            "pools": ["survival"],
+            "maxCopies": 5,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "earlyBirdCoins",
+                    "perTier": [1, 2, 3, 5, 8]
+                }
+            ]
+        },
+        {
+            "id": "steadyPace",
+            "name": "Steady pace",
+            "text": "Difficulty rises {0}% more slowly",
+            "pools": ["survival"],
+            "maxCopies": 5,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "levelPacePct",
+                    "perTier": [5, 8, 12, 18, 25]
+                }
+            ]
+        },
+        {
+            "id": "extraHeart",
+            "name": "Extra heart",
+            "text": "+{0} life",
+            "pools": ["survival"],
+            "tier": "rare",
+            "maxCopies": 2,
+            "sellable": false,
+            "effects": [
+                {
+                    "stat": "extraLives",
+                    "amount": 1
+                }
+            ]
+        },
+        {
+            "id": "lastStand",
+            "name": "Last stand",
+            "text": "On your last life, crops grow {0}% faster",
+            "pools": ["survival"],
+            "maxCopies": 3,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "lastStandGrowthPct",
+                    "perTier": [-5, -8, -12, -18, -25]
+                }
+            ]
+        },
+        {
+            "id": "secondChance",
+            "name": "Second chance",
+            "text": "{0}% chance a failed order costs no life",
+            "pools": ["survival"],
+            "maxCopies": 5,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "secondChance",
+                    "perTier": [5, 8, 12, 18, 25]
+                }
+            ]
+        },
+        {
+            "id": "secondWind",
+            "name": "Second wind",
+            "text": "After losing a life, the next order waits {0}% longer",
+            "pools": ["survival"],
+            "maxCopies": 3,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "secondWindPct",
+                    "perTier": [10, 15, 25, 35, 50]
+                }
+            ]
+        },
+        {
+            "id": "wormFarm",
+            "name": "Worm farm",
+            "text": "Worms give {0}% more extra crops",
+            "pools": ["survival", "timed"],
+            "maxCopies": 3,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "wormBonusPct",
+                    "perTier": [50, 100, 100, 150, 200]
+                }
+            ],
+            "needs": ["events"]
+        },
+        {
+            "id": "goodNeighbors",
+            "name": "Good neighbors",
+            "text": "Helpful neighbors replant what they harvest",
+            "pools": ["survival", "timed"],
+            "tier": "rare",
+            "maxCopies": 1,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "neighborReplant",
+                    "amount": 1
+                }
+            ],
+            "needs": ["events"]
+        },
+        {
+            "id": "birdNet",
+            "name": "Bird net",
+            "text": "Birds seed {0}% fewer plots",
+            "pools": ["survival", "timed"],
+            "maxCopies": 3,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "birdPlotsPct",
+                    "perTier": [-10, -15, -20, -25, -33]
+                }
+            ],
+            "needs": ["events"]
+        },
+        {
+            "id": "rootCellar",
+            "name": "Root cellar",
+            "text": "Rot takes {0}% less",
+            "pools": ["survival", "timed"],
+            "maxCopies": 3,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "rotPct",
+                    "perTier": [-10, -15, -25, -35, -50]
+                }
+            ],
+            "needs": ["events"]
+        },
+        {
+            "id": "lantern",
+            "name": "Lantern",
+            "text": "Fog lasts {0}% less",
+            "pools": ["survival", "timed"],
+            "maxCopies": 3,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "fogDurationPct",
+                    "perTier": [-10, -15, -25, -35, -50]
+                }
+            ],
+            "needs": ["events"]
+        },
+        {
+            "id": "calmNerves",
+            "name": "Calm nerves",
+            "text": "Emergency orders wait {0}% longer",
+            "pools": ["survival", "timed"],
+            "maxCopies": 3,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "emergencyTimePct",
+                    "perTier": [10, 15, 25, 35, 50]
+                }
+            ],
+            "needs": ["events"]
         }
     ]
 }

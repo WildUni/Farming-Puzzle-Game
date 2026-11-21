@@ -1,6 +1,7 @@
 // Survival tuning: lives, coins, life prices and the difficulty curve.
 // Every number comes from src/data/difficulty.json. See specs/difficulty.md.
-import type { OrderRules } from "./types"
+import type { GameState, OrderRules } from "./types"
+import { modifiersFor } from "./upgrades"
 import { ORDER_TICKS, TICKS_PER_SECOND } from "./game_constants"
 import rawDifficulty from "../data/difficulty.json"
 
@@ -86,6 +87,12 @@ function levelFor(ordersCompleted: number, config: DifficultyConfig = DIFFICULTY
     return Math.min(Math.floor(ordersCompleted / config.ordersPerLevel), config.levels.length - 1)
 }
 
+// A Survival run's level: levelFor on the filled orders, slowed by Steady pace (levelPacePct).
+function runLevel(state: GameState, config: DifficultyConfig = DIFFICULTY): number {
+    const pace = modifiersFor(state.upgrades).levelPacePct
+    return levelFor(Math.floor((state.ordersCompleted * 100) / pace), config)
+}
+
 // What a level means for new orders. Levels past the end use the last row.
 function orderRulesFor(level: number, config: DifficultyConfig = DIFFICULTY): OrderRules {
     const row = config.levels[Math.min(level, config.levels.length - 1)]
@@ -110,5 +117,13 @@ function lifePrice(livesBought: number, config: DifficultyConfig = DIFFICULTY): 
     return Math.round(base * growth ** livesBought)
 }
 
-export { validateDifficulty, DIFFICULTY, levelFor, orderRulesFor, eventGapTicks, lifePrice }
+export {
+    validateDifficulty,
+    DIFFICULTY,
+    levelFor,
+    runLevel,
+    orderRulesFor,
+    eventGapTicks,
+    lifePrice
+}
 export type { DifficultyConfig, LevelRow }

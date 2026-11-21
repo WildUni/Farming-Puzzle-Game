@@ -6,6 +6,8 @@ type RNGStreams = {
     harvest: RNGState
     drops: RNGState
     events: RNGState
+    lives: RNGState // Second chance rolls
+    shrink: RNGState // Small order rolls
 }
 type RNGSeed = number
 type GameMode = "survival" | "timed" | "puzzle"
@@ -72,6 +74,7 @@ type GameState = {
     allowEvents: boolean // copied from GameConfig so the rules can read it
     event: RunEvent | null // the announced or running event
     nextEventAt: number // first tick a new event may be announced on
+    secondWind: boolean // Survival: a life was lost, so the next new order gets Second wind time
 }
 
 // What the run's upgrades add up to. Worked out from GameState.upgrades, never stored.
@@ -96,6 +99,22 @@ type Modifiers = {
     crowDurationPct: number // % of Crows' length
     moleBlockChance: number // % chance Moles do nothing
     shielded: number // 1 on a Greenhouse plot: bad events skip it
+    bumperExtra: number // crops a Bumper harvest roll adds when it hits
+    smallOrderChance: number // % chance a new order asks for half as many crops
+    sneakPeek: number // 1: the next order is shown before it arrives
+    crowBan: number // 1: Crows never come (Pest control)
+    earlyBirdCoins: number // coins for filling an order with at least half its time left (Survival)
+    levelPacePct: number // % of filled orders a Survival level takes; 120 = levels come 20% slower
+    extraLives: number // lives added on top of the starting lives (Survival)
+    lastStandGrowthPct: number // % of growth time for crops planted on the last life (Survival)
+    secondChance: number // % chance a failed order costs no life (Survival)
+    secondWindPct: number // % of the time limit of the first new order after a lost life
+    wormBonusPct: number // % of Worms' extra crops
+    neighborReplant: number // 1: Helpful neighbor replants what they harvest
+    birdPlotsPct: number // % of the plots Birds seed
+    rotPct: number // % of Rot's share of storage
+    fogDurationPct: number // % of Fog's length
+    emergencyTimePct: number // % of an Emergency order's time share
 }
 
 type ModifierStat = keyof Modifiers
@@ -144,7 +163,7 @@ type Action =
     | { type: "deliver"; orderId: number }
     | { type: "buyLife" }
     | { type: "chooseUpgrade"; upgradeId: string; target?: number | string }
-    | { type: "usePowerUp"; slot: number; target?: number }
+    | { type: "usePowerUp"; slot: number; target?: number } // plot index, or order id
 
 // Effects move crops' and orders' clocks. See specs/effects.md.
 type LastingEffect =
@@ -152,12 +171,23 @@ type LastingEffect =
     | { kind: "orderRate"; pct: number } // open orders' timers run at pct% of normal
     | { kind: "blockHarvest" } // harvest is refused
     | { kind: "deliverBonus"; coins: number } // each delivery pays this many more coins (Survival)
+    | { kind: "harvestBonus"; crops: number } // each harvest adds this many more crops
+    | { kind: "fog" } // growth and order timers are hidden on screen; no rule changes
 
 type InstantEffect =
     | { kind: "cutGrowth"; ticks: number } // every growing crop gets this many ticks closer
     | { kind: "finishGrowth" } // one growing crop becomes ready now (targets a plot)
     | { kind: "grantCoins"; amount: number }
     | { kind: "stealCrop" } // one plot's crop is lost (targets a plot)
+    | { kind: "finishAll" } // every growing crop becomes ready now
+    | { kind: "clearField" } // every plot becomes empty
+    | { kind: "fillOrder" } // one open order is filled without crops (targets an order)
+    | { kind: "fillAllOrders" } // every open order is filled without crops, for no score
+    | { kind: "goodEvent" } // a random good event is announced now
+    | { kind: "harvestAll" } // every ready crop is harvested for the player
+    | { kind: "seedPlots"; plots: number } // random seeds land on up to this many empty plots
+    | { kind: "addOrder"; timePct: number } // an extra order with timePct% of the usual time
+    | { kind: "rotStorage"; pct: number } // this % of each stored crop is lost, rounded down
 
 type Effect = LastingEffect | InstantEffect
 
@@ -178,7 +208,8 @@ type PowerUpDef = {
     weight: number
     durationTicks: number | null // lasting effects only
     effect: Effect
-    target: "plot" | null
+    target: "plot" | "order" | null
+    needs: GameSystem[] // systems the run must have on for it to drop or be used
 }
 
 type PowerUpConfig = { powerUps: Record<string, PowerUpDef> } // id -> definition
@@ -199,6 +230,7 @@ type EventDef = {
     durationStat: ModifierStat | null // a ...Pct stat scaling the length
     amountStat: ModifierStat | null // a ...Pct stat scaling the effect's amount
     blockStat: ModifierStat | null // a ...Chance stat: % chance the event does nothing
+    banStat: ModifierStat | null // a ...Ban stat: above 0, the event is never announced
 }
 
 type EventConfig = {

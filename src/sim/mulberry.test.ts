@@ -111,6 +111,12 @@ describe("seedStream", () => {
         expect(seedStream(42, 3)).not.toBe(seedStream(42, 1))
         expect(seedStream(42, 3)).not.toBe(seedStream(42, 2))
         expect(seedStream(42, 3)).not.toBe(seedRNG(42))
+        for (const salt of [4, 5, 6]) {
+            for (let other = 1; other < salt; other++) {
+                expect(seedStream(42, salt)).not.toBe(seedStream(42, other))
+            }
+            expect(seedStream(42, salt)).not.toBe(seedRNG(42))
+        }
         expect(seedStream(42, 1)).not.toBe(seedStream(43, 1))
     })
 

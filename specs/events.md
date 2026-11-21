@@ -6,7 +6,7 @@ Events come only from `step`. There is no event action, so the action log doesn'
 
 What each event does lives in **`src/data/events.json`**. The announced or running event lives in **`GameState.event`**, and lasting effects it started live in **`GameState.activeEffects`**, next to power-ups' effects.
 
-This spec is the first slice: the scheduler, six events and their counter upgrades. Tradeoff events (Bee swarm, Festival, …), news broadcasts, Pest control and more events come later (see Open items).
+This spec covers the scheduler, thirteen events and their counter upgrades. Tradeoff events (Bee swarm, Festival, …), news broadcasts and the events that need new player actions or systems come later (see Open items).
 
 ## Concepts
 
@@ -57,13 +57,14 @@ Each event:
 | `weight`       | yes          | Relative chance among events of the same kind. Whole number `>= 1`                                            |
 | `warnSeconds`  | yes          | Seconds of warning. Whole number `>= 1`                                                                       |
 | `seconds`      | lasting only | How long its effect lasts. Whole number `>= 1`                                                                |
-| `effect`       | yes          | One `Effect` from [effects.md](effects.md). Not `finishGrowth` or `grantCoins`                                |
+| `effect`       | yes          | One `Effect` from [effects.md](effects.md). Not one of the power-up-only kinds (see `validateEvents`)         |
 | `target`       | no           | `"plot"` when the event hits one plot. Required exactly when the effect is `stealCrop`                        |
 | `durationStat` | no           | A `…Pct` modifier that scales `seconds`. Lasting events only                                                  |
 | `amountStat`   | no           | A `…Pct` modifier that scales the effect's amount (`ticks` of `cutGrowth`, `coins` of `deliverBonus`)         |
 | `blockStat`    | no           | A `…Chance` modifier: the % chance the event does nothing when it starts (see [Starting](#starting-an-event)) |
+| `banStat`      | no           | A `…Ban` modifier: while it is above 0 the event is never announced (Pest control)                            |
 
-The three `…Stat` fields are how counter upgrades work without any rule reading an event id: the event names the stat that changes it, and the stat comes from upgrades like any other.
+The four `…Stat` fields are how counter upgrades work without any rule reading an event id: the event names the stat that changes it, and the stat comes from upgrades like any other.
 
 ### Shipped events
 
@@ -77,6 +78,15 @@ All numbers are placeholders until playtesting.
 | `frost`            | Frost             | bad  | survival, timed | 30     | 5 s  | `growthRate` 0%        | 8 s   | –      | `durationStat: frostDurationPct` |
 | `crows`            | Crows             | bad  | survival, timed | 30     | 5 s  | `blockHarvest`         | 6 s   | –      | `durationStat: crowDurationPct`  |
 | `moles`            | Moles             | bad  | survival, timed | 25     | 5 s  | `stealCrop`            | –     | plot   | `blockStat: moleBlockChance`     |
+| `slowDay`          | Slow day          | good | survival, timed | 15     | 3 s  | `orderRate` 50%        | 15 s  | –      | –                                |
+| `worms`            | Worms             | good | survival, timed | 15     | 3 s  | `harvestBonus` 1 crop  | 20 s  | –      | `amountStat: wormBonusPct`       |
+| `helpfulNeighbor`  | Helpful neighbor  | good | survival, timed | 10     | 5 s  | `harvestAll`           | –     | –      | –                                |
+| `birds`            | Birds             | bad  | survival, timed | 20     | 5 s  | `seedPlots` 3 plots    | –     | –      | `amountStat: birdPlotsPct`       |
+| `emergencyOrder`   | Emergency order   | bad  | survival, timed | 15     | 5 s  | `addOrder` 50% time    | –     | –      | `amountStat: emergencyTimePct`   |
+| `rot`              | Rot               | bad  | survival, timed | 15     | 5 s  | `rotStorage` 30%       | –     | –      | `amountStat: rotPct`             |
+| `fog`              | Fog               | bad  | survival, timed | 15     | 3 s  | `fog`                  | 10 s  | –      | `durationStat: fogDurationPct`   |
+
+Crows also have `banStat: crowBan` (Pest control).
 
 Generous customer is Survival only because Timed earns no coins.
 
@@ -109,6 +119,7 @@ type EventDef = {
     durationStat: ModifierStat | null
     amountStat: ModifierStat | null
     blockStat: ModifierStat | null
+    banStat: ModifierStat | null
 }
 
 type EventConfig = {
@@ -149,10 +160,10 @@ Checks a parsed JSON value and returns it in the typed shape. Throws an `Error` 
 - `kind` is not `good` or `bad`.
 - `modes` is empty, has a repeat, or has a value other than `survival` or `timed`.
 - `weight` or `warnSeconds` is not a whole number `>= 1`.
-- `effect` breaks the rules in [effects.md](effects.md), or is `finishGrowth` or `grantCoins`.
+- `effect` breaks the rules in [effects.md](effects.md), or is a power-up-only kind (`finishGrowth`, `grantCoins`, `finishAll`, `clearField`, `fillOrder`, `fillAllOrders`, `goodEvent`). `addOrder`'s `timePct` and `rotStorage`'s `pct` must be from 1 to 100.
 - `seconds` is missing for a lasting effect, present for an instant one, or not a whole number `>= 1`.
 - `target` is not `"plot"` when present; it is missing on a `stealCrop` event or present on any other.
-- `durationStat` is on an instant event; `amountStat` is on an effect with no amount (`growthRate`, `orderRate`, `blockHarvest`, `stealCrop`); a stat field names something that isn't a `Modifiers` stat; `durationStat` or `amountStat` names a stat that doesn't end in `Pct`; `blockStat` names one that doesn't end in `Chance`.
+- `durationStat` is on an instant event; `amountStat` is on an effect with no amount (`growthRate`, `orderRate`, `blockHarvest`, `stealCrop`, `fog`, `harvestAll`); a stat field names something that isn't a `Modifiers` stat; `durationStat` or `amountStat` names a stat that doesn't end in `Pct`; `blockStat` names one that doesn't end in `Chance`; `banStat` names one that doesn't end in `Ban`.
 
 ### `EVENTS: EventConfig`
 
@@ -172,11 +183,13 @@ For a plot event, the plots it can hit, ascending: plots that are `growing` or `
 
 ### `eligibleEvents(state: GameState, kind: EventKind, config?): string[]`
 
-Ids of `kind` that can be announced now, sorted: in `modes` for the run's mode, and with at least one target if they need one.
+Ids of `kind` that can be announced now, sorted: in `modes` for the run's mode, not banned (`banStat` is null or its value is 0), and with at least one target if they need one.
 
-### `announceEvent(state: GameState, config?): [RunEvent | null, RNGState]`
+### `announceEvent(state: GameState, config?, kind: EventKind | null = null): [RunEvent | null, RNGState]`
 
 Picks the next event from `state.rng.events`. Returns the event (or `null`) and the new state of the stream.
+
+With `kind` given (the Good omen power-up), step 2 is skipped: only `eligibleEvents(state, kind)` are used, and if there are none the result is `[null, rng.events]` with no draw. So a forced announcement uses one draw, or two for a plot event.
 
 1. If both `eligibleEvents(state, "good")` and `(state, "bad")` are empty: `[null, rng.events]`, no draw.
 2. **Kind.** `roll = randomInt(rng.events, 0, 99)`; good when `roll < goodEventPct`. If that kind has no eligible events, the other kind is used. One draw.
@@ -208,18 +221,22 @@ On each tick, before effects move any clocks:
 
 An instant event starts and ends on the same tick.
 
-### Starting an event (`startEvent(state, config?): GameState`, in `events.ts`)
+### Starting an event (`startEvent(state, crops, rules, config?): GameState`, in `events.ts`)
 
-`step` calls `startEvent` with the new tick; it returns `state` unchanged unless the announced event starts on that tick.
+`step` calls `startEvent` with the new tick, the crop table and the current `orderRules`; it returns `state` unchanged unless the announced event starts on that tick.
 
 1. **Block roll.** If the event has a `blockStat` whose value is above 0, draw `roll = randomInt(rng.events, 0, 99)` and store the stream. If `roll < value`, the event does nothing more. With no `blockStat` or a value of 0, nothing is drawn.
 2. **Fire the effect**, with `amount` in place of the definition's amount:
 
-| Effect      | What happens                                                                                                                                                   |
-| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cutGrowth` | `plots = cutGrowth(plots, amount, tick)`                                                                                                                       |
-| `stealCrop` | If `plots[event.plot]` is `growing` or `ready`, it becomes `empty`. If the player emptied it during the warning, nothing happens and the block roll is skipped |
-| lasting     | `activeEffects = startEffect(activeEffects, id, effect, tick, endsAt − startsAt, exclude)`                                                                     |
+| Effect       | What happens                                                                                                                                                                                                                                                                |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cutGrowth`  | `plots = cutGrowth(plots, amount, tick)`                                                                                                                                                                                                                                    |
+| `stealCrop`  | If `plots[event.plot]` is `growing` or `ready`, it becomes `empty`. If the player emptied it during the warning, nothing happens and the block roll is skipped                                                                                                              |
+| `harvestAll` | Every `ready` plot is harvested into `inventory` (`yield + yieldBonus` from `modifiersAt`; no bumper roll and no drop, so no draws) and becomes `empty`. With `neighborReplant` above 0 it is replanted with the same crop on this tick (growth from `plantGrowthPct`)      |
+| `seedPlots`  | Up to `amount` of the `empty`, unshielded plots get a crop planted on this tick (growth from `plantGrowthPct`). For each: `pick` a plot from those still free, then `pick` a crop id from the sorted crop table, both from `rng.events`. With no free plot nothing is drawn |
+| `addOrder`   | `createOrder(nextOrderId, tick, rng.events, crops, rules)` with `orderTicks = scalePct(rules.orderTicks, amount)`, appended to `orders` even past `maxOpenOrders`; `nextOrderId` goes up by 1. Two draws                                                                    |
+| `rotStorage` | Each stored crop loses `floor(amount_held × amount / 100)`; crops that reach 0 are removed (`rotStorage(inventory, pct)`)                                                                                                                                                   |
+| lasting      | `activeEffects = startEffect(activeEffects, id, effect, tick, endsAt − startsAt, exclude)`; `deliverBonus` and `harvestBonus` use `amount` as their coins or crops                                                                                                          |
 
 For a lasting **bad** event, `exclude` is `shieldedPlots(state)` at the start; for a good one, `[]`. A plot shielded later is not added to a running effect.
 
@@ -251,6 +268,8 @@ All have `"needs": ["events"]`. `GameSystem` becomes `"powerUps" | "events"`.
 | `moleTraps`    | Mole traps    | survival, timed | tiered | 3         | `moleBlockChance` +10, +15, +20, +30, +40   | –                     | yes      |
 | `greenhouse`   | Greenhouse    | survival, timed | epic   | 2         | `shielded` +1                               | plot, `oncePerTarget` | no       |
 
+The second batch adds Pest control, Worm farm, Good neighbors, Bird net, Root cellar, Lantern and Calm nerves, listed with their stats in [upgrades.md](upgrades.md#shipped-with-the-second-batch).
+
 New stats:
 
 | Stat               | base | min | max | Read by                                         |
@@ -273,7 +292,8 @@ New stats:
 - No Phaser or browser imports. Pure: never changes its inputs.
 - Draws only from `rng.events`: in `announceEvent`, and in the block roll when an event starts. No draw depends on another stream, so events never change which orders come next, which upgrades are offered, or which power-ups drop.
 - No rule reads an event id except to look up its definition. What an event does is its `effect` and its stat fields.
-- Events never change `tick`, the run timer, `score`, `lives` or `ordersCompleted`.
+- Events never change `tick`, the run timer, `score`, `lives`, `coins` or `ordersCompleted`. They can change `plots` (Rain shower, Moles, Helpful neighbor, Birds), `inventory` (Helpful neighbor, Rot) and `orders` / `nextOrderId` (Emergency order).
+- Birds and Emergency order draw from `rng.events` when they start; the number of Birds draws depends on how many plots are free, which is fixed by the state, so replays stay exact.
 
 ## Tests (`events.test.ts`)
 
@@ -312,6 +332,18 @@ New stats:
 - **Moles** empties its plot on `startsAt`; does nothing (and draws nothing) if the plot was harvested during the warning; does nothing when the Mole traps roll hits.
 - Two runs on the same seed and the same actions, one with events on and one off, create the same orders (same `rng.orders`).
 
+**Second batch (also in `events.test.ts`)**
+
+- `validateEvents` accepts each new kind and `banStat`, and throws for a zero or out-of-range amount, a power-up-only kind, Fog without seconds, an `amountStat` on Fog, and a `banStat` that isn't a `…Ban` stat.
+- Pest control removes Crows from `eligibleEvents`. A forced kind uses one draw and only that kind; with nothing of that kind eligible it gives `null` and draws nothing.
+- **Slow day** holds open orders' timers by half its length.
+- **Worms** add 1 crop to harvests while they work (3 with a legendary Worm farm) and none after.
+- **Helpful neighbor** harvests every ready plot without touching `rng.harvest` or `rng.drops`; with Good neighbors the plots are replanted.
+- **Birds** seed 3 free plots with two draws each, skip a Greenhouse plot and ready plots, seed 1 with Bird net at its cap, and only as many as are free.
+- **Emergency order** adds an order past the limit with `scalePct(orderTicks, 50)` (75% with a legendary Calm nerves) and leaves `rng.orders` alone.
+- **Rot** removes `floor(30%)` of each crop (`floor(15%)` with a legendary Root cellar).
+- **Fog** starts a `fog` effect for its length, halved by a legendary Lantern.
+
 **Replay (`verification.test.ts`)**
 
 - Scripted Survival and Timed runs with events (and power-ups) on replay equal, and their final states show at least one event has run.
@@ -319,9 +351,11 @@ New stats:
 ## Open items
 
 - [ ] Tune every number (weights, warnings, lengths, gaps, stat caps) after playtesting.
-- [ ] More events: Worms, Scarecrow, Lucky clover, Helpful neighbor, Slow day (good); Drought, Birds, Emergency order, Fake merchant, Raccoon, Rot, Fog, Mix-up, Price crash (bad). Several need new effect kinds or player actions (Drought taps, Raccoon taps).
+- [x] Slow day, Worms, Helpful neighbor (good); Birds, Emergency order, Rot, Fog (bad).
+- [ ] Still to come: Scarecrow (its guard would have to outlast its own event, since events don't overlap), Lucky clover and Four-leaf (a per-plot mark that lasts until the next harvest), Drought and Raccoon (tap actions), Mix-up (re-rolling an open order), Fake merchant (the shop), Price crash (selling crops).
+- [ ] Should Birds' seeds be the crops orders want, or random as now? Should the player be able to dig a seeded plot up without Clean slate?
 - [ ] Tradeoff events (Bee swarm, Market day, Festival, …), which need a choice from the player.
 - [ ] News broadcasts: a ticker that announces some events earlier and in words.
-- [ ] Pest control, which needs an `"event"` upgrade target.
+- [x] Pest control, as a `banStat` (`crowBan`) on Crows instead of an `"event"` upgrade target. Banning Frost or Moles too would be one more stat each.
 - [ ] Should a good event be allowed to overlap a bad one, or run back to back with no gap?
-- [ ] Good omen power-up: announce a random good event now (needs `announceEvent` to take a forced kind).
+- [x] Good omen power-up: announce a random good event now (`announceEvent` takes a forced kind).

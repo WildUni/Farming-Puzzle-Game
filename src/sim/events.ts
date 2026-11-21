@@ -1,29 +1,49 @@
 // Events: definitions from src/data/events.json, choosing and announcing the next event, and
 // starting one. See specs/events.md.
 import type {
+    CropTable,
     Effect,
     EventConfig,
     EventDef,
     EventKind,
     GameMode,
     GameState,
+    Inventory,
     Modifiers,
     ModifierStat,
+    OrderRules,
+    Plot,
     RNGState,
     RunEvent
 } from "./types"
 import { TICKS_PER_SECOND } from "./game_constants"
 import { pick, randomInt } from "./mulberry"
-import { MODIFIER_STATS, modifiersAt, modifiersFor, scalePct } from "./upgrades"
-import { eventGapTicks, levelFor } from "./difficulty"
+import { MODIFIER_STATS, modifiersAt, modifiersFor, plantGrowthPct, scalePct } from "./upgrades"
+import { eventGapTicks, runLevel } from "./difficulty"
 import { POWER_UPS } from "./powerups"
 import { cutGrowth, startEffect, stealCrop } from "./effects"
+import { plant } from "./plot"
+import { createOrder } from "./orders"
 import rawEvents from "../data/events.json"
 
 const EVENT_MODES: readonly GameMode[] = ["survival", "timed"]
 const EVENT_KINDS: readonly EventKind[] = ["good", "bad"]
-const LASTING_KINDS: readonly string[] = ["growthRate", "orderRate", "blockHarvest", "deliverBonus"]
-const AMOUNT_KINDS: readonly string[] = ["cutGrowth", "deliverBonus"]
+const LASTING_KINDS: readonly string[] = [
+    "growthRate",
+    "orderRate",
+    "blockHarvest",
+    "deliverBonus",
+    "harvestBonus",
+    "fog"
+]
+const AMOUNT_KINDS: readonly string[] = [
+    "cutGrowth",
+    "deliverBonus",
+    "harvestBonus",
+    "seedPlots",
+    "addOrder",
+    "rotStorage"
+]
 
 // ---------------------------------------------------------------------------------------------
 // Validation
@@ -53,7 +73,15 @@ function wholeAtLeast(v: unknown, min: number, field: string): number {
     return v
 }
 
-// The effects an event may use: everything but the power-up-only finishGrowth and grantCoins.
+// A whole number from min to max.
+function wholeBetween(v: unknown, min: number, max: number, field: string): number {
+    const n = wholeAtLeast(v, min, field)
+    if (n > max) fail(field, `a whole number from ${min} to ${max}`)
+    return n
+}
+
+// The effects an event may use. The power-up-only ones (finishGrowth, grantCoins, finishAll,
+// clearField, fillOrder, fillAllOrders, goodEvent) are refused.
 function validateEffect(raw: unknown, at: string): Effect {
     if (!isObject(raw)) fail(at, "an object")
     switch (raw.kind) {
@@ -71,6 +99,18 @@ function validateEffect(raw: unknown, at: string): Effect {
             return { kind: "deliverBonus", coins: wholeAtLeast(raw.coins, 1, `${at}.coins`) }
         case "stealCrop":
             return { kind: "stealCrop" }
+        case "harvestBonus":
+            return { kind: "harvestBonus", crops: wholeAtLeast(raw.crops, 1, `${at}.crops`) }
+        case "fog":
+            return { kind: "fog" }
+        case "harvestAll":
+            return { kind: "harvestAll" }
+        case "seedPlots":
+            return { kind: "seedPlots", plots: wholeAtLeast(raw.plots, 1, `${at}.plots`) }
+        case "addOrder":
+            return { kind: "addOrder", timePct: wholeBetween(raw.timePct, 1, 100, `${at}.timePct`) }
+        case "rotStorage":
+            return { kind: "rotStorage", pct: wholeBetween(raw.pct, 1, 100, `${at}.pct`) }
         default:
             return fail(`${at}.kind`, "an effect kind events can use")
     }
@@ -134,6 +174,7 @@ function validateEvent(entry: unknown, at: string): EventDef {
     const durationStat = statField(entry, "durationStat", "Pct", at)
     const amountStat = statField(entry, "amountStat", "Pct", at)
     const blockStat = statField(entry, "blockStat", "Chance", at)
+    const banStat = statField(entry, "banStat", "Ban", at)
     if (durationStat !== null && !lasting) fail(`${at}.durationStat`, "left out when instant")
     if (amountStat !== null && !AMOUNT_KINDS.includes(effect.kind)) {
         fail(`${at}.amountStat`, "left out for an effect with no amount")
@@ -151,7 +192,8 @@ function validateEvent(entry: unknown, at: string): EventDef {
         target,
         durationStat,
         amountStat,
-        blockStat
+        blockStat,
+        banStat
     }
 }
 
@@ -182,19 +224,29 @@ function pctOf(m: Readonly<Modifiers>, stat: ModifierStat | null): number {
     return stat === null ? 100 : m[stat]
 }
 
-// The effect's own amount (cutGrowth ticks, deliverBonus coins), or null.
+// The effect's own amount (cutGrowth ticks, deliverBonus coins, ...), or null.
 function baseAmount(effect: Effect): number | null {
-    if (effect.kind === "cutGrowth") return effect.ticks
-    if (effect.kind === "deliverBonus") return effect.coins
-    return null
+    switch (effect.kind) {
+        case "cutGrowth":
+            return effect.ticks
+        case "deliverBonus":
+            return effect.coins
+        case "harvestBonus":
+            return effect.crops
+        case "seedPlots":
+            return effect.plots
+        case "addOrder":
+            return effect.timePct
+        case "rotStorage":
+            return effect.pct
+        default:
+            return null
+    }
 }
 
 // Ticks after an event ends until the next may be announced, with Calm skies applied.
 function gapTicks(state: GameState, config: EventConfig = EVENTS): number {
-    const gap =
-        state.mode === "survival"
-            ? eventGapTicks(levelFor(state.ordersCompleted))
-            : config.timedGapTicks
+    const gap = state.mode === "survival" ? eventGapTicks(runLevel(state)) : config.timedGapTicks
     return scalePct(gap, modifiersFor(state.upgrades).eventGapPct)
 }
 
@@ -212,13 +264,16 @@ function eventTargets(state: GameState, def: EventDef): number[] {
     return state.plots.flatMap((p, i) => (p.state !== "empty" && !shielded.includes(i) ? [i] : []))
 }
 
-// Ids of `kind` that can be announced now, sorted.
+// Ids of `kind` that can be announced now, sorted: in the run's mode, not banned (Pest control),
+// and with a target if they need one.
 function eligibleEvents(state: GameState, kind: EventKind, config: EventConfig = EVENTS): string[] {
+    const m = modifiersFor(state.upgrades)
     return Object.values(config.events)
         .filter(
             (def) =>
                 def.kind === kind &&
                 def.modes.includes(state.mode) &&
+                (def.banStat === null || m[def.banStat] <= 0) &&
                 (def.target === null || eventTargets(state, def).length > 0)
         )
         .map((def) => def.id)
@@ -226,23 +281,31 @@ function eligibleEvents(state: GameState, kind: EventKind, config: EventConfig =
 }
 
 // Picks the next event from rng.events: a kind roll, a weighted event roll, and a plot pick for
-// plot events. Every number the event uses is fixed here.
+// plot events. Every number the event uses is fixed here. With `kind` given (Good omen), there
+// is no kind roll and only that kind is used.
 function announceEvent(
     state: GameState,
-    config: EventConfig = EVENTS
+    config: EventConfig = EVENTS,
+    kind: EventKind | null = null
 ): [RunEvent | null, RNGState] {
     const good = eligibleEvents(state, "good", config)
     const bad = eligibleEvents(state, "bad", config)
     let rng = state.rng.events
-    if (good.length === 0 && bad.length === 0) return [null, rng]
-    const m = modifiersFor(state.upgrades)
-
-    const [kindRoll, afterKind] = randomInt(rng, 0, 99)
-    let ids = kindRoll < m.goodEventPct ? good : bad
-    if (ids.length === 0) ids = ids === good ? bad : good
+    let ids: string[]
+    if (kind !== null) {
+        ids = kind === "good" ? good : bad
+        if (ids.length === 0) return [null, rng]
+    } else {
+        if (good.length === 0 && bad.length === 0) return [null, rng]
+        const m = modifiersFor(state.upgrades)
+        const [kindRoll, afterKind] = randomInt(rng, 0, 99)
+        rng = afterKind
+        ids = kindRoll < m.goodEventPct ? good : bad
+        if (ids.length === 0) ids = ids === good ? bad : good
+    }
 
     const total = ids.reduce((sum, id) => sum + config.events[id].weight, 0)
-    const [eventRoll, afterEvent] = randomInt(afterKind, 0, total - 1)
+    const [eventRoll, afterEvent] = randomInt(rng, 0, total - 1)
     rng = afterEvent
     let r = eventRoll
     let id = ids[ids.length - 1]
@@ -287,8 +350,91 @@ function buildEvent(state: GameState, def: EventDef, plot: number | null): RunEv
 // ---------------------------------------------------------------------------------------------
 // Starting
 
+// Helpful neighbor: every ready crop is harvested into storage (yield + yieldBonus, no bumper
+// roll or drop), and with Good neighbors replanted with the same crop.
+function harvestAll(state: GameState, crops: CropTable): GameState {
+    const replant = modifiersFor(state.upgrades).neighborReplant > 0
+    const inventory: Inventory = { ...state.inventory }
+    let changed = false
+    const plots = state.plots.map((p, plot): Plot => {
+        if (p.state !== "ready") return p
+        changed = true
+        const { cropId } = p
+        const { yieldBonus } = modifiersAt(state.upgrades, { plot, cropId })
+        inventory[cropId] = (inventory[cropId] ?? 0) + crops[cropId].yield + yieldBonus
+        const empty: Plot = { state: "empty" }
+        if (!replant) return empty
+        const pct = plantGrowthPct(state, plot, cropId)
+        return plant(empty, cropId, state.tick, crops, pct) ?? empty
+    })
+    return changed ? { ...state, plots, inventory } : state
+}
+
+// Birds: up to `count` empty, unshielded plots get a random crop planted. Two draws per seeded
+// plot from rng.events: which plot, then which crop.
+function seedPlots(state: GameState, count: number, crops: CropTable): GameState {
+    const shielded = shieldedPlots(state)
+    let free = state.plots.flatMap((p, i) =>
+        p.state === "empty" && !shielded.includes(i) ? [i] : []
+    )
+    const ids = Object.keys(crops).sort()
+    if (free.length === 0 || ids.length === 0) return state
+    let rng = state.rng.events
+    let plots = state.plots
+    for (let n = 0; n < count && free.length > 0; n++) {
+        const [plot, afterPlot] = pick(rng, free)
+        const [cropId, afterCrop] = pick(afterPlot, ids)
+        rng = afterCrop
+        free = free.filter((i) => i !== plot)
+        const pct = plantGrowthPct(state, plot, cropId)
+        const seeded = plant(plots[plot], cropId, state.tick, crops, pct)!
+        plots = plots.map((p, i) => (i === plot ? seeded : p))
+    }
+    return { ...state, plots, rng: { ...state.rng, events: rng } }
+}
+
+// Emergency order: one extra order with `timePct`% of the usual time, from rng.events (two
+// draws, as createOrder). It is added past maxOpenOrders.
+function addOrder(
+    state: GameState,
+    timePct: number,
+    crops: CropTable,
+    rules: OrderRules
+): GameState {
+    const short = { ...rules, orderTicks: scalePct(rules.orderTicks, timePct) }
+    const [order, events] = createOrder(
+        state.nextOrderId,
+        state.tick,
+        state.rng.events,
+        crops,
+        short
+    )
+    return {
+        ...state,
+        orders: [...state.orders, order],
+        nextOrderId: state.nextOrderId + 1,
+        rng: { ...state.rng, events }
+    }
+}
+
+// Rot: each stored crop loses `pct`% of its amount, rounded down. Crops that reach 0 are removed.
+function rotStorage(inventory: Inventory, pct: number): Inventory {
+    const out: Inventory = {}
+    for (const [cropId, amount] of Object.entries(inventory)) {
+        const left = amount - Math.floor((amount * pct) / 100)
+        if (left > 0) out[cropId] = left
+    }
+    return out
+}
+
 // Fires the announced event on its start tick: an optional block roll, then its effect.
-function startEvent(state: GameState, config: EventConfig = EVENTS): GameState {
+// `crops` and `rules` (the current order rules) are for the effects that plant or make orders.
+function startEvent(
+    state: GameState,
+    crops: CropTable,
+    rules: OrderRules,
+    config: EventConfig = EVENTS
+): GameState {
     const event = state.event
     if (event === null || event.startsAt !== state.tick) return state
     const def = config.events[event.id]
@@ -318,6 +464,14 @@ function startEvent(state: GameState, config: EventConfig = EVENTS): GameState {
                 ...next,
                 plots: next.plots.map((p, i) => (i === event.plot ? stealCrop(p)! : p))
             }
+        case "harvestAll":
+            return harvestAll(next, crops)
+        case "seedPlots":
+            return seedPlots(next, event.amount!, crops)
+        case "addOrder":
+            return addOrder(next, event.amount!, crops, rules)
+        case "rotStorage":
+            return { ...next, inventory: rotStorage(next.inventory, event.amount!) }
         case "deliverBonus":
             return {
                 ...next,
@@ -330,15 +484,28 @@ function startEvent(state: GameState, config: EventConfig = EVENTS): GameState {
                     exclude
                 )
             }
+        case "harvestBonus":
+            return {
+                ...next,
+                activeEffects: startEffect(
+                    next.activeEffects,
+                    def.id,
+                    { kind: "harvestBonus", crops: event.amount! },
+                    now,
+                    length,
+                    exclude
+                )
+            }
         case "growthRate":
         case "orderRate":
         case "blockHarvest":
+        case "fog":
             return {
                 ...next,
                 activeEffects: startEffect(next.activeEffects, def.id, effect, now, length, exclude)
             }
         default:
-            return next // finishGrowth and grantCoins are refused by validateEvents
+            return next // power-up-only effects are refused by validateEvents
     }
 }
 
@@ -351,5 +518,6 @@ export {
     eligibleEvents,
     announceEvent,
     buildEvent,
-    startEvent
+    startEvent,
+    rotStorage
 }

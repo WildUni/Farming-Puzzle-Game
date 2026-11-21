@@ -3,7 +3,7 @@
 import { GameObjects, Scene } from "phaser"
 import type { GameState } from "../../sim/types"
 import { progress } from "../../sim/plot"
-import { plotOverlays, plotText } from "../format"
+import { isFogged, plotOverlays, plotText } from "../format"
 import type { PlotOverlay } from "../format"
 import { COLORS, TEXT } from "../theme"
 
@@ -39,6 +39,7 @@ export class PlotsView {
         if (this.squares.length !== state.plots.length) this.build(state.plots.length)
 
         const overlays = plotOverlays(state)
+        const fog = isFogged(state)
         state.plots.forEach((plot, i) => {
             const { box, label, track, bar, tint, marks } = this.squares[i]
             const here = overlays[i]
@@ -64,8 +65,9 @@ export class PlotsView {
             )
             const alpha = targets !== null && !isTarget ? 0.45 : 1
             for (const part of [box, label, track, bar, tint, marks]) part.setAlpha(alpha)
-            label.setText(plotText(plot, state.tick))
-            const growing = plot.state === "growing"
+            label.setText(plotText(plot, state.tick, fog))
+            // Fog hides how far along a crop is.
+            const growing = plot.state === "growing" && !fog
             track.setVisible(growing)
             bar.setVisible(growing)
             if (growing) bar.width = BAR_W * progress(plot, state.tick)
@@ -119,6 +121,8 @@ function markText(mark: PlotOverlay): string {
             return "FROST"
         case "fast":
             return "SUN"
+        case "worms":
+            return "WORMS"
         case "shield":
             return "SAFE"
         case "target":

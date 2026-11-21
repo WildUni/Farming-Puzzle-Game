@@ -1,10 +1,19 @@
 // Order cards stacked down from the top-left corner, one per open order.
 // Reports clicks by order id. A card is outlined when there are enough crops to fill it.
-// A countdown bar along the bottom shrinks with the time left and turns red in the last quarter.
+// A countdown bar along the bottom shrinks with the time left and turns red in the last quarter;
+// Fog hides it. With Sneak peek, a dimmed card under the others shows the next order. While an
+// order power-up is being aimed, the cards it can fill are outlined and the rest dimmed.
 import { GameObjects, Scene } from "phaser"
-import type { GameState } from "../../sim/types"
+import type { GameState, Order } from "../../sim/types"
 import { canFulfill } from "../../sim/orders"
-import { orderText, orderTimeFraction, isOrderUrgent, ordersFrozen } from "../format"
+import {
+    isFogged,
+    nextOrderText,
+    orderText,
+    orderTimeFraction,
+    isOrderUrgent,
+    ordersFrozen
+} from "../format"
 import { MARGIN, COLORS, TEXT } from "../theme"
 
 const CARD_W = 300
@@ -26,24 +35,40 @@ export class OrdersView {
     private onClick: (orderId: number) => void
     private cards: Card[] = []
     private shownIds: number[] = [] // order id on each visible card, by card index
+    private peekBox: GameObjects.Rectangle
+    private peekLabel: GameObjects.Text
 
     constructor(scene: Scene, onClick: (orderId: number) => void) {
         this.scene = scene
         this.onClick = onClick
+        this.peekBox = scene.add
+            .rectangle(MARGIN, MARGIN, CARD_W, CARD_H, COLORS.card)
+            .setOrigin(0)
+            .setAlpha(0.55)
+            .setStrokeStyle(2, COLORS.cardStroke)
+        this.peekLabel = scene.add.text(MARGIN + 10, MARGIN + 8, "", TEXT.body).setAlpha(0.8)
     }
 
-    update(state: GameState): void {
+    // `preview` is the Sneak peek order, or null. `targets` lists the order ids an order
+    // power-up can be used on while the player is choosing one, else null.
+    update(state: GameState, preview: Order | null = null, targets: number[] | null = null): void {
         // Cards are kept and hidden rather than destroyed, so the count only ever grows.
         while (this.cards.length < state.orders.length) this.cards.push(this.makeCard())
 
         this.shownIds = state.orders.map((o) => o.id)
         const frozen = ordersFrozen(state)
+        const fog = isFogged(state)
         this.cards.forEach((card, i) => {
             const order = state.orders[i]
             const visible = order !== undefined
             for (const part of [card.box, card.label, card.track, card.bar])
                 part.setVisible(visible)
             if (!visible) return
+            card.track.setVisible(!fog)
+            card.bar.setVisible(!fog)
+            const isTarget = targets !== null && targets.includes(order.id)
+            const alpha = targets !== null && !isTarget ? 0.45 : 1
+            for (const part of [card.box, card.label, card.track, card.bar]) part.setAlpha(alpha)
             card.label.setText(orderText(order, state))
             card.bar.width = BAR_W * orderTimeFraction(order, state.tick)
             card.bar.setFillStyle(
@@ -53,9 +78,20 @@ export class OrdersView {
                       ? COLORS.barUrgent
                       : COLORS.barFill
             )
-            if (canFulfill(order, state.inventory)) card.box.setStrokeStyle(4, COLORS.ready)
+            if (isTarget) card.box.setStrokeStyle(4, COLORS.highlight)
+            else if (canFulfill(order, state.inventory)) card.box.setStrokeStyle(4, COLORS.ready)
             else card.box.setStrokeStyle(2, COLORS.cardStroke)
         })
+
+        const peek = preview !== null
+        this.peekBox.setVisible(peek)
+        this.peekLabel.setVisible(peek)
+        if (peek) {
+            const y = MARGIN + state.orders.length * (CARD_H + CARD_GAP)
+            this.peekBox.setY(y)
+            this.peekLabel.setY(y + 8)
+            this.peekLabel.setText(nextOrderText(preview))
+        }
     }
 
     private makeCard(): Card {
