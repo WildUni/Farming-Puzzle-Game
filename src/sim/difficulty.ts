@@ -1,4 +1,4 @@
-// Survival tuning: lives, coins, life prices and the difficulty curve.
+// Survival tuning: coins, life prices and the difficulty curve.
 // Every number comes from src/data/difficulty.json. See specs/difficulty.md.
 import type { GameState, OrderRules } from "./types"
 import { modifiersFor } from "./upgrades"
@@ -14,8 +14,6 @@ type LevelRow = {
 }
 
 type DifficultyConfig = {
-    startLives: number
-    maxLives: number // Survival lives can't go above this, plus Extra heart
     coinsPerOrder: number
     lifePrice: { base: number; growth: number }
     ordersPerLevel: number
@@ -47,8 +45,6 @@ function wholeAtLeast(
 function validateDifficulty(raw: unknown): DifficultyConfig {
     if (!isObject(raw)) fail("config", "an object")
 
-    const startLives = wholeAtLeast(raw, "startLives", 1, "startLives")
-    const maxLives = wholeAtLeast(raw, "maxLives", startLives, "maxLives")
     const coinsPerOrder = wholeAtLeast(raw, "coinsPerOrder", 0, "coinsPerOrder")
     const ordersPerLevel = wholeAtLeast(raw, "ordersPerLevel", 1, "ordersPerLevel")
 
@@ -80,8 +76,6 @@ function validateDifficulty(raw: unknown): DifficultyConfig {
     })
 
     return {
-        startLives,
-        maxLives,
         coinsPerOrder,
         lifePrice: { base, growth },
         ordersPerLevel,

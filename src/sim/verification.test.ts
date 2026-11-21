@@ -6,7 +6,7 @@ import { canFulfill } from "./orders"
 import { UPGRADES, validTargets } from "./upgrades"
 import { powerUpTargets } from "./powerups"
 import { EVENTS } from "./events"
-import { TIMED_MODE_TICKS } from "./game_constants"
+import { MODES } from "./modes"
 import type { Action, Crop, CropTable, GameConfig, GameState, LogEntry } from "./types"
 
 const cropList: Crop[] = [
@@ -142,11 +142,12 @@ describe("replay: matches the original run", () => {
         expect(replayState(seed, survival, log, state.tick, crops)).toEqual(state)
     })
 
-    it("replays a full Timed run that ends", () => {
-        const { state, log } = play(7, timed, TIMED_MODE_TICKS)
+    it("replays a full Timed run that ends, with combos", () => {
+        const { state, log } = play(7, timed, MODES.timed.runTicks)
         expect(state.status).toBe("ended")
-        expect(state.tick).toBe(TIMED_MODE_TICKS)
-        expect(replayState(7, timed, log, TIMED_MODE_TICKS, crops)).toEqual(state)
+        expect(state.bestCombo).toBeGreaterThan(1)
+        expect(state.tick).toBe(MODES.timed.runTicks)
+        expect(replayState(7, timed, log, MODES.timed.runTicks, crops)).toEqual(state)
     })
 
     it.each([1, 2, 3])(
@@ -257,18 +258,18 @@ describe("replay: rejects bad logs", () => {
 
     it("rejects an action on or after the tick a Timed run ends", () => {
         const plant: Action = { type: "plant", plot: 0, cropId: "garlic" }
-        const last: LogEntry[] = [{ tick: TIMED_MODE_TICKS - 1, action: plant }]
-        expect(replay(1, timed, last, TIMED_MODE_TICKS, crops).ok).toBe(true)
+        const last: LogEntry[] = [{ tick: MODES.timed.runTicks - 1, action: plant }]
+        expect(replay(1, timed, last, MODES.timed.runTicks, crops).ok).toBe(true)
 
-        const onEnd: LogEntry[] = [{ tick: TIMED_MODE_TICKS, action: plant }]
-        expect(replay(1, timed, onEnd, TIMED_MODE_TICKS, crops)).toEqual({
+        const onEnd: LogEntry[] = [{ tick: MODES.timed.runTicks, action: plant }]
+        expect(replay(1, timed, onEnd, MODES.timed.runTicks, crops)).toEqual({
             ok: false,
             error: "after-end",
             entry: 0
         })
 
-        const afterEnd: LogEntry[] = [{ tick: TIMED_MODE_TICKS + 5, action: plant }]
-        expect(replay(1, timed, afterEnd, TIMED_MODE_TICKS + 10, crops)).toEqual({
+        const afterEnd: LogEntry[] = [{ tick: MODES.timed.runTicks + 5, action: plant }]
+        expect(replay(1, timed, afterEnd, MODES.timed.runTicks + 10, crops)).toEqual({
             ok: false,
             error: "after-end",
             entry: 0
@@ -306,7 +307,7 @@ describe("replay: rejects bad logs", () => {
     })
 
     it("rejects a finalTick after a Timed run ended", () => {
-        expect(replay(1, timed, [], TIMED_MODE_TICKS + 1, crops)).toEqual({
+        expect(replay(1, timed, [], MODES.timed.runTicks + 1, crops)).toEqual({
             ok: false,
             error: "bad-final-tick",
             entry: null

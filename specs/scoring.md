@@ -25,5 +25,6 @@ Base points per filled order, plus a bonus for the time left on that order.
 - [ ] Replace the placeholder with the target rule, and move the `10` into `game_constants.ts`.
 - [ ] Decide whether scoring is per order (added when an order is delivered) or calculated once at the end of the run.
 - [ ] Decide whether to take `GameState` directly instead of `RunData` (see [types.md](types.md)).
-- [ ] Scoring for each mode: combo multiplier in Timed, and Survival and Puzzle rules (open question in the design doc).
+- [x] Timed combo multiplier: applied per order in `completeOrder` (`main.ts`), with its numbers in `modes.json` (see [modes.md](modes.md)).
+- [ ] Scoring for Survival and Puzzle (open question in the design doc), and moving every mode's formula into this file (Day 5).
 - [ ] No tests yet.

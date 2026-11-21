@@ -71,7 +71,7 @@ type OrderRules = {
 }
 ```
 
-How `step` creates orders at the current difficulty: how many it keeps open, each new order's time limit, and the range for its amount. Timed uses the fixed `DEFAULT_ORDER_RULES`; Survival reads them from the current level (see [difficulty.md](difficulty.md)).
+How `step` creates orders at the current difficulty: how many it keeps open, each new order's time limit, and the range for its amount. Timed uses the fixed `DEFAULT_ORDER_RULES` with `MODES.timed.openOrders` open; Survival reads them from the current level (see [difficulty.md](difficulty.md)).
 
 ### `GameState`
 
@@ -102,6 +102,9 @@ Everything that changes during a run. If `step` or `replay` would give a differe
 | `event`                           | The announced or running `RunEvent`, else `null` (see [events.md](events.md))       |
 | `nextEventAt`                     | First tick a new event may be announced on                                          |
 | `secondWind`                      | Survival: a life was lost and the next new order hasn't been made yet (Second wind) |
+| `combo`                           | Timed: orders filled in a row; sets the score multiplier (`comboPct`)               |
+| `comboEndsAt`                     | Timed: last tick the streak survives without another fill; `0` with no streak       |
+| `bestCombo`                       | Timed: longest streak this run, for the summary                                     |
 
 The Survival level and the next life's price are worked out from `ordersCompleted` and `livesBought` (see [difficulty.md](difficulty.md)), so they are not stored. The same goes for the upgrade `Modifiers`, which are added up from `upgrades` (see [upgrades.md](upgrades.md)).
 

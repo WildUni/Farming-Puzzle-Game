@@ -1,0 +1,15 @@
+{
+    "survival": {
+        "startLives": 3,
+        "maxLives": 3
+    },
+    "timed": {
+        "runSeconds": 300,
+        "openOrders": 3,
+        "combo": {
+            "stepPct": 25,
+            "capPct": 300,
+            "windowSeconds": 20
+        }
+    }
+}

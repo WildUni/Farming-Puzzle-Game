@@ -19,7 +19,7 @@ Returns a fresh state for a new run.
 | `orders`                                   | `[]`                                                                                                                                                                                                       |
 | `nextOrderId`                              | `0`                                                                                                                                                                                                        |
 | `score`, `ordersCompleted`, `ordersFailed` | `0`                                                                                                                                                                                                        |
-| `lives`                                    | Survival: `DIFFICULTY.startLives`. Other modes: `0`                                                                                                                                                        |
+| `lives`                                    | Survival: `MODES.survival.startLives`. Other modes: `0`                                                                                                                                                    |
 | `coins`, `livesBought`                     | `0`                                                                                                                                                                                                        |
 | `upgrades`                                 | `[]`                                                                                                                                                                                                       |
 | `upgradeOffer`                             | `null`                                                                                                                                                                                                     |
@@ -29,6 +29,7 @@ Returns a fresh state for a new run.
 | `allowEvents`                              | `config.allowEvents`                                                                                                                                                                                       |
 | `event`                                    | `null`                                                                                                                                                                                                     |
 | `nextEventAt`                              | `EVENTS.firstEventTicks`                                                                                                                                                                                   |
+| `combo`, `comboEndsAt`, `bestCombo`        | `0`                                                                                                                                                                                                        |
 | `secondWind`                               | `false`                                                                                                                                                                                                    |
 
 Rules:
@@ -83,6 +84,7 @@ Returns a **new** state, or `null` if the move is not allowed. A `null` result m
 - Returns `null` if the order `isExpired` at `state.tick` (`tick > expiresAt`). Delivering on tick `expiresAt` itself is allowed. With the tick order above this can't normally happen, but it keeps `applyAction` safe to call on any state.
 - Calls `fulfill(order, inventory)`. Returns `null` if the inventory is short.
 - Removes the order from `orders` (other orders keep their order), stores the new inventory, adds `order.value` to `score`, and adds 1 to `ordersCompleted`.
+- **Timed combo:** the score added is `floor(order.value × comboPct(combo) / 100)` instead, using the streak built **before** this fill (so the first order in a streak scores ×1). Then `combo` goes up by 1, `comboEndsAt = tick + MODES.timed.combo.windowTicks`, and `bestCombo = max(bestCombo, combo)`. Finish one does the same; Finish all scores nothing and leaves the streak alone (see [modes.md](modes.md)).
 - **Survival:** also adds `DIFFICULTY.coinsPerOrder + coinsPerOrder` (the modifier) `+ deliverBonusAt(activeEffects, tick)` (Generous customer, Gold rush) `+ earlyBirdCoins` when `2 × timeLeft(order, tick) >= timeLimit` (Early bird) to `coins`. Other modes don't earn coins.
 - Everything after the crops are taken is shared with the Finish one and Finish all power-ups (`completeOrder`), which fill orders without crops.
 - Does not create a new order. That is `step`'s job. Filling an order can raise the level (see [difficulty.md](difficulty.md)); orders `step` creates from then on use the new level's rules, while orders already open keep their time limit and amount.
@@ -93,7 +95,7 @@ Returns a **new** state, or `null` if the move is not allowed. A `null` result m
 - Returns `null` at the cap: `lives >= maxLivesFor(state)`.
 - The price is `lifePriceFor(state)`. Returns `null` if `coins` is below it.
 - Takes the price from `coins`, adds 1 to `lives` and 1 to `livesBought`. Nothing else changes.
-- Lives are capped at `maxLivesFor(state)`: `DIFFICULTY.maxLives` (3) plus Extra heart's `extraLives`. The rising price is a second limit.
+- Lives are capped at `maxLivesFor(state)`: `MODES.survival.maxLives` (3) plus Extra heart's `extraLives`. The rising price is a second limit.
 
 **`chooseUpgrade`** `{ type: 'chooseUpgrade', upgradeId, target? }`
 
@@ -115,7 +117,7 @@ Appends `copy` to `upgrades` (a new array) and adds empty plots if `extraPlots` 
 
 ### `maxLivesFor(state: GameState): number`
 
-The most lives a Survival run can hold: `DIFFICULTY.maxLives + modifiersFor(upgrades).extraLives`. `buyLife`, `canBuyLife`, the hearts and the buy button all use it. `chooseUpgrade` and the debug menu (see [debug.md](debug.md)) both use it.
+The most lives a Survival run can hold: `MODES.survival.maxLives + modifiersFor(upgrades).extraLives`. `buyLife`, `canBuyLife`, the hearts and the buy button all use it. `chooseUpgrade` and the debug menu (see [debug.md](debug.md)) both use it.
 
 ### `nextOrderPreview(state: GameState, crops: CropTable): Order | null`
 
@@ -134,7 +136,8 @@ Price of the next life with upgrades applied: `scalePct(lifePrice(livesBought), 
 The order rules `step` uses for new orders.
 
 - **Survival:** `orderRulesFor(runLevel(state))` from `difficulty.ts` (the level slowed by Steady pace), with `orderTicks` scaled by the `orderTimePct` modifier (`scalePct`).
-- **Timed** and **Puzzle:** the fixed `DEFAULT_ORDER_RULES` from `game_constants.ts` (`MAX_OPEN_ORDERS`, `ORDER_TICKS`, `ORDER_MIN_AMOUNT`, `ORDER_MAX_AMOUNT`).
+- **Timed:** `DEFAULT_ORDER_RULES` with `maxOpenOrders` set to `MODES.timed.openOrders` (3), so a Timed run starts with 3 open orders and keeps 3 open.
+- **Puzzle:** the fixed `DEFAULT_ORDER_RULES` from `game_constants.ts` (`MAX_OPEN_ORDERS`, `ORDER_TICKS`, `ORDER_MIN_AMOUNT`, `ORDER_MAX_AMOUNT`).
 
 ### `step(state: GameState, crops: CropTable): GameState`
 
@@ -152,9 +155,10 @@ Returns a **new** state. The steps run in this order, each one using the result 
 3. **Effects:** `tickEffects(activeEffects, plots, orders, tick)` drops lasting effects that have ended and moves crops' and orders' deadlines for the ones still active (see [effects.md](effects.md)). It runs before growth and failed orders, so a crop pulled to this tick turns ready now, and an order pushed past this tick doesn't fail.
 4. **Growth:** every plot is passed through `updateGrowth(plot, tick)`. A growing plot becomes `'ready'` on its `readyAt` tick (_p + growTicks_ for a crop planted on tick _p_). Empty and ready plots don't change.
 5. **Failed orders:** every order where `isExpired(order, tick)` (`tick > expiresAt`) is removed, and `ordersFailed` goes up by 1 for each. The other orders keep their order in the list.
+    - **Timed:** if `combo > 0` and an order failed this tick, or `tick > comboEndsAt` (no fill within the window), `combo` and `comboEndsAt` go back to `0`. `bestCombo` stays. No lives are lost.
     - **Survival:** each failed order also costs one life. `lives` never goes below 0, even when more orders fail on one tick than there are lives left. With `secondChance` above 0, each failed order first draws `randomInt(rng.lives, 0, 99)` and keeps the life when the roll is below it. If any life was lost, `secondWind` becomes `true`.
 6. **End of run:** if the mode's end condition is met, `status` becomes `'ended'` and `step` stops here. No new orders are created.
-    - **Timed:** `tick >= TIMED_MODE_TICKS`. Ticks `0` to `TIMED_MODE_TICKS − 1` are playable.
+    - **Timed:** `tick >= MODES.timed.runTicks`. Ticks `0` to `MODES.timed.runTicks − 1` are playable.
     - **Survival:** `lives` is 0. Once ended, `applyAction` refuses every action, including `buyLife`.
     - **Puzzle:** no end condition yet (see Open items).
 7. **New orders:** with `rules = orderRules(state)`, while fewer than `rules.maxOpenOrders` orders are open, create one with `createOrder(nextOrderId, tick, rng.orders, crops, rules)`, add it to the **end** of `orders`, store the returned state in `rng.orders`, and add 1 to `nextOrderId`. **Small order:** with `smallOrderChance` above 0, each new order then draws `randomInt(rng.shrink, 0, 99)`; below the chance, every amount becomes `ceil(amount / 2)`, the value stays, and the order's `small` is set to `true` so the screen can mark it. **Second wind:** while `secondWind` is `true`, the first order made uses `orderTicks = scalePct(rules.orderTicks, secondWindPct)`, and `secondWind` becomes `false`. This also creates the first orders, on tick 1, and refills a slot the tick after an order is delivered or failed. If more orders are open than `maxOpenOrders` allows, none are removed; no new ones are made until the count drops.
@@ -166,7 +170,7 @@ Returns a **new** state. The steps run in this order, each one using the result 
 - Once `status` is `'ended'`, returns `state` unchanged.
 - While `upgradeOffer` is not `null`, returns `state` unchanged: time stops until `chooseUpgrade`.
 - Never changes `state` or anything inside it.
-- Never changes `score`, `ordersCompleted`, `coins`, `livesBought` or `powerUps`. Those only change through `applyAction`. `inventory` changes in `step` only when Helpful neighbor or Rot starts. `lives` only goes down in `step` (and up through `buyLife` and Extra heart). `activeEffects` gains entries through `usePowerUp` and lasting events; `step` only removes ended ones.
+- Never changes `score`, `ordersCompleted`, `coins`, `livesBought`, `bestCombo` or `powerUps`. Those only change through `applyAction`. `combo` only goes back to 0 in `step`; it only climbs through `applyAction`. `inventory` changes in `step` only when Helpful neighbor or Rot starts. `lives` only goes down in `step` (and up through `buyLife` and Extra heart). `activeEffects` gains entries through `usePowerUp` and lasting events; `step` only removes ended ones.
 - `rng.orders` changes only when orders are created (exactly two draws per order). `rng.upgrades` changes only when an upgrade offer is made (exactly two draws per card). `rng.events` changes only when an event is announced (two or three draws), Moles' block roll is made (one draw), or Birds (two per seeded plot) or Emergency order (two) start. `rng.lives` changes only on a failed order with Second chance (one draw each), and `rng.shrink` only on a new order with Small order (one draw each). `step` never touches `rng.harvest` or `rng.drops`. No stream's draws depend on another's, so upgrade picks, harvests, drops, power-up use and events never change which orders come next.
 - Deterministic: the same arguments always give an equal result, so the same seed and the same actions always give the same run.
 
@@ -232,15 +236,16 @@ Returns a **new** state. The steps run in this order, each one using the result 
 
 **`step`: orders** (run in Timed, where the order rules are the fixed constants)
 
-- The first step fills up to `MAX_OPEN_ORDERS` orders, with ids from 0, `expiresAt = tick + ORDER_TICKS`, and `nextOrderId` and `rng.orders` advanced to match `createOrder`.
-- Never opens more than `MAX_OPEN_ORDERS` orders.
+- In Timed, the first step fills up to `MODES.timed.openOrders` orders, with ids from 0, `expiresAt = tick + ORDER_TICKS`, and `nextOrderId` and `rng.orders` advanced to match `createOrder`.
+- Never opens more than `MODES.timed.openOrders` orders in Timed.
+- `orderRules` is `DEFAULT_ORDER_RULES` with `MODES.timed.openOrders` in Timed, and `DEFAULT_ORDER_RULES` in Puzzle.
 - An order is still open on its `expiresAt` tick and fails on the tick after: it is removed and `ordersFailed` goes up by 1.
 - A failed order is replaced on the same step with a new id, and the remaining orders keep their order.
 - A delivered order is replaced on the next step.
 
 **`step`: end of run**
 
-- Timed ends on tick `TIMED_MODE_TICKS` and creates no new orders on that step. After that, `step` changes nothing and `applyAction` returns `null`.
+- Timed ends on tick `MODES.timed.runTicks` and creates no new orders on that step. After that, `step` changes nothing and `applyAction` returns `null`.
 - Survival doesn't end by time while lives are left.
 
 **`step`: Survival lives and difficulty**
@@ -281,6 +286,17 @@ Returns a **new** state. The steps run in this order, each one using the result 
 - Harvest drops: kept when a slot is free, lost when not, never with power-ups off; `rng.drops` moves by the draws `rollDrop` used.
 - `usePowerUp` fires each shipped power-up's effect and removes its slot; it is refused in every case listed above.
 - `step` runs effects before growth and failed orders: an Order freeze started on the order's `expiresAt` tick keeps it from failing on the next step, and a crop pulled to the current tick is ready on that same step.
+
+**Timed combo**
+
+- `createGame` starts every mode with `combo`, `comboEndsAt` and `bestCombo` at 0.
+- The first fill scores ×1, sets `combo` to 1 and `comboEndsAt` to `tick + windowTicks`.
+- Fills in a row score `floor(value × comboPct(n) / 100)` for n = 0, 1, 2, …, and `bestCombo` follows.
+- At the cap, a fill scores `floor(value × capPct / 100)`.
+- The streak survives on tick `comboEndsAt` and is broken on the tick after.
+- A failed order breaks the streak, keeps `bestCombo`, and costs no life.
+- Finish one extends the streak; Finish all scores nothing and leaves `combo` and `comboEndsAt` as they were.
+- Survival fills score `order.value` and never touch the combo fields.
 
 `replay`, which rebuilds a run from its seed and action log, lives in `verification.ts` (see [verification.md](verification.md)).
 

@@ -66,7 +66,7 @@ Rules:
 - **Fails on the first problem** and reports the index of the entry that caused it, so a bad log is easy to debug.
 - **Deterministic:** the same arguments always give the same result. Replaying a run's log with its `finalTick` gives a state equal (`toEqual`) to the run's final state.
 - **Never changes `log`.**
-- Entries on an ended tick are not allowed. In Timed the run ends on tick `TIMED_MODE_TICKS`, so the last tick an action can be logged on is `TIMED_MODE_TICKS − 1`.
+- Entries on an ended tick are not allowed. In Timed the run ends on tick `MODES.timed.runTicks`, so the last tick an action can be logged on is `MODES.timed.runTicks − 1`.
 
 ## Tests (`verification.test.ts`)
 

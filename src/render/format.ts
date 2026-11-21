@@ -13,7 +13,8 @@ import type {
     UpgradeDef,
     UpgradeTarget
 } from "../sim/types"
-import { TICKS_PER_SECOND, TIMED_MODE_TICKS } from "../sim/game_constants"
+import { TICKS_PER_SECOND } from "../sim/game_constants"
+import { MODES, comboPct } from "../sim/modes"
 import { progress } from "../sim/plot"
 import { timeLeft } from "../sim/orders"
 import { runLevel } from "../sim/difficulty"
@@ -76,17 +77,21 @@ function targetText(target: UpgradeTarget): string {
 }
 
 // Summary on the game-over panel. Levels are shown counted from 1.
-// Survival lists how long the run lasted; Timed always lasts the same time, so it
-// lists the failed orders instead.
+// Both modes list filled and failed orders; Survival also lists how long the run lasted
+// (Timed always lasts the same time) and the level reached.
 function gameOverText(state: GameState): string {
-    const lines = [`Score ${state.score}`, `Orders filled ${state.ordersCompleted}`]
+    const lines = [
+        `Score ${state.score}`,
+        `Orders filled ${state.ordersCompleted}`,
+        `Orders failed ${state.ordersFailed}`
+    ]
     if (state.mode === "survival") {
         lines.push(
             `Time survived ${formatClock(state.tick)}`,
             `Level reached ${runLevel(state) + 1}`
         )
-    } else {
-        lines.push(`Orders failed ${state.ordersFailed}`)
+    } else if (state.mode === "timed") {
+        lines.push(`Best combo ${state.bestCombo}`)
     }
     return lines.join("\n")
 }
@@ -116,7 +121,7 @@ function modeButtonText(mode: GameMode): string {
         case "survival":
             return "Survival\nLast as long as you can"
         case "timed":
-            return `Timed\nBest score in ${formatClock(TIMED_MODE_TICKS)}`
+            return `Timed\nBest score in ${formatClock(MODES.timed.runTicks)}`
         case "puzzle":
             return "Puzzle\nSolve handmade levels"
     }
@@ -133,7 +138,7 @@ function formatClock(ticks: number): string {
 // Timed mode counts down to the end of the run; other modes count up.
 function timerText(state: GameState): string {
     return state.mode === "timed"
-        ? formatClock(TIMED_MODE_TICKS - state.tick)
+        ? formatClock(MODES.timed.runTicks - state.tick)
         : formatClock(state.tick)
 }
 
@@ -186,10 +191,12 @@ function statRows(state: GameState, crops: CropTable): [string, string][] {
                   ["Coins", String(state.coins)]
               ]
             : []
+    const timed: [string, string][] = state.mode === "timed" ? [["Combo", comboText(state)]] : []
     return [
         ["Mode", modeName(state.mode)],
         [state.mode === "timed" ? "Time left" : "Time", timerText(state)],
         ["Score", String(state.score)],
+        ...timed,
         ...survival,
         ["Filled", String(state.ordersCompleted)],
         ["Failed", String(state.ordersFailed)],
@@ -199,12 +206,29 @@ function statRows(state: GameState, crops: CropTable): [string, string][] {
     ]
 }
 
+// Combo row: the multiplier the next filled order gets, then the time left to keep the streak.
+// "x1" with no streak.
+function comboText(state: GameState): string {
+    const mult = `x${comboPct(state.combo) / 100}`
+    if (state.combo === 0) return mult
+    return `${mult} ${formatClock(state.comboEndsAt - state.tick)}`
+}
+
 // Label on a plant-picker button: crop id and how long it takes to grow.
 function cropButtonText(crop: Crop): string {
     return `${crop.id}\n${formatClock(crop.growTicks)}`
 }
 
-export { formatClock, timerText, plotText, orderText, nextOrderText, statRows, cropButtonText }
+export {
+    formatClock,
+    timerText,
+    comboText,
+    plotText,
+    orderText,
+    nextOrderText,
+    statRows,
+    cropButtonText
+}
 export { isFogged }
 
 // Share of an order's own time limit still left, from 1 (just opened) to 0 (last tick).

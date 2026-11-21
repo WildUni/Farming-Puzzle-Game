@@ -181,7 +181,7 @@ Every plot becomes `{ state: "empty" }`. Returns the same array when every plot 
 
 - No Phaser or browser imports. Pure: never changes its inputs.
 - No randomness. Effects never draw from any stream.
-- Times are ticks. No effect changes `tick` or the run timer (`TIMED_MODE_TICKS`).
+- Times are ticks. No effect changes `tick` or the run timer (`MODES.timed.runTicks`).
 - While `step` is stopped (run ended, or an upgrade offer open), `tickEffects` isn't called, so lasting effects stop with the rest of the clock. Their ticks are not used up while time stands still.
 
 ## Tests (`effects.test.ts`)

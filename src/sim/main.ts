@@ -12,15 +12,11 @@ import type {
     RNGState
 } from "./types"
 import { randomInt, seedRNG, seedStream } from "./mulberry"
-import {
-    START_PLOTS,
-    TIMED_MODE_TICKS,
-    DEFAULT_ORDER_RULES,
-    ORDERS_PER_UPGRADE
-} from "./game_constants"
+import { START_PLOTS, DEFAULT_ORDER_RULES, ORDERS_PER_UPGRADE } from "./game_constants"
 import { plant, harvest, updateGrowth } from "./plot"
 import { createOrder, fulfill, isExpired, timeLeft } from "./orders"
 import { DIFFICULTY, runLevel, orderRulesFor, lifePrice } from "./difficulty"
+import { MODES, comboPct } from "./modes"
 import {
     UPGRADES,
     modifiersFor,
@@ -73,7 +69,7 @@ function createGame(seed: RNGSeed, config: GameConfig): GameState {
         score: 0,
         ordersCompleted: 0,
         ordersFailed: 0,
-        lives: config.mode === "survival" ? DIFFICULTY.startLives : 0,
+        lives: config.mode === "survival" ? MODES.survival.startLives : 0,
         coins: 0,
         livesBought: 0,
         upgrades: [],
@@ -85,13 +81,20 @@ function createGame(seed: RNGSeed, config: GameConfig): GameState {
         allowEvents: config.allowEvents,
         event: null,
         nextEventAt: EVENTS.firstEventTicks,
-        secondWind: false
+        secondWind: false,
+        combo: 0,
+        comboEndsAt: 0,
+        bestCombo: 0
     }
 }
 
 // The rules step uses for new orders: the current level in Survival (slowed by Steady pace),
-// fixed otherwise. Survival order timers are scaled by the orderTimePct upgrade modifier.
+// fixed otherwise, with Timed keeping MODES.timed.openOrders open. Survival order timers are
+// scaled by the orderTimePct upgrade modifier.
 function orderRules(state: GameState): OrderRules {
+    if (state.mode === "timed") {
+        return { ...DEFAULT_ORDER_RULES, maxOpenOrders: MODES.timed.openOrders }
+    }
     if (state.mode !== "survival") return DEFAULT_ORDER_RULES
     const rules = orderRulesFor(runLevel(state))
     const { orderTimePct } = modifiersFor(state.upgrades)
@@ -103,9 +106,9 @@ function lifePriceFor(state: GameState): number {
     return scalePct(lifePrice(state.livesBought), modifiersFor(state.upgrades).lifePricePct)
 }
 
-// Most lives a Survival run can hold: DIFFICULTY.maxLives plus Extra heart's extraLives.
+// Most lives a Survival run can hold: MODES.survival.maxLives plus Extra heart's extraLives.
 function maxLivesFor(state: GameState): number {
-    return DIFFICULTY.maxLives + modifiersFor(state.upgrades).extraLives
+    return MODES.survival.maxLives + modifiersFor(state.upgrades).extraLives
 }
 
 // True when a buyLife action would succeed. The buy button uses this.
@@ -288,7 +291,10 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
 // Fills `order`: removes it, adds 1 to ordersCompleted, adds its value to score when `scored`,
 // and in Survival pays coins: the base pay, Big tips, Generous customer / Gold rush, and Early
 // bird when at least half the order's time is left. deliver and the Finish power-ups use it.
+// In Timed a scored fill is multiplied by the combo, then extends the streak (see withCombo).
 function completeOrder(state: GameState, order: Order, scored: boolean): GameState {
+    const combo = state.mode === "timed" && scored
+    const points = combo ? Math.floor((order.value * comboPct(state.combo)) / 100) : order.value
     const m = modifiersFor(state.upgrades)
     const early = timeLeft(order, state.tick) * 2 >= order.timeLimit ? m.earlyBirdCoins : 0
     const pay =
@@ -296,12 +302,24 @@ function completeOrder(state: GameState, order: Order, scored: boolean): GameSta
         m.coinsPerOrder +
         deliverBonusAt(state.activeEffects, state.tick) +
         early
-    return {
+    const filled: GameState = {
         ...state,
         orders: state.orders.filter((o) => o.id !== order.id),
-        score: scored ? state.score + order.value : state.score,
+        score: scored ? state.score + points : state.score,
         ordersCompleted: state.ordersCompleted + 1,
         coins: state.mode === "survival" ? state.coins + pay : state.coins
+    }
+    return combo ? withCombo(filled) : filled
+}
+
+// One more order in the streak: combo + 1, the window restarts from this tick, best combo kept.
+function withCombo(state: GameState): GameState {
+    const combo = state.combo + 1
+    return {
+        ...state,
+        combo,
+        comboEndsAt: state.tick + MODES.timed.combo.windowTicks,
+        bestCombo: Math.max(state.bestCombo, combo)
     }
 }
 
@@ -379,7 +397,7 @@ function nextOrderPreview(state: GameState, crops: CropTable): Order | null {
 function isRunOver(state: GameState): boolean {
     switch (state.mode) {
         case "timed":
-            return state.tick >= TIMED_MODE_TICKS
+            return state.tick >= MODES.timed.runTicks
         case "survival":
             return state.lives <= 0
         case "puzzle":
@@ -446,6 +464,8 @@ function step(state: GameState, crops: CropTable): GameState {
         lives = Math.max(0, lives - lost)
         if (lost > 0) secondWind = true
     }
+    // Timed: a failed order breaks the combo, and so does a window with no order filled.
+    const comboBroken = ev.combo > 0 && (failed > 0 || tick > ev.comboEndsAt)
 
     const next: GameState = {
         ...ev,
@@ -455,6 +475,8 @@ function step(state: GameState, crops: CropTable): GameState {
         ordersFailed,
         lives,
         secondWind,
+        combo: comboBroken ? 0 : ev.combo,
+        comboEndsAt: comboBroken ? 0 : ev.comboEndsAt,
         rng: { ...ev.rng, lives: livesRng },
         activeEffects: moved.active
     }

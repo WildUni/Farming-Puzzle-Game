@@ -27,6 +27,7 @@ import {
     targetText,
     tierName,
     gameOverText,
+    comboText,
     gameOverTitle,
     modeName,
     modeButtonText,
@@ -36,7 +37,8 @@ import {
 import { createGame } from "../sim/main"
 import { buildCropTable } from "../sim/plot"
 import { lifePrice, levelFor, DIFFICULTY } from "../sim/difficulty"
-import { TIMED_MODE_TICKS, ORDER_TICKS } from "../sim/game_constants"
+import { ORDER_TICKS } from "../sim/game_constants"
+import { MODES, comboPct } from "../sim/modes"
 import { UPGRADES, effectAmount, scalePct } from "../sim/upgrades"
 import { POWER_UPS } from "../sim/powerups"
 import { EVENTS } from "../sim/events"
@@ -66,8 +68,8 @@ describe("formatClock", () => {
 
 describe("timerText", () => {
     it("counts down in timed mode", () => {
-        expect(timerText(game("timed"))).toBe(formatClock(TIMED_MODE_TICKS))
-        expect(timerText({ ...game("timed"), tick: TIMED_MODE_TICKS })).toBe("0:00")
+        expect(timerText(game("timed"))).toBe(formatClock(MODES.timed.runTicks))
+        expect(timerText({ ...game("timed"), tick: MODES.timed.runTicks })).toBe("0:00")
     })
 
     it("counts up in survival mode", () => {
@@ -114,24 +116,33 @@ describe("PLAYABLE_MODES, modeName and modeButtonText", () => {
     it("describes each playable mode on a second line", () => {
         expect(modeButtonText("survival")).toBe("Survival\nLast as long as you can")
         expect(modeButtonText("timed")).toBe(
-            `Timed\nBest score in ${formatClock(TIMED_MODE_TICKS)}`
+            `Timed\nBest score in ${formatClock(MODES.timed.runTicks)}`
         )
         expect(modeButtonText("timed")).toBe("Timed\nBest score in 5:00")
     })
 })
 
 describe("statRows", () => {
-    it("shows Timed's countdown, score, order counts and every crop sorted", () => {
+    it("shows Timed's countdown, score, combo, order counts and every crop sorted", () => {
         const state = { ...game("timed"), score: 12, ordersCompleted: 2, ordersFailed: 1 }
         expect(statRows({ ...state, inventory: { garlic: 5 } }, crops)).toEqual([
             ["Mode", "Timed"],
             ["Time left", "5:00"],
             ["Score", "12"],
+            ["Combo", "x1"],
             ["Filled", "2"],
             ["Failed", "1"],
             ["carrot", "0"],
             ["garlic", "5"]
         ])
+    })
+
+    it("shows the combo multiplier and the time left to keep it", () => {
+        const s = { ...game("timed"), tick: 100, combo: 3, comboEndsAt: 150 }
+        expect(comboText(s)).toBe(`x${comboPct(3) / 100} 0:05`)
+        expect(comboText({ ...game("timed"), combo: 0 })).toBe("x1")
+        const labels = statRows({ ...game("survival"), combo: 3 }, crops).map(([l]) => l)
+        expect(labels).not.toContain("Combo")
     })
 
     it("adds level, lives and coins in Survival", () => {
@@ -188,7 +199,9 @@ describe("buyLifeText", () => {
     })
 
     it("says Lives full at the cap", () => {
-        expect(buyLifeText({ ...game("survival"), lives: DIFFICULTY.maxLives })).toBe("Lives full")
+        expect(buyLifeText({ ...game("survival"), lives: MODES.survival.maxLives })).toBe(
+            "Lives full"
+        )
     })
 
     it("applies the life price upgrade", () => {
@@ -263,18 +276,27 @@ describe("gameOverText", () => {
     it("shows score and order counts in Timed", () => {
         const state = {
             ...game("timed"),
-            tick: TIMED_MODE_TICKS,
+            tick: MODES.timed.runTicks,
             score: 340,
             ordersCompleted: 12,
             ordersFailed: 3
         }
-        expect(gameOverText(state)).toBe("Score 340\nOrders filled 12\nOrders failed 3")
+        expect(gameOverText({ ...state, bestCombo: 7 })).toBe(
+            "Score 340\nOrders filled 12\nOrders failed 3\nBest combo 7"
+        )
     })
 
-    it("shows score, orders filled, time survived and level reached in Survival", () => {
-        const state = { ...game("survival"), tick: 3050, score: 120, ordersCompleted: 7 }
+    it("shows score, order counts, time survived and level reached in Survival", () => {
+        const state = {
+            ...game("survival"),
+            tick: 3050,
+            score: 120,
+            ordersCompleted: 7,
+            ordersFailed: 3
+        }
         expect(gameOverText(state)).toBe(
-            `Score 120\nOrders filled 7\nTime survived 5:05\nLevel reached ${levelFor(7) + 1}`
+            "Score 120\nOrders filled 7\nOrders failed 3\nTime survived 5:05\n" +
+                `Level reached ${levelFor(7) + 1}`
         )
     })
 })

@@ -8,7 +8,8 @@ One spec per module in `src/sim/`. Each spec says what the module is for, what i
 | `src/sim/game_constants.ts` | [game_constants.md](game_constants.md) | Tuning numbers (tick rate, time limits, starting plots)                |
 | `src/sim/main.ts`           | [main.md](main.md)                     | Whole-game functions: `createGame`, `applyAction`, `step`              |
 | `src/sim/mulberry.ts`       | [mulberry.md](mulberry.md)             | Seeded random number generator                                         |
-| `src/sim/difficulty.ts`     | [difficulty.md](difficulty.md)         | Survival lives, coins, life prices and difficulty levels               |
+| `src/sim/modes.ts`          | [modes.md](modes.md)                   | Per-mode rules: starting lives, lives cap, Timed length and orders     |
+| `src/sim/difficulty.ts`     | [difficulty.md](difficulty.md)         | Survival coins, life prices and difficulty levels                      |
 | `src/sim/upgrades.ts`       | [upgrades.md](upgrades.md)             | Upgrades: tiers, pools, offers, picks and the modifiers they add up to |
 | `src/sim/effects.ts`        | [effects.md](effects.md)               | Instant and lasting effects that move crops' and orders' clocks        |
 | `src/sim/powerups.ts`       | [powerups.md](powerups.md)             | Power-ups: drops from harvests, held slots, using them                 |

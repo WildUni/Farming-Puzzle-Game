@@ -30,23 +30,24 @@ Name on the first line, description on the second:
 | survival | `Survival\nLast as long as you can` |
 | timed    | `Timed\nBest score in 5:00`         |
 
-The Timed length comes from `TIMED_MODE_TICKS`, so it stays right if the constant changes.
+The Timed length comes from `MODES.timed.runTicks` (`modes.json`), so it stays right if the config changes.
 
 ## Heads-up display (stats table)
 
 `statRows(state, crops)` gives the rows, in order. The two modes show different stats:
 
-| Row    | Survival                                                   | Timed                                |
-| ------ | ---------------------------------------------------------- | ------------------------------------ |
-| Mode   | `Survival`                                                 | `Timed`                              |
-| Time   | `Time`: counts **up** from 0:00                            | `Time left`: counts **down** to 0:00 |
-| Score  | yes                                                        | yes                                  |
-| Level  | yes, counted from 1                                        | no                                   |
-| Lives  | yes, as full and empty hearts up to the cap (`heartsText`) | no                                   |
-| Coins  | yes                                                        | no                                   |
-| Filled | yes                                                        | yes                                  |
-| Failed | yes                                                        | yes                                  |
-| Crops  | one row per crop, sorted                                   | one row per crop, sorted             |
+| Row    | Survival                                                   | Timed                                             |
+| ------ | ---------------------------------------------------------- | ------------------------------------------------- |
+| Mode   | `Survival`                                                 | `Timed`                                           |
+| Time   | `Time`: counts **up** from 0:00                            | `Time left`: counts **down** to 0:00              |
+| Score  | yes                                                        | yes                                               |
+| Combo  | no                                                         | `comboText`: `x1.75 0:05`, or `x1` with no streak |
+| Level  | yes, counted from 1                                        | no                                                |
+| Lives  | yes, as full and empty hearts up to the cap (`heartsText`) | no                                                |
+| Coins  | yes                                                        | no                                                |
+| Filled | yes                                                        | yes                                               |
+| Failed | yes                                                        | yes                                               |
+| Crops  | one row per crop, sorted                                   | one row per crop, sorted                          |
 
 - Timed has no lives, coins or levels (see [main.md](main.md)), so those rows are left out instead of showing zeros.
 - The **Buy life** button only shows in Survival. At the lives cap it reads `Lives full` and is disabled.
@@ -126,8 +127,8 @@ Shown over the board as soon as `status` is `'ended'`.
 
 - Title (`gameOverTitle`): `Game over` in Survival (lives ran out), `Time's up` in Timed.
 - Summary (`gameOverText`), one item per line:
-    - Survival: `Score`, `Orders filled`, `Time survived`, `Level reached`.
-    - Timed: `Score`, `Orders filled`, `Orders failed`.
+    - Survival: `Score`, `Orders filled`, `Orders failed`, `Time survived`, `Level reached`.
+    - Timed: `Score`, `Orders filled`, `Orders failed`, `Best combo` (the longest streak).
 - Two buttons:
     - **Restart:** a new run of the same mode on a new random seed.
     - **Menu:** back to the mode select, with the mode just played selected.
@@ -160,8 +161,9 @@ Three sections, top to bottom:
 ## Tests (`format.test.ts`)
 
 - `PLAYABLE_MODES` is Survival then Timed.
-- `modeName` and `modeButtonText` for each mode; the Timed description follows `TIMED_MODE_TICKS`.
-- `statRows`: the exact rows for Timed, and for Survival; Timed has no Level, Lives or Coins rows.
+- `modeName` and `modeButtonText` for each mode; the Timed description follows `MODES.timed.runTicks`.
+- `statRows`: the exact rows for Timed, and for Survival; Timed has no Level, Lives or Coins rows, and Survival no Combo row.
+- `comboText` shows the multiplier and the time left on the streak, and `x1` with none.
 - `gameOverTitle` and `gameOverText` for each mode.
 - `debugText` includes the mode, and `DEBUGGED` only when the run was changed by the debug menu.
 - `upgradeCardText` shows name, tier, description with that tier's values (a tiered and a non-tiered example, and one with two effects) and the copy count after picking.
@@ -182,6 +184,7 @@ Three sections, top to bottom:
 
 - [ ] Plot upgrades: pick the plot on the board itself (valid plots highlighted, the rest greyed out) instead of a row of `Plot N` buttons, once a plot upgrade can be offered. Greenhouse is the first (see [events.md](events.md)).
 
-- [ ] Combo multiplier and rush waves in Timed (Day 5), with a combo row in the HUD and best combo on the summary.
+- [x] Combo multiplier in Timed, with a Combo row in the HUD and best combo on the summary.
+- [ ] Rush waves in Timed (Day 5), with a warning banner.
 - [ ] High score per mode on the mode select (Day 5 saves).
 - [ ] Puzzle in the picker once puzzle levels exist.

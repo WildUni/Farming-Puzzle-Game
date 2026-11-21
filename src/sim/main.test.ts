@@ -17,12 +17,12 @@ import {
     START_PLOTS,
     MAX_OPEN_ORDERS,
     ORDER_TICKS,
-    TIMED_MODE_TICKS,
     DEFAULT_ORDER_RULES,
     ORDERS_PER_UPGRADE,
     UPGRADE_CHOICES
 } from "./game_constants"
 import { DIFFICULTY, lifePrice, levelFor, orderRulesFor, runLevel } from "./difficulty"
+import { MODES, comboPct } from "./modes"
 import {
     UPGRADES,
     effectAmount,
@@ -109,7 +109,7 @@ describe("createGame", () => {
         expect(g.nextOrderId).toBe(0)
         expect(g.ordersCompleted).toBe(0)
         expect(g.ordersFailed).toBe(0)
-        expect(g.lives).toBe(DIFFICULTY.startLives)
+        expect(g.lives).toBe(MODES.survival.startLives)
         expect(g.coins).toBe(0)
         expect(g.livesBought).toBe(0)
         expect(g.upgrades).toEqual([])
@@ -373,14 +373,14 @@ describe("applyAction: buyLife", () => {
     })
 
     it("is refused at the lives cap, which Extra heart raises", () => {
-        expect(maxLivesFor(makeState())).toBe(DIFFICULTY.maxLives)
-        const full = makeState({ coins: 1000, lives: DIFFICULTY.maxLives })
+        expect(maxLivesFor(makeState())).toBe(MODES.survival.maxLives)
+        const full = makeState({ coins: 1000, lives: MODES.survival.maxLives })
         expect(applyAction(full, buy, crops)).toBeNull()
         expect(canBuyLife(full)).toBe(false)
-        expect(canBuyLife({ ...full, lives: DIFFICULTY.maxLives - 1 })).toBe(true)
+        expect(canBuyLife({ ...full, lives: MODES.survival.maxLives - 1 })).toBe(true)
         const hearty = { ...full, upgrades: [own("extraHeart", "rare")] }
-        expect(maxLivesFor(hearty)).toBe(DIFFICULTY.maxLives + 1)
-        expect(apply(hearty, buy).lives).toBe(DIFFICULTY.maxLives + 1)
+        expect(maxLivesFor(hearty)).toBe(MODES.survival.maxLives + 1)
+        expect(apply(hearty, buy).lives).toBe(MODES.survival.maxLives + 1)
     })
 
     it("returns null when coins are one short", () => {
@@ -506,16 +506,18 @@ describe("step: growth", () => {
     })
 })
 
-// Run in Timed, where the order rules are the fixed constants.
+// Run in Timed, where the order rules are the fixed constants with MODES.timed.openOrders open.
+const TIMED_OPEN = MODES.timed.openOrders
+
 describe("step: orders", () => {
-    it("fills up to MAX_OPEN_ORDERS orders on the first step", () => {
+    it("fills up to TIMED_OPEN orders on the first step", () => {
         const state = createGame(3, timed)
         const next = step(state, crops)
 
         // Build the expected orders the same way step should.
         let rng = state.rng.orders
         const expected: Order[] = []
-        for (let id = 0; id < MAX_OPEN_ORDERS; id++) {
+        for (let id = 0; id < TIMED_OPEN; id++) {
             const [order, after] = createOrder(id, 1, rng, crops)
             expected.push(order)
             rng = after
@@ -523,25 +525,26 @@ describe("step: orders", () => {
 
         expect(next.orders).toEqual(expected)
         expect(next.orders.every((o) => o.expiresAt === 1 + ORDER_TICKS)).toBe(true)
-        expect(next.nextOrderId).toBe(MAX_OPEN_ORDERS)
+        expect(next.nextOrderId).toBe(TIMED_OPEN)
         expect(next.rng.orders).toBe(rng)
     })
 
-    it("never opens more than MAX_OPEN_ORDERS orders", () => {
+    it("never opens more than TIMED_OPEN orders", () => {
         let state = createGame(5, timed)
         for (let i = 0; i < 2000; i++) {
             state = step(state, crops)
-            expect(state.orders.length).toBeLessThanOrEqual(MAX_OPEN_ORDERS)
+            expect(state.orders.length).toBeLessThanOrEqual(TIMED_OPEN)
         }
     })
 
     it("keeps an order open on its expiresAt tick and fails it on the tick after", () => {
         const order = makeOrder({ id: 0, expiresAt: 60 })
         const other = makeOrder({ id: 1, expiresAt: 900 })
-        let state = makeTimed({ tick: 59, orders: [order, other], nextOrderId: 2 })
+        const third = makeOrder({ id: 2, expiresAt: 900 })
+        let state = makeTimed({ tick: 59, orders: [order, other, third], nextOrderId: 3 })
 
         state = step(state, crops) // tick 60
-        expect(state.orders.map((o) => o.id)).toEqual([0, 1])
+        expect(state.orders.map((o) => o.id)).toEqual([0, 1, 2])
         expect(state.ordersFailed).toBe(0)
 
         state = step(state, crops) // tick 61
@@ -552,13 +555,15 @@ describe("step: orders", () => {
     it("replaces a failed order on the same step and keeps the others in order", () => {
         const a = makeOrder({ id: 0, expiresAt: 900 })
         const b = makeOrder({ id: 1, expiresAt: 60 })
-        const state = makeTimed({ tick: 60, orders: [a, b], nextOrderId: 2 })
+        const c = makeOrder({ id: 2, expiresAt: 900 })
+        const state = makeTimed({ tick: 60, orders: [a, b, c], nextOrderId: 3 })
         const next = step(state, crops)
-        expect(next.orders).toHaveLength(MAX_OPEN_ORDERS)
+        expect(next.orders).toHaveLength(TIMED_OPEN)
         expect(next.orders[0]).toEqual(a)
-        expect(next.orders[1].id).toBe(2)
-        expect(next.orders[1].expiresAt).toBe(61 + ORDER_TICKS)
-        expect(next.nextOrderId).toBe(3)
+        expect(next.orders[1]).toEqual(c)
+        expect(next.orders[2].id).toBe(3)
+        expect(next.orders[2].expiresAt).toBe(61 + ORDER_TICKS)
+        expect(next.nextOrderId).toBe(4)
     })
 
     it("replaces a delivered order on the next step", () => {
@@ -566,23 +571,23 @@ describe("step: orders", () => {
         const target = state.orders[0]
         state = { ...state, inventory: { ...target.required } }
         state = apply(state, { type: "deliver", orderId: target.id })
-        expect(state.orders).toHaveLength(MAX_OPEN_ORDERS - 1)
+        expect(state.orders).toHaveLength(TIMED_OPEN - 1)
 
         state = step(state, crops)
-        expect(state.orders).toHaveLength(MAX_OPEN_ORDERS)
-        expect(state.orders[state.orders.length - 1].id).toBe(MAX_OPEN_ORDERS)
+        expect(state.orders).toHaveLength(TIMED_OPEN)
+        expect(state.orders[state.orders.length - 1].id).toBe(TIMED_OPEN)
         expect(state.ordersFailed).toBe(0)
     })
 })
 
 describe("step: end of run", () => {
-    it("ends a Timed run on tick TIMED_MODE_TICKS", () => {
-        let state = stepN(createGame(2, timed), TIMED_MODE_TICKS - 1)
+    it("ends a Timed run on tick MODES.timed.runTicks", () => {
+        let state = stepN(createGame(2, timed), MODES.timed.runTicks - 1)
         expect(state.status).toBe("running")
 
         const before = state
         state = step(state, crops)
-        expect(state.tick).toBe(TIMED_MODE_TICKS)
+        expect(state.tick).toBe(MODES.timed.runTicks)
         expect(state.status).toBe("ended")
         // No new orders on the ending step.
         expect(state.nextOrderId).toBe(before.nextOrderId)
@@ -590,21 +595,26 @@ describe("step: end of run", () => {
     })
 
     it("changes nothing after a Timed run ends, and refuses actions", () => {
-        const ended = stepN(createGame(2, timed), TIMED_MODE_TICKS)
+        const ended = stepN(createGame(2, timed), MODES.timed.runTicks)
         expect(step(ended, crops)).toBe(ended)
         expect(applyAction(ended, { type: "plant", plot: 0, cropId: "garlic" }, crops)).toBeNull()
     })
 
     it("does not end a Survival run by time while lives are left", () => {
-        const state = stepN(makeState({ lives: 1000 }), TIMED_MODE_TICKS + 10)
+        const state = stepN(makeState({ lives: 1000 }), MODES.timed.runTicks + 10)
         expect(state.status).toBe("running")
         expect(state.lives).toBeGreaterThan(0)
     })
 })
 
 describe("orderRules", () => {
-    it("uses the fixed constants outside Survival", () => {
-        expect(orderRules(makeTimed({ ordersCompleted: 50 }))).toEqual(DEFAULT_ORDER_RULES)
+    it("uses the fixed constants in Timed, with MODES.timed.openOrders open", () => {
+        expect(orderRules(makeTimed({ ordersCompleted: 50 }))).toEqual({
+            ...DEFAULT_ORDER_RULES,
+            maxOpenOrders: MODES.timed.openOrders
+        })
+        expect(MODES.timed.openOrders).toBe(3)
+        expect(orderRules(makeTimed({ mode: "puzzle" }))).toEqual(DEFAULT_ORDER_RULES)
         expect(DEFAULT_ORDER_RULES.maxOpenOrders).toBe(MAX_OPEN_ORDERS)
         expect(DEFAULT_ORDER_RULES.orderTicks).toBe(ORDER_TICKS)
     })
@@ -627,7 +637,7 @@ describe("step: Survival lives and difficulty", () => {
         })
         const next = step(state, crops)
         expect(next.ordersFailed).toBe(1)
-        expect(next.lives).toBe(DIFFICULTY.startLives - 1)
+        expect(next.lives).toBe(MODES.survival.startLives - 1)
         expect(next.status).toBe("running")
     })
 
@@ -679,7 +689,7 @@ describe("step: Survival lives and difficulty", () => {
 
     it("ends an idle run after a fixed number of ticks", () => {
         const { orderTicks: T, maxOpenOrders: k } = orderRulesFor(0)
-        const L = DIFFICULTY.startLives
+        const L = MODES.survival.startLives
         const endTick = Math.ceil(L / k) * (T + 1) + 1
 
         let state = createGame(11, config)
@@ -1335,7 +1345,7 @@ describe("upgrades: rules added with the second batch", () => {
         // Past the cap (2) a copy adds nothing.
         const two = [own("extraHeart", "rare"), own("extraHeart", "rare")]
         expect(withUpgrade(makeState({ upgrades: two }), own("extraHeart", "rare")).lives).toBe(
-            DIFFICULTY.startLives
+            MODES.survival.startLives
         )
     })
 
@@ -1363,7 +1373,9 @@ describe("upgrades: rules added with the second batch", () => {
             expect(next.rng.lives).toBe(nextValue(s.rng.lives)[1])
             outcomes.add(next.lives)
         }
-        expect(outcomes).toEqual(new Set([DIFFICULTY.startLives, DIFFICULTY.startLives - 1]))
+        expect(outcomes).toEqual(
+            new Set([MODES.survival.startLives, MODES.survival.startLives - 1])
+        )
         const plain = { ...makeState({ tick: 100, orders: [makeOrder({ expiresAt: 100 })] }) }
         expect(step(plain, crops).rng.lives).toBe(plain.rng.lives)
     })
@@ -1456,5 +1468,110 @@ describe("power-ups: second batch", () => {
         expect(applyAction(busy, { type: "usePowerUp", slot: 0 }, crops)).toBeNull()
         const off = holding(["goodOmen"], { allowEvents: false })
         expect(applyAction(off, { type: "usePowerUp", slot: 0 }, crops)).toBeNull()
+    })
+})
+
+describe("Timed combo", () => {
+    const COMBO = MODES.timed.combo
+    const deliver = (orderId: number): Action => ({ type: "deliver", orderId })
+
+    // A Timed game at `tick` with the given orders and enough carrots for all of them.
+    function ready(orders: Order[], overrides: Partial<GameState> = {}): GameState {
+        return makeTimed({ tick: 100, orders, inventory: { carrot: 99 }, ...overrides })
+    }
+
+    it("createGame starts with no streak", () => {
+        for (const mode of ["survival", "timed"] as const) {
+            const g = createGame(1, { mode, allowPowerUps: false, allowEvents: false })
+            expect([g.combo, g.comboEndsAt, g.bestCombo]).toEqual([0, 0, 0])
+        }
+    })
+
+    it("the first fill scores x1, then starts the streak and its window", () => {
+        const next = apply(ready([makeOrder({ id: 0, value: 24 })]), deliver(0))
+        expect(next.score).toBe(24)
+        expect(next.combo).toBe(1)
+        expect(next.comboEndsAt).toBe(100 + COMBO.windowTicks)
+        expect(next.bestCombo).toBe(1)
+    })
+
+    it("each fill in a row scores the multiplier built so far, rounding down", () => {
+        const orders = [0, 1, 2].map((id) => makeOrder({ id, value: 10 }))
+        let s = ready(orders)
+        s = apply(s, deliver(0))
+        s = apply(s, deliver(1))
+        s = apply(s, deliver(2))
+        const expected = [0, 1, 2].reduce(
+            (sum, combo) => sum + Math.floor((10 * comboPct(combo)) / 100),
+            0
+        )
+        expect(s.score).toBe(expected)
+        expect(s.combo).toBe(3)
+        expect(s.bestCombo).toBe(3)
+    })
+
+    it("comboPct climbs by stepPct and stops at capPct", () => {
+        expect(comboPct(0)).toBe(100)
+        expect(comboPct(1)).toBe(100 + COMBO.stepPct)
+        expect(comboPct(1000)).toBe(COMBO.capPct)
+        const capped = apply(ready([makeOrder({ id: 0, value: 20 })], { combo: 1000 }), deliver(0))
+        expect(capped.score).toBe(Math.floor((20 * COMBO.capPct) / 100))
+    })
+
+    it("keeps the streak through comboEndsAt and breaks it on the tick after", () => {
+        // Keep orders open far into the future so none fail.
+        const far = [0, 1, 2].map((id) => makeOrder({ id, expiresAt: 100_000 }))
+        let s = makeTimed({ tick: 49, orders: far, nextOrderId: 3, combo: 2, comboEndsAt: 50 })
+        s = step(s, crops) // tick 50
+        expect(s.combo).toBe(2)
+        s = step(s, crops) // tick 51
+        expect(s.combo).toBe(0)
+        expect(s.comboEndsAt).toBe(0)
+    })
+
+    it("a failed order breaks the combo, keeps the best, and costs no life", () => {
+        const failing = makeOrder({ id: 0, expiresAt: 99 })
+        const s = makeTimed({
+            tick: 99,
+            orders: [failing],
+            nextOrderId: 1,
+            combo: 4,
+            comboEndsAt: 500,
+            bestCombo: 6
+        })
+        const next = step(s, crops) // tick 100: the order fails
+        expect(next.ordersFailed).toBe(1)
+        expect(next.combo).toBe(0)
+        expect(next.bestCombo).toBe(6)
+        expect(next.lives).toBe(0)
+        expect(next.status).toBe("running")
+    })
+
+    it("Finish one extends the streak; Finish all neither scores nor builds it", () => {
+        const on: GameConfig = { mode: "timed", allowPowerUps: true, allowEvents: false }
+        const orders = [makeOrder({ id: 1, value: 10 }), makeOrder({ id: 2, value: 10 })]
+        const base = { ...createGame(1, on), tick: 100, orders, combo: 1, comboEndsAt: 120 }
+
+        const one = apply(
+            { ...base, powerUps: ["finishOne"] },
+            {
+                type: "usePowerUp",
+                slot: 0,
+                target: 1
+            }
+        )
+        expect(one.score).toBe(Math.floor((10 * comboPct(1)) / 100))
+        expect(one.combo).toBe(2)
+
+        const all = apply({ ...base, powerUps: ["finishAll"] }, { type: "usePowerUp", slot: 0 })
+        expect(all.score).toBe(0)
+        expect([all.combo, all.comboEndsAt]).toEqual([1, 120])
+    })
+
+    it("Survival has no combo: fills score their value and leave the streak at 0", () => {
+        const s = makeState({ tick: 100, orders: [makeOrder({ id: 0 })], inventory: { carrot: 3 } })
+        const next = apply(s, deliver(0))
+        expect(next.score).toBe(24)
+        expect([next.combo, next.comboEndsAt, next.bestCombo]).toEqual([0, 0, 0])
     })
 })

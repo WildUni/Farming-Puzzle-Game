@@ -76,6 +76,9 @@ type GameState = {
     event: RunEvent | null // the announced or running event
     nextEventAt: number // first tick a new event may be announced on
     secondWind: boolean // Survival: a life was lost, so the next new order gets Second wind time
+    combo: number // Timed: orders filled in a row; sets the score multiplier (comboPct)
+    comboEndsAt: number // Timed: last tick the streak survives without another fill (0 with no streak)
+    bestCombo: number // Timed: longest streak this run
 }
 
 // What the run's upgrades add up to. Worked out from GameState.upgrades, never stored.

@@ -172,7 +172,7 @@ Bigger bumper has `"requires": ["bumperHarvest"]`. Early bird is Survival only b
 | `crowBan`            | 0    | 0   | 1   | 1: Crows are never announced (Crows' `banStat`)                                             |
 | `earlyBirdCoins`     | 0    | 0   | 15  | Coins for filling an order with at least half its time left                                 |
 | `levelPacePct`       | 100  | 100 | 200 | % of filled orders a Survival level takes                                                   |
-| `extraLives`         | 0    | 0   | 2   | Added to the lives cap (`DIFFICULTY.maxLives`); each rise also adds a life                  |
+| `extraLives`         | 0    | 0   | 2   | Added to the lives cap (`MODES.survival.maxLives`); each rise also adds a life              |
 | `lastStandGrowthPct` | 100  | 50  | 100 | % of growth time for crops planted on the last life                                         |
 | `secondChance`       | 0    | 0   | 50  | % chance a failed order costs no life                                                       |
 | `secondWindPct`      | 100  | 100 | 200 | % of the time limit of the first new order after a lost life                                |

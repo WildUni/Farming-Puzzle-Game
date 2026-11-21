@@ -1,15 +1,13 @@
 # difficulty.ts
 
-Survival tuning: lives, coins, life prices and the difficulty curve. Every number lives in **one file**, `src/data/difficulty.json`, so tuning a run never needs a code change. `difficulty.ts` loads that file, checks it, and turns it into the rules `main.ts` uses.
+Survival tuning: coins, life prices and the difficulty curve. Every number lives in **one file**, `src/data/difficulty.json`, so tuning a run never needs a code change. `difficulty.ts` loads that file, checks it, and turns it into the rules `main.ts` uses.
 
-Only Survival reads this module. Timed and Puzzle keep the fixed order rules in `game_constants.ts`.
+Only Survival reads this module. Timed and Puzzle keep the fixed order rules in `game_constants.ts`. Starting lives and the lives cap are per-mode rules, so they live in `modes.json` (see [modes.md](modes.md)).
 
 ## `src/data/difficulty.json`
 
 ```json
 {
-    "startLives": 3,
-    "maxLives": 3,
     "coinsPerOrder": 4,
     "lifePrice": { "base": 10, "growth": 1.5 },
     "ordersPerLevel": 5,
@@ -22,8 +20,6 @@ Only Survival reads this module. Timed and Puzzle keep the fixed order rules in 
 
 | Field                  | Meaning                                                                                    |
 | ---------------------- | ------------------------------------------------------------------------------------------ |
-| `startLives`           | Lives a Survival run starts with                                                           |
-| `maxLives`             | Most lives a Survival run can hold (Extra heart adds to it). Whole number `>= startLives`  |
 | `coinsPerOrder`        | Coins paid for each filled order                                                           |
 | `lifePrice.base`       | Price of the first life bought                                                             |
 | `lifePrice.growth`     | Each later life costs this many times the one before                                       |
@@ -53,8 +49,6 @@ type LevelRow = {
     eventGapSeconds: number
 }
 type DifficultyConfig = {
-    startLives: number
-    maxLives: number
     coinsPerOrder: number
     lifePrice: { base: number; growth: number }
     ordersPerLevel: number
@@ -79,8 +73,7 @@ type OrderRules = {
 
 Checks a parsed JSON value and returns it typed. Throws an `Error` naming the bad field when:
 
-- `startLives` or `ordersPerLevel` is not a whole number `>= 1`.
-- `maxLives` is not a whole number `>= startLives`.
+- `ordersPerLevel` is not a whole number `>= 1`.
 - `coinsPerOrder` is not a whole number `>= 0`.
 - `lifePrice.base` is not a whole number `>= 1`, or `lifePrice.growth` is not a number `>= 1`.
 - `levels` is not a non-empty array.
@@ -128,7 +121,7 @@ Price of the next life when `livesBought` lives have already been bought this ru
 
 - A player who does nothing never fills an order, so stays on level 1. Each order fails after its time limit and costs a life, so the run ends after a fixed number of ticks (see the test below).
 - A player who keeps filling orders climbs to the last level. There, orders ask for more crops per tick than 4 plots can grow, so orders fail and cost lives.
-- Coins per order are fixed but life prices grow geometrically, and lives are capped at `maxLives`, so buying lives only delays the end.
+- Coins per order are fixed but life prices grow geometrically, and lives are capped at `MODES.survival.maxLives`, so buying lives only delays the end.
 
 ## Tests (`difficulty.test.ts`)
 
