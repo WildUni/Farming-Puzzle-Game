@@ -1,0 +1,38 @@
+{
+    "powerUps": [
+        {
+            "id": "readyOne",
+            "name": "Ready one",
+            "text": "One growing crop is ready now",
+            "modes": ["survival", "timed"],
+            "weight": 30,
+            "target": "plot",
+            "effect": { "kind": "finishGrowth" }
+        },
+        {
+            "id": "growthBoost",
+            "name": "Growth boost",
+            "text": "Every growing crop is 5 s closer to ready",
+            "modes": ["survival", "timed"],
+            "weight": 30,
+            "effect": { "kind": "cutGrowth", "ticks": 50 }
+        },
+        {
+            "id": "orderFreeze",
+            "name": "Order freeze",
+            "text": "Order timers stop for {seconds} s",
+            "modes": ["survival", "timed"],
+            "weight": 20,
+            "seconds": 10,
+            "effect": { "kind": "orderRate", "pct": 0 }
+        },
+        {
+            "id": "coinBag",
+            "name": "Coin bag",
+            "text": "+10 coins",
+            "modes": ["survival"],
+            "weight": 20,
+            "effect": { "kind": "grantCoins", "amount": 10 }
+        }
+    ]
+}

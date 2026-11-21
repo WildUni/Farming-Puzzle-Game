@@ -68,6 +68,21 @@ Crops grow 7% faster
     - Clicking a target sends `chooseUpgrade { upgradeId, target }` through `act()`. A **Back** button returns to the cards without sending anything.
 - The game loop does not step while an offer is open. Pause still works on top of it.
 
+## Power-ups (PowerUpBar)
+
+A row of slot buttons under the plots, in both modes. Hidden when `allowPowerUps` is off. The Game scene starts runs with `allowPowerUps: true` (the Daily Challenge will turn it off).
+
+- One button per slot (`powerUpSlots`), left to right in `powerUps` order. A held power-up shows its name (`powerUpButtonText`); an empty slot is drawn greyed out with no text.
+- A held power-up's button shows its name and, on the next line, its text with `{seconds}` filled in from `durationFor` (`powerUpButtonText`), so Long-lasting shows the longer time.
+- A button is enabled only when `canUsePowerUp` is true for it (with any valid target, for a plot power-up), so the screen and the rules can't disagree.
+- **Untargeted power-up:** clicking sends `usePowerUp { slot }` through `act()`.
+- **Plot power-up (Ready one):** clicking enters target mode. The plots in `powerUpTargets` are highlighted and the rest greyed out; clicking a highlighted plot sends `usePowerUp { slot, target }` through `act()`. Clicking the button again, Esc (which pauses otherwise) or a click on a dimmed plot cancels without sending anything. Target mode also ends when no plot is a valid target any more, and when the game pauses, ends or opens an upgrade offer. While in target mode a plot click never plants or harvests.
+- The bar is covered by the upgrade-pick shade like the rest of the board.
+
+### Active effects
+
+A line under the slot buttons lists each lasting effect with `endsAt > tick` and the seconds left (`activeEffectText`), e.g. `Order freeze 7s`. Seconds left are `ceil((endsAt − tick) / TICKS_PER_SECOND)`, so it never shows `0s` while the effect still has ticks to run. An effect on its `endsAt` tick has done its last tick and is not listed. While an Order freeze is active, order countdown bars are drawn in a frozen colour.
+
 ## End of run (GameOverView)
 
 Shown over the board as soon as `status` is `'ended'`.
@@ -94,6 +109,9 @@ Shown over the board as soon as `status` is `'ended'`.
 - `debugText` includes the mode.
 - `upgradeCardText` shows name, tier, description with that tier's values (a tiered and a non-tiered example, and one with two effects) and the copy count after picking.
 - `buyLifeText` shows the price with the `lifePricePct` modifier applied.
+- `powerUpButtonText` gives the name, then the text with `{seconds}` filled from `durationFor`, with and without Long-lasting.
+- `shownEffects` and `ordersFrozen` leave out an effect on its `endsAt` tick.
+- `activeEffectText` shows the name and seconds left, rounding up: `1s` with one tick left, `10s` with 100.
 
 ## Open items
 

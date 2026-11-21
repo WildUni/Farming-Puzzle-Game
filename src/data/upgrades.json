@@ -6,7 +6,10 @@
         "bumperChance": { "base": 0, "min": 0, "max": 50 },
         "orderTimePct": { "base": 100, "min": 100, "max": 200 },
         "coinsPerOrder": { "base": 0, "min": 0, "max": 20 },
-        "lifePricePct": { "base": 100, "min": 25, "max": 100 }
+        "lifePricePct": { "base": 100, "min": 25, "max": 100 },
+        "dropChance": { "base": 8, "min": 0, "max": 40 },
+        "powerUpSlots": { "base": 2, "min": 1, "max": 3 },
+        "powerUpDurationPct": { "base": 100, "min": 100, "max": 200 }
     },
     "tiers": {
         "common": { "weight": 40, "sellPrice": 5 },
@@ -84,6 +87,37 @@
             "maxCopies": 2,
             "sellable": false,
             "effects": [{ "stat": "extraPlots", "amount": 1 }]
+        },
+        {
+            "id": "luckyDrops",
+            "name": "Lucky drops",
+            "text": "+{0}% chance of a power-up per harvest",
+            "pools": ["survival", "timed"],
+            "maxCopies": 5,
+            "sellable": true,
+            "needs": ["powerUps"],
+            "effects": [{ "stat": "dropChance", "perTier": [2, 3, 5, 8, 12] }]
+        },
+        {
+            "id": "longLasting",
+            "name": "Long-lasting",
+            "text": "Power-ups last {0}% longer",
+            "pools": ["survival", "timed"],
+            "maxCopies": 5,
+            "sellable": true,
+            "needs": ["powerUps"],
+            "effects": [{ "stat": "powerUpDurationPct", "perTier": [10, 15, 25, 35, 50] }]
+        },
+        {
+            "id": "bigPockets",
+            "name": "Big pockets",
+            "text": "Hold {0} more power-up",
+            "pools": ["survival", "timed"],
+            "tier": "rare",
+            "maxCopies": 1,
+            "sellable": false,
+            "needs": ["powerUps"],
+            "effects": [{ "stat": "powerUpSlots", "amount": 1 }]
         }
     ]
 }

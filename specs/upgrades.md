@@ -91,6 +91,7 @@ At least one weight must be above 0. Shipped weights: common 40, uncommon 30, ra
 | `targetRule` | when `target` is set | `"oncePerTarget"` or `"stackable"`                                                                                   |
 | `requires`   | no                   | Upgrade ids that must be owned (at least one copy each) before this one is offered                                   |
 | `category`   | no                   | A group name, for per-category copy limits later. Not used by any rule yet                                           |
+| `needs`      | no                   | Game systems the run must have for this upgrade to be offered. Only `"powerUps"` so far (later `"events"`)           |
 
 ### Shipped upgrades (phase 1)
 
@@ -118,6 +119,22 @@ Shipped stats:
 | `coinsPerOrder` | 0    | 0   | 20  | Extra coins per filled order                        |
 | `lifePricePct`  | 100  | 25  | 100 | % of the normal life price                          |
 
+### Shipped with power-ups
+
+Added with [powerups.md](powerups.md). All three have `"needs": ["powerUps"]`.
+
+| id            | name         | pools           | tier   | maxCopies | effects (common → legendary)                 | target | sellable |
+| ------------- | ------------ | --------------- | ------ | --------- | -------------------------------------------- | ------ | -------- |
+| `luckyDrops`  | Lucky drops  | survival, timed | tiered | 5         | `dropChance` +2, +3, +5, +8, +12             | –      | yes      |
+| `longLasting` | Long-lasting | survival, timed | tiered | 5         | `powerUpDurationPct` +10, +15, +25, +35, +50 | –      | yes      |
+| `bigPockets`  | Big pockets  | survival, timed | rare   | 1         | `powerUpSlots` +1                            | –      | no       |
+
+| Stat                 | base | min | max | Meaning                                  |
+| -------------------- | ---- | --- | --- | ---------------------------------------- |
+| `dropChance`         | 8    | 0   | 40  | % chance that a harvest drops a power-up |
+| `powerUpSlots`       | 2    | 1   | 3   | Power-ups the player can hold at once    |
+| `powerUpDurationPct` | 100  | 100 | 200 | % of a lasting power-up's length         |
+
 Changes from the old six: `bigHarvest` (flat +1 yield) is replaced by `bumperHarvest`, a chance of 1 extra crop per harvest (see [The harvest roll](#the-harvest-roll)). `haggler` becomes `lifeDiscount` (the new Haggler belongs to the Bulk buyer event). `tips` becomes `bigTips`. `extraPlot` is shop-only, so it is not offered until the shop exists. `"timed"` is already listed in the pools so that turning Timed offers on later is a code change only.
 
 ## Types (in [types.md](types.md))
@@ -133,8 +150,12 @@ type Modifiers = {
     orderTimePct: number
     coinsPerOrder: number
     lifePricePct: number
+    dropChance: number
+    powerUpSlots: number
+    powerUpDurationPct: number
 }
 type ModifierStat = keyof Modifiers
+type GameSystem = "powerUps" // later: "events"
 type StatDef = { base: number; min: number; max: number }
 type TierDef = { weight: number; sellPrice: number }
 type UpgradeEffect = { stat: ModifierStat; amounts: number[] } // tiered: 5 values; non-tiered: 1
@@ -151,6 +172,7 @@ type UpgradeDef = {
     targetRule: "oncePerTarget" | "stackable" | null // null exactly when target is null
     requires: string[]
     category: string | null
+    needs: GameSystem[]
 }
 type UpgradeConfig = {
     stats: Record<ModifierStat, StatDef>
@@ -195,6 +217,7 @@ Checks a parsed JSON value and returns it in the typed shape. Throws an `Error` 
 - A targeted upgrade's effect uses a stat that is not read per plot and crop (only `growthPct`, `yieldBonus` and `bumperChance` are; see [Where the modifiers apply](#where-the-modifiers-apply)).
 - `requires` names an unknown id or the upgrade itself.
 - `category`, when present, is not a non-empty string.
+- `needs`, when present, has a repeat or a value that is not a `GameSystem`.
 
 A bad file is a setup mistake, so this throws instead of returning `null`.
 
@@ -266,6 +289,7 @@ Ids that can be offered from `pool`, sorted. An id is eligible when all of these
 2. `copyCount < maxCopies`.
 3. Every id in `requires` has at least one owned copy.
 4. `validTargets` is not empty.
+5. Every system in `needs` is on in this run: `"powerUps"` means `state.allowPowerUps`.
 
 ### `rollOffer(state: GameState, pool: Pool, crops: CropTable, config?): [OfferCard[], RNGState]`
 
@@ -289,12 +313,12 @@ Rules:
 
 `GameState` fields:
 
-| Field          | Starting value                                                                           | Meaning                                                             |
-| -------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `rng`          | `{ orders: seedRNG(seed), upgrades: seedStream(seed, 1), harvest: seedStream(seed, 2) }` | One generator state per system (see [mulberry.md](mulberry.md))     |
-| `upgrades`     | `[]`                                                                                     | `OwnedUpgrade` copies, in pick order                                |
-| `upgradeOffer` | `null`                                                                                   | The `OfferCard`s on offer while the player is choosing, else `null` |
-| `offersMade`   | `0`                                                                                      | Offers made so far this run                                         |
+| Field          | Starting value                                                                                                       | Meaning                                                             |
+| -------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `rng`          | `{ orders: seedRNG(seed), upgrades: seedStream(seed, 1), harvest: seedStream(seed, 2), drops: seedStream(seed, 3) }` | One generator state per system (see [mulberry.md](mulberry.md))     |
+| `upgrades`     | `[]`                                                                                                                 | `OwnedUpgrade` copies, in pick order                                |
+| `upgradeOffer` | `null`                                                                                                               | The `OfferCard`s on offer while the player is choosing, else `null` |
+| `offersMade`   | `0`                                                                                                                  | Offers made so far this run                                         |
 
 1. **Offer due:** in Survival, when `ordersCompleted >= (offersMade + 1) × ORDERS_PER_UPGRADE`. So the 1st offer comes after the 10th filled order, the 2nd after the 20th, and so on.
 2. **Making the offer:** at the end of a `step` (after new orders, and only if the run didn't end on that step), if an offer is due, `rollOffer(state, "survival", crops)` draws it from `rng.upgrades`, `upgradeOffer` is set and `offersMade` goes up by 1. If nothing is eligible, `offersMade` still goes up and `upgradeOffer` stays `null`, so the run continues.
@@ -314,25 +338,28 @@ The random draws for offers come from `rng.upgrades`, separate from `rng.orders`
 
 Each modifier is read in one place. Changes apply from then on; nothing already made is changed afterwards.
 
-| Modifier        | Read by                    | Through                         | Effect                                                                                       |
-| --------------- | -------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------- |
-| `extraPlots`    | `chooseUpgrade`            | `modifiersFor`                  | Adds plots when the total goes up                                                            |
-| `growthPct`     | `plant`                    | `modifiersAt({ plot, cropId })` | `readyAt = now + scalePct(growTicks, growthPct)`; crops already growing keep their `readyAt` |
-| `yieldBonus`    | `harvest`                  | `modifiersAt({ plot, cropId })` | Adds `crops[cropId].yield + yieldBonus`                                                      |
-| `bumperChance`  | `harvest`                  | `modifiersAt({ plot, cropId })` | Adds 1 more crop when the harvest roll is below it (see below)                               |
-| `orderTimePct`  | `orderRules` (Survival)    | `modifiersFor`                  | `orderTicks = scalePct(level orderTicks, orderTimePct)` for new orders                       |
-| `coinsPerOrder` | `deliver` (Survival)       | `modifiersFor`                  | Pays `DIFFICULTY.coinsPerOrder + coinsPerOrder`                                              |
-| `lifePricePct`  | `lifePriceFor` / `buyLife` | `modifiersFor`                  | Price is `scalePct(lifePrice(livesBought), lifePricePct)`                                    |
+| Modifier             | Read by                         | Through                         | Effect                                                                                       |
+| -------------------- | ------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------- |
+| `extraPlots`         | `chooseUpgrade`                 | `modifiersFor`                  | Adds plots when the total goes up                                                            |
+| `growthPct`          | `plant`                         | `modifiersAt({ plot, cropId })` | `readyAt = now + scalePct(growTicks, growthPct)`; crops already growing keep their `readyAt` |
+| `yieldBonus`         | `harvest`                       | `modifiersAt({ plot, cropId })` | Adds `crops[cropId].yield + yieldBonus`                                                      |
+| `bumperChance`       | `harvest`                       | `modifiersAt({ plot, cropId })` | Adds 1 more crop when the harvest roll is below it (see below)                               |
+| `orderTimePct`       | `orderRules` (Survival)         | `modifiersFor`                  | `orderTicks = scalePct(level orderTicks, orderTimePct)` for new orders                       |
+| `coinsPerOrder`      | `deliver` (Survival)            | `modifiersFor`                  | Pays `DIFFICULTY.coinsPerOrder + coinsPerOrder`                                              |
+| `lifePricePct`       | `lifePriceFor` / `buyLife`      | `modifiersFor`                  | Price is `scalePct(lifePrice(livesBought), lifePricePct)`                                    |
+| `dropChance`         | `rollDrop` (on `harvest`)       | `modifiersFor`                  | % chance of a power-up drop per harvest (see [powerups.md](powerups.md))                     |
+| `powerUpSlots`       | `harvest`                       | `modifiersFor`                  | A drop is kept only while `powerUps.length < powerUpSlots`                                   |
+| `powerUpDurationPct` | `durationFor` (on `usePowerUp`) | `modifiersFor`                  | Lasting power-ups run `scalePct(durationTicks, powerUpDurationPct)` ticks                    |
 
 ### The harvest roll
 
-`harvest` is the only action that draws a random number, and only from `rng.harvest`:
+`harvest` is the only action that draws random numbers. The bumper roll below uses `rng.harvest`; the power-up drop roll after it uses `rng.drops` (see [powerups.md](powerups.md)):
 
 - When `bumperChance` (at that plot and crop) is 0, it draws nothing and `rng.harvest` is unchanged. Runs without Bumper harvest never touch the stream.
 - Otherwise it draws once: `roll = randomInt(rng.harvest, 0, 99)`. If `roll < bumperChance`, the harvest adds 1 more crop. The new state is stored in `rng.harvest` either way.
 - The extra crop is added after `yieldBonus`: `crops[cropId].yield + yieldBonus + (bumper ? 1 : 0)`.
 
-Replay stays exact, because the stream lives in `GameState` and actions are replayed in log order. A later Bigger bumper upgrade would add a stat for the number of extra crops instead of the fixed 1; Lucky drops can roll from the same stream.
+Replay stays exact, because the stream lives in `GameState` and actions are replayed in log order. A later Bigger bumper upgrade would add a stat for the number of extra crops instead of the fixed 1. Lucky drops rolls from its own stream, `rng.drops`, so Bumper harvest never changes which power-ups drop.
 
 Adding a stat means: a `Modifiers` field, an entry under `stats` in `upgrades.json`, and one row here with the one place that reads it. Adding an upgrade that only uses existing stats is a JSON entry and nothing else.
 
@@ -348,7 +375,7 @@ Adding a stat means: a `Modifiers` field, an entry under `stats` in `upgrades.js
 
 - Accepts the shipped `upgrades.json`.
 - Throws for each case in its list above, one test per case, using a small valid config with one field changed.
-- Turns `perTier` and `amount` into `amounts`, and missing optional fields into `null` / `[]`.
+- Turns `perTier` and `amount` into `amounts`, and missing optional fields (including `needs`) into `null` / `[]`.
 
 **`effectAmount`**
 
@@ -385,6 +412,7 @@ Adding a stat means: a `Modifiers` field, an entry under `stats` in `upgrades.js
 - Drops an id at `maxCopies`, counting copies of every tier.
 - Drops an id whose `requires` aren't owned, and lists it once they are.
 - Drops an id with no valid targets, and an untargeted id whose stats are all capped.
+- Drops an id with `needs: ["powerUps"]` when `allowPowerUps` is off, and lists it when it is on.
 
 **`rollOffer`**
 
@@ -419,7 +447,7 @@ Each later phase adds to this design without changing the stored shapes above.
 1. **Timed offers and rerolls.** `isOfferDue` and `rollOffer` use the mode's pool instead of always `survival`. A `rerollOffer` action pays a rising coin price (`rerollsThisOffer` in state) and redraws the whole offer from `rng.upgrades`, with the same tier weights as a normal roll.
 2. **Shop** (its own `shop.ts` and spec). Stock is drawn from the mode's pool plus `shop`, from `rng.upgrades` or its own stream. `sellUpgrade { index }` removes `upgrades[index]` and pays its tier's `sellPrice`; only `sellable` upgrades, only while the shop is open. Selling frees a copy and, for targeted upgrades, its target.
 3. **More upgrade kinds**, behind a `kind` field: `instant` (Promotion: changes an owned copy's tier and is not stored), `active` (Miracle grow: owning it unlocks a `useAbility` action, its recharge is a stat), `economy` (Interest, Discount card, Free restock: stats read by the shop).
-4. **Upgrades for events, power-ups and storage** ship with those systems. `requires` grows to name an event or power-up that must exist in the run. Other chance-based upgrades (Second chance, Lucky drops) draw from a stream of their own, as Bumper harvest does.
+4. **Upgrades for events, power-ups and storage** ship with those systems. The power-up upgrades are in (see [Shipped with power-ups](#shipped-with-power-ups)); they use `needs` rather than `requires`, since they depend on a system being on, not on another upgrade. Events will add `"events"` to `GameSystem`. Other chance-based upgrades (Second chance, Lucky drops) draw from a stream of their own, as Bumper harvest does.
 
 ## Open items
 

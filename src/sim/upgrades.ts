@@ -3,6 +3,7 @@
 import type {
     CropTable,
     GameState,
+    GameSystem,
     Modifiers,
     ModifierStat,
     OfferCard,
@@ -29,13 +30,19 @@ const MODIFIER_STATS: readonly ModifierStat[] = [
     "bumperChance",
     "orderTimePct",
     "coinsPerOrder",
-    "lifePricePct"
+    "lifePricePct",
+    "dropChance",
+    "powerUpSlots",
+    "powerUpDurationPct"
 ]
 
 // Stats read per plot and crop (by plant and harvest), so targeted upgrades may use them.
 const CONTEXT_STATS: readonly ModifierStat[] = ["growthPct", "yieldBonus", "bumperChance"]
 
 const POOLS: readonly Pool[] = ["survival", "timed", "shop"]
+
+// Systems an upgrade's `needs` may name.
+const GAME_SYSTEMS: readonly GameSystem[] = ["powerUps"]
 
 // ---------------------------------------------------------------------------------------------
 // Validation
@@ -206,6 +213,16 @@ function validateUpgrade(entry: unknown, at: string): UpgradeDef {
     let category: string | null = null
     if (has(entry, "category")) category = nonEmptyString(entry, "category", at)
 
+    let needs: GameSystem[] = []
+    if (has(entry, "needs")) {
+        const n = entry.needs
+        if (!Array.isArray(n) || !n.every((x) => (GAME_SYSTEMS as unknown[]).includes(x))) {
+            fail(`${at}.needs`, `a list of ${GAME_SYSTEMS.join(", ")}`)
+        }
+        if (new Set(n).size !== n.length) fail(`${at}.needs`, "free of repeats")
+        needs = [...(n as GameSystem[])]
+    }
+
     return {
         id,
         name,
@@ -218,7 +235,8 @@ function validateUpgrade(entry: unknown, at: string): UpgradeDef {
         target,
         targetRule,
         requires,
-        category
+        category,
+        needs
     }
 }
 
@@ -376,6 +394,11 @@ function validTargets(
         )
 }
 
+// True when every system `def` needs is on in this run.
+function systemsOn(def: UpgradeDef, state: GameState): boolean {
+    return def.needs.every((n) => n !== "powerUps" || state.allowPowerUps)
+}
+
 // Ids that can be offered from `pool`, sorted so the list doesn't depend on the JSON's order.
 function eligibleUpgrades(
     state: GameState,
@@ -390,6 +413,7 @@ function eligibleUpgrades(
                 def.pools.includes(pool) &&
                 copyCount(upgrades, def.id) < def.maxCopies &&
                 def.requires.every((r) => copyCount(upgrades, r) > 0) &&
+                systemsOn(def, state) &&
                 validTargets(upgrades, def.id, state.plots.length, crops, config).length > 0
         )
         .map((def) => def.id)

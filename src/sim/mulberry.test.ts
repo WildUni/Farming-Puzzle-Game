@@ -108,6 +108,9 @@ describe("seedStream", () => {
     it("gives different states for different salts, and differs from seedRNG", () => {
         expect(seedStream(42, 1)).not.toBe(seedStream(42, 2))
         expect(seedStream(42, 1)).not.toBe(seedRNG(42))
+        expect(seedStream(42, 3)).not.toBe(seedStream(42, 1))
+        expect(seedStream(42, 3)).not.toBe(seedStream(42, 2))
+        expect(seedStream(42, 3)).not.toBe(seedRNG(42))
         expect(seedStream(42, 1)).not.toBe(seedStream(43, 1))
     })
 

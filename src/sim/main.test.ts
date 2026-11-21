@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import { createGame, applyAction, step, canBuyLife, orderRules, lifePriceFor } from "./main"
 import { buildCropTable, updateGrowth } from "./plot"
 import { createOrder } from "./orders"
-import { randomInt, seedRNG, seedStream } from "./mulberry"
+import { nextValue, randomInt, seedRNG, seedStream } from "./mulberry"
 import {
     START_PLOTS,
     MAX_OPEN_ORDERS,
@@ -98,8 +98,13 @@ describe("createGame", () => {
         expect(g.rng).toEqual({
             orders: seedRNG(1),
             upgrades: seedStream(1, 1),
-            harvest: seedStream(1, 2)
+            harvest: seedStream(1, 2),
+            drops: seedStream(1, 3)
         })
+        expect(g.allowPowerUps).toBe(false)
+        expect(g.powerUps).toEqual([])
+        expect(g.activeEffects).toEqual([])
+        expect(createGame(1, { ...config, allowPowerUps: true }).allowPowerUps).toBe(true)
     })
 
     it("gives Timed runs no lives", () => {
@@ -1001,5 +1006,186 @@ describe("upgrades: modifiers change the rules", () => {
         const state = makeState({ upgrades: owned, plots, upgradeOffer: offer })
         const next = apply(state, { type: "chooseUpgrade", upgradeId: "extraPlot" })
         expect(next.plots).toBe(state.plots)
+    })
+})
+
+describe("power-ups: drops and use", () => {
+    const on: GameConfig = { mode: "survival", allowPowerUps: true }
+    const growingPlot = (readyAt: number): Plot => ({
+        state: "growing",
+        cropId: "garlic",
+        plantedAt: 0,
+        readyAt
+    })
+    const readyPlot: Plot = { state: "ready", cropId: "garlic" }
+
+    function withPowerUps(overrides: Partial<GameState> = {}): GameState {
+        return { ...createGame(1, on), ...overrides }
+    }
+
+    function replacePlots(plots: Plot[], i: number, plot: Plot): Plot[] {
+        return plots.map((p, j) => (j === i ? plot : p))
+    }
+
+    // A fresh Survival game with plot 0 ready to harvest.
+    function readyToHarvest(seed: number, cfg: GameConfig = on): GameState {
+        const s = createGame(seed, cfg)
+        return { ...s, plots: replacePlots(s.plots, 0, readyPlot) }
+    }
+
+    // A seed whose first harvest drops a power-up, so these tests don't hang on one seed.
+    function seedThatDrops(): number {
+        for (let seed = 0; seed < 1000; seed++) {
+            const next = apply(readyToHarvest(seed), { type: "harvest", plot: 0 })
+            if (next.powerUps.length === 1) return seed
+        }
+        throw new Error("no seed drops")
+    }
+
+    const twoDraws = (rng: number) => nextValue(nextValue(rng)[1])[1]
+
+    it("keeps a drop in a free slot and advances rng.drops by two draws", () => {
+        const s = readyToHarvest(seedThatDrops())
+        const next = apply(s, { type: "harvest", plot: 0 })
+        expect(next.powerUps).toHaveLength(1)
+        expect(next.rng.drops).toBe(twoDraws(s.rng.drops))
+        expect(next.rng.orders).toBe(s.rng.orders)
+        expect(next.rng.upgrades).toBe(s.rng.upgrades)
+    })
+
+    it("loses a drop when every slot is full, but still uses both draws", () => {
+        const s = { ...readyToHarvest(seedThatDrops()), powerUps: ["coinBag", "coinBag"] }
+        const next = apply(s, { type: "harvest", plot: 0 })
+        expect(next.powerUps).toEqual(["coinBag", "coinBag"])
+        expect(next.rng.drops).toBe(twoDraws(s.rng.drops))
+    })
+
+    it("Big pockets adds a third slot", () => {
+        const s = {
+            ...readyToHarvest(seedThatDrops()),
+            powerUps: ["coinBag", "coinBag"],
+            upgrades: [own("bigPockets", "rare")]
+        }
+        expect(apply(s, { type: "harvest", plot: 0 }).powerUps).toHaveLength(3)
+    })
+
+    it("never drops with power-ups off", () => {
+        const s = readyToHarvest(seedThatDrops(), config)
+        const next = apply(s, { type: "harvest", plot: 0 })
+        expect(next.powerUps).toEqual([])
+        expect(next.rng.drops).toBe(s.rng.drops)
+    })
+
+    it("removes the used slot and keeps the others in order", () => {
+        const s = withPowerUps({ powerUps: ["orderFreeze", "coinBag", "growthBoost"] })
+        expect(apply(s, { type: "usePowerUp", slot: 1 }).powerUps).toEqual([
+            "orderFreeze",
+            "growthBoost"
+        ])
+    })
+
+    it("Ready one readies its plot, which can be harvested on the same tick", () => {
+        const s = withPowerUps({
+            powerUps: ["readyOne"],
+            plots: replacePlots(createGame(1, on).plots, 2, growingPlot(80))
+        })
+        const used = apply(s, { type: "usePowerUp", slot: 0, target: 2 })
+        expect(used.plots[2]).toEqual(readyPlot)
+        expect(apply(used, { type: "harvest", plot: 2 }).inventory.garlic).toBeGreaterThan(0)
+    })
+
+    it("Growth boost brings growing crops 50 ticks closer and readies ones brought to now", () => {
+        const plots = [growingPlot(200), growingPlot(30), { state: "empty" } as Plot, readyPlot]
+        const s = withPowerUps({ tick: 10, powerUps: ["growthBoost"], plots })
+        const used = apply(s, { type: "usePowerUp", slot: 0 })
+        expect(used.plots[0]).toMatchObject({ state: "growing", readyAt: 150, plantedAt: -50 })
+        expect(used.plots[1]).toEqual(readyPlot)
+        expect(used.plots[2]).toBe(plots[2])
+        expect(used.plots[3]).toBe(plots[3])
+    })
+
+    it("Coin bag adds its coins", () => {
+        const s = withPowerUps({ coins: 3, powerUps: ["coinBag"] })
+        expect(apply(s, { type: "usePowerUp", slot: 0 }).coins).toBe(13)
+    })
+
+    it("Order freeze holds order timers for 10 s, then they count down again", () => {
+        let s = step(withPowerUps({ powerUps: ["orderFreeze"] }), crops)
+        const id = s.orders[0].id
+        const left = s.orders[0].expiresAt - s.tick
+        s = apply(s, { type: "usePowerUp", slot: 0 })
+        for (let i = 0; i < 100; i++) {
+            s = step(s, crops)
+            expect(s.orders.find((o) => o.id === id)!.expiresAt - s.tick).toBe(left)
+        }
+        s = step(s, crops)
+        expect(s.orders.find((o) => o.id === id)!.expiresAt - s.tick).toBe(left - 1)
+        expect(s.activeEffects).toEqual([])
+    })
+
+    it("Long-lasting stretches Order freeze, and a second freeze adds to it", () => {
+        const upgrades = [own("longLasting", "legendary")]
+        const s = withPowerUps({ tick: 5, upgrades, powerUps: ["orderFreeze", "orderFreeze"] })
+        const once = apply(s, { type: "usePowerUp", slot: 0 })
+        expect(once.activeEffects[0].endsAt).toBe(5 + 150)
+        const twice = apply(once, { type: "usePowerUp", slot: 0 })
+        expect(twice.activeEffects).toHaveLength(1)
+        expect(twice.activeEffects[0].endsAt).toBe(5 + 300)
+    })
+
+    it("an Order freeze started on an order's last tick keeps it from failing", () => {
+        const order = makeOrder({ expiresAt: 10 })
+        const s = withPowerUps({ tick: 10, orders: [order], powerUps: ["orderFreeze"] })
+        const next = step(apply(s, { type: "usePowerUp", slot: 0 }), crops)
+        expect(next.ordersFailed).toBe(0)
+        expect(next.orders.find((o) => o.id === order.id)!.expiresAt).toBe(11)
+    })
+
+    it("refuses bad uses", () => {
+        const plots = replacePlots(createGame(1, on).plots, 1, growingPlot(80))
+        const s = withPowerUps({ plots, powerUps: ["readyOne", "coinBag"] })
+        const refused: [GameState, Action][] = [
+            [
+                { ...s, allowPowerUps: false },
+                { type: "usePowerUp", slot: 1 }
+            ],
+            [s, { type: "usePowerUp", slot: 2 }],
+            [s, { type: "usePowerUp", slot: -1 }],
+            [s, { type: "usePowerUp", slot: 0 }],
+            [s, { type: "usePowerUp", slot: 0, target: 0 }],
+            [s, { type: "usePowerUp", slot: 0, target: 9 }],
+            [s, { type: "usePowerUp", slot: 1, target: 1 }],
+            [
+                { ...s, upgradeOffer: OFFER },
+                { type: "usePowerUp", slot: 1 }
+            ],
+            [
+                { ...s, status: "ended" },
+                { type: "usePowerUp", slot: 1 }
+            ]
+        ]
+        for (const [state, action] of refused) expect(applyAction(state, action, crops)).toBeNull()
+    })
+
+    it("an open upgrade offer doesn't use up an active Order freeze", () => {
+        const s = apply(withPowerUps({ powerUps: ["orderFreeze"] }), {
+            type: "usePowerUp",
+            slot: 0
+        })
+        const paused = { ...s, upgradeOffer: OFFER }
+        expect(step(paused, crops)).toBe(paused)
+    })
+
+    it("using power-ups never changes the order sequence", () => {
+        const plain = createGame(7, on)
+        const used = apply({ ...plain, powerUps: ["growthBoost"] }, { type: "usePowerUp", slot: 0 })
+        let a = plain
+        let b = used
+        for (let i = 0; i < 2000; i++) {
+            a = step(a, crops)
+            b = step(b, crops)
+        }
+        expect(b.rng.orders).toBe(a.rng.orders)
+        expect(b.nextOrderId).toBe(a.nextOrderId)
     })
 })

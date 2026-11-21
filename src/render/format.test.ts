@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest"
 import {
     formatClock,
+    powerUpButtonText,
+    activeEffectText,
+    shownEffects,
+    ordersFrozen,
     timerText,
     plotText,
     orderText,
@@ -29,7 +33,8 @@ import { buildCropTable } from "../sim/plot"
 import { lifePrice, levelFor, DIFFICULTY } from "../sim/difficulty"
 import { TIMED_MODE_TICKS, ORDER_TICKS } from "../sim/game_constants"
 import { UPGRADES, effectAmount, scalePct } from "../sim/upgrades"
-import type { GameState, Order } from "../sim/types"
+import { POWER_UPS } from "../sim/powerups"
+import type { ActiveEffect, GameState, Order } from "../sim/types"
 
 const crops = buildCropTable([
     { id: "garlic", growTicks: 80, yield: 2, value: 2 },
@@ -317,5 +322,35 @@ describe("debugText", () => {
         expect(debugText(game("timed"), 7, false)).toContain("tick 0  seed 7  timed\n")
         expect(debugText(game("survival"), 7, false)).toContain("tick 0  seed 7  survival\n")
         expect(debugText(game("timed"), 7, true)).toContain("PAUSED")
+    })
+})
+
+describe("power-up text", () => {
+    const freeze = POWER_UPS.powerUps.orderFreeze
+    const effect = (endsAt: number): ActiveEffect => ({
+        source: "orderFreeze",
+        effect: { kind: "orderRate", pct: 0 },
+        startedAt: 0,
+        endsAt
+    })
+
+    it("powerUpButtonText gives the name and fills {seconds} from durationFor", () => {
+        expect(powerUpButtonText(freeze, [])).toBe("Order freeze\nOrder timers stop for 10 s")
+        const longer = [{ id: "longLasting", tier: "legendary" as const, target: null }]
+        expect(powerUpButtonText(freeze, longer)).toBe("Order freeze\nOrder timers stop for 15 s")
+        expect(powerUpButtonText(POWER_UPS.powerUps.coinBag, [])).toBe("Coin bag\n+10 coins")
+    })
+
+    it("activeEffectText rounds seconds up", () => {
+        expect(activeEffectText(effect(101), 100)).toBe("Order freeze 1s")
+        expect(activeEffectText(effect(200), 100)).toBe("Order freeze 10s")
+        expect(activeEffectText(effect(171), 100)).toBe("Order freeze 8s")
+    })
+
+    it("shownEffects and ordersFrozen skip an effect on its endsAt tick", () => {
+        const s = { ...game("survival"), tick: 50, activeEffects: [effect(50), effect(60)] }
+        expect(shownEffects(s)).toEqual([effect(60)])
+        expect(ordersFrozen(s)).toBe(true)
+        expect(ordersFrozen({ ...s, activeEffects: [effect(50)] })).toBe(false)
     })
 })

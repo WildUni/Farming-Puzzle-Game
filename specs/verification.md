@@ -78,6 +78,7 @@ Rules:
 - A full Timed run ends with `status: 'ended'` and replays equal.
 - A full Survival run, played until lives run out by a player that also buys lives whenever it can, ends with `status: 'ended'`, has `buyLife` entries in its log, and replays equal.
 - The scripted players pick the first card on each offer, with the first of its `validTargets` when it is targeted; their Survival runs have `chooseUpgrade` entries (some with a `target`) and replay equal.
+- With power-ups on, scripted players that use every power-up as soon as they can (Ready one on its first valid plot) have `usePowerUp` entries in their logs and replay equal in both modes (see [powerups.md](powerups.md)).
 - `after-end`: an action logged after a Survival run ran out of lives.
 - Actions on tick 0, and several actions on the same tick, replay correctly.
 - The same arguments give equal results, and the log is not changed.
@@ -86,6 +87,7 @@ Rules:
 
 - `refused`: an action that can't be applied (harvesting an empty plot), and an action that is fine on another tick but not on the logged one. The reported `entry` is the index of the bad entry.
 - `refused`: an unknown action type.
+- `refused`: a `usePowerUp` on an empty slot, and any `usePowerUp` in a run with power-ups off.
 - `out-of-order`: an entry with a lower tick than the one before.
 - `bad-tick`: a negative tick, a fractional tick, and a tick after `finalTick`.
 - `after-end`: an action logged on or after the tick a Timed run ends.

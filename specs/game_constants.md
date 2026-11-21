@@ -24,6 +24,7 @@ Tuning numbers that are the same for every run. Changing one should never requir
 
 - Every duration the simulation uses is in ticks. Convert from seconds here, using `TICKS_PER_SECOND`, not in other modules.
 - Per-crop numbers (growth time, yield, value) belong in `src/data/crops.json`, not here.
+- Power-up numbers (weights, lengths, amounts) belong in `src/data/powerups.json`. Lengths there are in seconds and `validatePowerUps` turns them into ticks with `TICKS_PER_SECOND` (see [powerups.md](powerups.md)).
 - Upgrade numbers (stat caps, tier weights, per-tier amounts) belong in `src/data/upgrades.json`. `MIN_MODIFIER_PCT` was removed when each stat got its own `min` and `max` there (see [upgrades.md](upgrades.md)).
 
 ## Open items

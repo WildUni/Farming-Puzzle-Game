@@ -35,7 +35,10 @@ function rawConfig(): Record<string, unknown> {
             bumperChance: { base: 0, min: 0, max: 50 },
             orderTimePct: { base: 100, min: 100, max: 200 },
             coinsPerOrder: { base: 0, min: 0, max: 6 },
-            lifePricePct: { base: 100, min: 25, max: 100 }
+            lifePricePct: { base: 100, min: 25, max: 100 },
+            dropChance: { base: 0, min: 0, max: 40 },
+            powerUpSlots: { base: 2, min: 1, max: 3 },
+            powerUpDurationPct: { base: 100, min: 100, max: 200 }
         },
         tiers: {
             common: { weight: 40, sellPrice: 1 },
@@ -145,7 +148,8 @@ describe("validateUpgrades", () => {
             target: null,
             targetRule: null,
             requires: [],
-            category: null
+            category: null,
+            needs: []
         })
         expect(config.upgrades.peek).toMatchObject({
             tier: "epic",
@@ -221,7 +225,10 @@ describe("validateUpgrades", () => {
         ],
         ["requires an unknown id", (r) => (r.upgrades[5].requires = ["nope"])],
         ["requires itself", (r) => (r.upgrades[5].requires = ["peek"])],
-        ["an empty category", (r) => (r.upgrades[5].category = "")]
+        ["an empty category", (r) => (r.upgrades[5].category = "")],
+        ["an unknown system in needs", (r) => (r.upgrades[0].needs = ["weather"])],
+        ["a repeat in needs", (r) => (r.upgrades[0].needs = ["powerUps", "powerUps"])],
+        ["needs that is not a list", (r) => (r.upgrades[0].needs = "powerUps")]
     ]
     it.each(bad)("throws for %s", (_, change) => {
         const raw = rawConfig()
@@ -255,7 +262,10 @@ describe("modifiersFor", () => {
             bumperChance: 0,
             orderTimePct: 100,
             coinsPerOrder: 0,
-            lifePricePct: 100
+            lifePricePct: 100,
+            dropChance: 0,
+            powerUpSlots: 2,
+            powerUpDurationPct: 100
         })
     })
 
@@ -416,6 +426,16 @@ describe("eligibleUpgrades", () => {
     it("drops an id at maxCopies, counting copies of every tier", () => {
         const two = survival({ upgrades: [own("coins", "common"), own("coins", "legendary")] })
         expect(eligibleUpgrades(two, "timed", crops, config)).toEqual([])
+    })
+
+    it("lists a power-up upgrade only when power-ups are on", () => {
+        const off = eligibleUpgrades(survival(), "survival", crops)
+        const on = eligibleUpgrades(survival({ allowPowerUps: true }), "survival", crops)
+        for (const id of ["luckyDrops", "longLasting", "bigPockets"]) {
+            expect(UPGRADES.upgrades[id].needs).toEqual(["powerUps"])
+            expect(off).not.toContain(id)
+            expect(on).toContain(id)
+        }
     })
 
     it("lists an id only once its requires are owned", () => {

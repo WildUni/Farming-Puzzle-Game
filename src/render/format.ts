@@ -7,6 +7,8 @@ import type {
     Crop,
     CropTable,
     OwnedUpgrade,
+    ActiveEffect,
+    PowerUpDef,
     Tier,
     UpgradeDef,
     UpgradeTarget
@@ -17,6 +19,7 @@ import { timeLeft } from "../sim/orders"
 import { levelFor } from "../sim/difficulty"
 import { lifePriceFor } from "../sim/main"
 import { copyCount, effectAmount } from "../sim/upgrades"
+import { POWER_UPS, durationFor } from "../sim/powerups"
 
 const MAX_HEARTS = 5 // more lives than this show as a count
 
@@ -209,3 +212,30 @@ export { orderTimeFraction, isOrderUrgent, parseSeed, debugText, MAX_SEED }
 export { heartsText, buyLifeText, gameOverText, gameOverTitle }
 export { tierName, upgradeDescription, upgradeCardText, targetTitle, targetText }
 export { PLAYABLE_MODES, modeName, modeButtonText }
+
+// Text on a power-up slot button: the name, then what it does with {seconds} filled in from
+// durationFor, so Long-lasting shows the longer time.
+function powerUpButtonText(def: PowerUpDef, upgrades: readonly OwnedUpgrade[]): string {
+    const ticks = durationFor(def, upgrades)
+    const seconds = ticks === null ? "" : String(Math.ceil(ticks / TICKS_PER_SECOND))
+    return `${def.name}\n${def.text.replace(/\{seconds\}/g, seconds)}`
+}
+
+// Lasting effects still to run a tick: an effect on its endsAt tick has done its last one.
+function shownEffects(state: GameState): ActiveEffect[] {
+    return state.activeEffects.filter((a) => a.endsAt > state.tick)
+}
+
+// "Order freeze 7s": the effect's source name and whole seconds left, rounding up.
+function activeEffectText(effect: ActiveEffect, now: number): string {
+    const def = POWER_UPS.powerUps[effect.source]
+    const name = def === undefined ? effect.source : def.name
+    return `${name} ${Math.ceil((effect.endsAt - now) / TICKS_PER_SECOND)}s`
+}
+
+// True while an effect stops order timers, so their countdown bars can be drawn frozen.
+function ordersFrozen(state: GameState): boolean {
+    return shownEffects(state).some((a) => a.effect.kind === "orderRate" && a.effect.pct === 0)
+}
+
+export { powerUpButtonText, shownEffects, activeEffectText, ordersFrozen }

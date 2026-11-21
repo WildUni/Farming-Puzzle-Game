@@ -25,6 +25,10 @@ const COLORS = {
     barTrack: 0x3b2a14, // empty part of a progress or countdown bar
     barFill: 0x7fd34e, // growth and countdown bar
     barUrgent: 0xd8342c, // countdown bar in an order's last quarter
+    barFrozen: 0x6fc8ff, // countdown bar while order timers are stopped
+    powerUp: 0x2f6fd6, // a held power-up's slot button
+    powerUpHover: 0x4a86e8,
+    slotEmpty: 0x5f6b52, // a slot with no power-up in it
     shade: 0x000000, // dims the board while paused
     // Frame of an upgrade card, by tier.
     tier: {

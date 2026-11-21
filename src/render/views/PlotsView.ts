@@ -30,15 +30,20 @@ export class PlotsView {
         this.onClick = onClick
     }
 
-    // `selected` is the plot the plant picker is open for, or null.
-    update(state: GameState, selected: number | null): void {
+    // `selected` is the plot the plant picker is open for, or null. `targets` lists the plots a
+    // power-up can be used on while the player is choosing one (the rest are dimmed), else null.
+    update(state: GameState, selected: number | null, targets: number[] | null = null): void {
         if (this.squares.length !== state.plots.length) this.build(state.plots.length)
 
         state.plots.forEach((plot, i) => {
             const { box, label, track, bar } = this.squares[i]
             box.setFillStyle(COLORS.plot[plot.state])
-            if (plot.state === "ready" || i === selected) box.setStrokeStyle(4, COLORS.highlight)
+            const isTarget = targets !== null && targets.includes(i)
+            const lit = targets === null ? plot.state === "ready" || i === selected : isTarget
+            if (lit) box.setStrokeStyle(4, COLORS.highlight)
             else box.setStrokeStyle(2, COLORS.plotStroke)
+            const alpha = targets !== null && !isTarget ? 0.45 : 1
+            for (const part of [box, label, track, bar]) part.setAlpha(alpha)
             label.setText(plotText(plot, state.tick))
             const growing = plot.state === "growing"
             track.setVisible(growing)

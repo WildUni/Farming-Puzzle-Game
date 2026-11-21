@@ -4,6 +4,7 @@ import { createGame, applyAction, step } from "./main"
 import { buildCropTable } from "./plot"
 import { canFulfill } from "./orders"
 import { UPGRADES, validTargets } from "./upgrades"
+import { powerUpTargets } from "./powerups"
 import { TIMED_MODE_TICKS } from "./game_constants"
 import type { Action, Crop, CropTable, GameConfig, GameState, LogEntry } from "./types"
 
@@ -382,5 +383,53 @@ describe("replay: upgrade offers", () => {
         const result = replayState(1, survival, [...log, pick], state.tick + 50, crops)
         expect(result.upgrades.map((u) => u.id)).toEqual([state.upgradeOffer![0].id])
         expect(result.tick).toBe(state.tick + 50)
+    })
+})
+
+describe("replay: power-ups", () => {
+    const survivalOn: GameConfig = { mode: "survival", allowPowerUps: true }
+    const timedOn: GameConfig = { mode: "timed", allowPowerUps: true }
+
+    // Uses every held power-up as soon as it can (Ready one on its first valid plot), then
+    // plays like botMoves. Slot 0 is tried repeatedly since each use moves the others up.
+    function powerUser(state: GameState): Action[] {
+        const uses: Action[] = []
+        for (let i = 0; i < state.powerUps.length; i++) {
+            const [target] = powerUpTargets(state, i)
+            uses.push(
+                target === undefined
+                    ? { type: "usePowerUp", slot: 0 }
+                    : { type: "usePowerUp", slot: 0, target }
+            )
+        }
+        return [...uses, ...botMoves(state)]
+    }
+
+    it.each([
+        ["Survival", survivalOn],
+        ["Timed", timedOn]
+    ])("replays a %s run that uses power-ups equal", (_, cfg) => {
+        for (const seed of [1, 2, 3]) {
+            const { state, log } = play(seed, cfg, 2500, powerUser)
+            expect(log.some((e) => e.action.type === "usePowerUp")).toBe(true)
+            expect(replayState(seed, cfg, log, state.tick, crops)).toEqual(state)
+        }
+    })
+
+    it("refuses a usePowerUp on an empty slot, and any use with power-ups off", () => {
+        const empty = replay(
+            1,
+            survivalOn,
+            [{ tick: 0, action: { type: "usePowerUp", slot: 0 } }],
+            0,
+            crops
+        )
+        expect(empty).toEqual({ ok: false, error: "refused", entry: 0 })
+        const { state, log } = play(1, survivalOn, 2500, powerUser)
+        const firstUse = log.findIndex((e) => e.action.type === "usePowerUp")
+        const off = replay(1, survival, log, state.tick, crops)
+        expect(off.ok).toBe(false)
+        // With power-ups off nothing drops, so the run differs no later than the first use.
+        if (!off.ok) expect(off.entry).toBeLessThanOrEqual(firstUse)
     })
 })

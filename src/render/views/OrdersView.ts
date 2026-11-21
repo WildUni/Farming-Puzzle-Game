@@ -4,7 +4,7 @@
 import { GameObjects, Scene } from "phaser"
 import type { GameState } from "../../sim/types"
 import { canFulfill } from "../../sim/orders"
-import { orderText, orderTimeFraction, isOrderUrgent } from "../format"
+import { orderText, orderTimeFraction, isOrderUrgent, ordersFrozen } from "../format"
 import { MARGIN, COLORS, TEXT } from "../theme"
 
 const CARD_W = 300
@@ -37,6 +37,7 @@ export class OrdersView {
         while (this.cards.length < state.orders.length) this.cards.push(this.makeCard())
 
         this.shownIds = state.orders.map((o) => o.id)
+        const frozen = ordersFrozen(state)
         this.cards.forEach((card, i) => {
             const order = state.orders[i]
             const visible = order !== undefined
@@ -46,7 +47,11 @@ export class OrdersView {
             card.label.setText(orderText(order, state))
             card.bar.width = BAR_W * orderTimeFraction(order, state.tick)
             card.bar.setFillStyle(
-                isOrderUrgent(order, state.tick) ? COLORS.barUrgent : COLORS.barFill
+                frozen
+                    ? COLORS.barFrozen
+                    : isOrderUrgent(order, state.tick)
+                      ? COLORS.barUrgent
+                      : COLORS.barFill
             )
             if (canFulfill(order, state.inventory)) card.box.setStrokeStyle(4, COLORS.ready)
             else card.box.setStrokeStyle(2, COLORS.cardStroke)

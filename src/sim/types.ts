@@ -1,6 +1,6 @@
 type RNGState = number
 // One generator per system, so one system's draws never shift another's.
-type RNGStreams = { orders: RNGState; upgrades: RNGState; harvest: RNGState }
+type RNGStreams = { orders: RNGState; upgrades: RNGState; harvest: RNGState; drops: RNGState }
 type RNGSeed = number
 type GameMode = "survival" | "timed" | "puzzle"
 type GameStatus = "running" | "ended"
@@ -60,6 +60,9 @@ type GameState = {
     upgrades: OwnedUpgrade[] // copies picked this run, in pick order
     upgradeOffer: OfferCard[] | null // cards on offer while the player chooses; time stops while set
     offersMade: number // upgrade offers made this run
+    allowPowerUps: boolean // copied from GameConfig so the rules can read it
+    powerUps: string[] // held power-up ids, one per slot, in drop order
+    activeEffects: ActiveEffect[] // lasting effects working right now
 }
 
 // What the run's upgrades add up to. Worked out from GameState.upgrades, never stored.
@@ -71,9 +74,15 @@ type Modifiers = {
     orderTimePct: number // % of the order time limit
     coinsPerOrder: number // extra coins per filled order (Survival)
     lifePricePct: number // % of the normal life price
+    dropChance: number // % chance that a harvest drops a power-up
+    powerUpSlots: number // power-ups the player can hold at once
+    powerUpDurationPct: number // % of a lasting power-up's length
 }
 
 type ModifierStat = keyof Modifiers
+
+// Game systems an upgrade can need to be on in the run before it is offered.
+type GameSystem = "powerUps"
 
 type Tier = "common" | "uncommon" | "rare" | "epic" | "legendary"
 type Pool = "survival" | "timed" | "shop"
@@ -97,6 +106,7 @@ type UpgradeDef = {
     targetRule: "oncePerTarget" | "stackable" | null // null exactly when target is null
     requires: string[]
     category: string | null
+    needs: GameSystem[]
 }
 
 type UpgradeConfig = {
@@ -115,6 +125,40 @@ type Action =
     | { type: "deliver"; orderId: number }
     | { type: "buyLife" }
     | { type: "chooseUpgrade"; upgradeId: string; target?: number | string }
+    | { type: "usePowerUp"; slot: number; target?: number }
+
+// Effects move crops' and orders' clocks. See specs/effects.md.
+type LastingEffect =
+    | { kind: "growthRate"; pct: number } // growing crops' clocks run at pct% of normal
+    | { kind: "orderRate"; pct: number } // open orders' timers run at pct% of normal
+
+type InstantEffect =
+    | { kind: "cutGrowth"; ticks: number } // every growing crop gets this many ticks closer
+    | { kind: "finishGrowth" } // one growing crop becomes ready now (targets a plot)
+    | { kind: "grantCoins"; amount: number }
+
+type Effect = LastingEffect | InstantEffect
+
+type ActiveEffect = {
+    source: string // power-up id (later: event id)
+    effect: LastingEffect
+    startedAt: number // tick it started on
+    endsAt: number // last tick it moves a clock on
+}
+
+// Power-ups. See specs/powerups.md.
+type PowerUpDef = {
+    id: string
+    name: string
+    text: string // {seconds} is replaced by the length after powerUpDurationPct
+    modes: GameMode[]
+    weight: number
+    durationTicks: number | null // lasting effects only
+    effect: Effect
+    target: "plot" | null
+}
+
+type PowerUpConfig = { powerUps: Record<string, PowerUpDef> } // id -> definition
 
 type LogEntry = { tick: number; action: Action }
 
@@ -151,5 +195,12 @@ export type {
     UpgradeConfig,
     UpgradeTarget,
     OwnedUpgrade,
-    OfferCard
+    OfferCard,
+    GameSystem,
+    LastingEffect,
+    InstantEffect,
+    Effect,
+    ActiveEffect,
+    PowerUpDef,
+    PowerUpConfig
 }

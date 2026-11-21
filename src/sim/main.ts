@@ -19,10 +19,13 @@ import { plant, harvest, updateGrowth } from "./plot"
 import { createOrder, fulfill, isExpired } from "./orders"
 import { DIFFICULTY, levelFor, orderRulesFor, lifePrice } from "./difficulty"
 import { UPGRADES, modifiersFor, modifiersAt, scalePct, rollOffer, validTargets } from "./upgrades"
+import { tickEffects, startEffect, cutGrowth, finishGrowth } from "./effects"
+import { POWER_UPS, rollDrop, canUsePowerUp, durationFor } from "./powerups"
 
 // Salts for the separate streams. The orders stream uses the seed itself (see specs/mulberry.md).
 const UPGRADE_STREAM_SALT = 1
 const HARVEST_STREAM_SALT = 2
+const DROPS_STREAM_SALT = 3
 
 function createGame(seed: RNGSeed, config: GameConfig): GameState {
     return {
@@ -32,7 +35,8 @@ function createGame(seed: RNGSeed, config: GameConfig): GameState {
         rng: {
             orders: seedRNG(seed),
             upgrades: seedStream(seed, UPGRADE_STREAM_SALT),
-            harvest: seedStream(seed, HARVEST_STREAM_SALT)
+            harvest: seedStream(seed, HARVEST_STREAM_SALT),
+            drops: seedStream(seed, DROPS_STREAM_SALT)
         },
         plots: Array.from({ length: START_PLOTS }, (): Plot => ({ state: "empty" })),
         inventory: {},
@@ -46,7 +50,10 @@ function createGame(seed: RNGSeed, config: GameConfig): GameState {
         livesBought: 0,
         upgrades: [],
         upgradeOffer: null,
-        offersMade: 0
+        offersMade: 0,
+        allowPowerUps: config.allowPowerUps,
+        powerUps: [],
+        activeEffects: []
     }
 }
 
@@ -85,7 +92,7 @@ function replacePlot(plots: Plot[], i: number, plot: Plot): Plot[] {
 }
 
 // Applies one player move. Returns a new state, or null if the move isn't allowed.
-// Never changes `state` or `tick`; only harvest draws, and only from rng.harvest. See specs/main.md.
+// Never changes `state` or `tick`; only harvest draws (rng.harvest and rng.drops). See specs/main.md.
 function applyAction(state: GameState, action: Action, crops: CropTable): GameState | null {
     if (state.status === "ended") return null
     // While an upgrade offer is open the clock is stopped and only the pick is allowed.
@@ -125,6 +132,11 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
                 rng = { ...state.rng, harvest: next }
             }
             const amount = crops[cropId].yield + yieldBonus + bumper
+            // Power-up drop: rolled from rng.drops whether or not a slot is free.
+            const [drop, dropsRng] = rollDrop(state)
+            rng = { ...rng, drops: dropsRng }
+            const keep =
+                drop !== null && state.powerUps.length < modifiersFor(state.upgrades).powerUpSlots
             return {
                 ...state,
                 rng,
@@ -132,7 +144,8 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
                 inventory: {
                     ...state.inventory,
                     [cropId]: (state.inventory[cropId] ?? 0) + amount
-                }
+                },
+                powerUps: keep ? [...state.powerUps, drop] : state.powerUps
             }
         }
 
@@ -189,6 +202,41 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
             }
         }
 
+        case "usePowerUp": {
+            const target = action.target ?? null
+            if (!canUsePowerUp(state, action.slot, target)) return null
+            const def = POWER_UPS.powerUps[state.powerUps[action.slot]]
+            const used: GameState = {
+                ...state,
+                powerUps: state.powerUps.filter((_, i) => i !== action.slot)
+            }
+            const effect = def.effect
+            switch (effect.kind) {
+                case "finishGrowth": {
+                    // canUsePowerUp checked the target is a growing plot.
+                    const ready = finishGrowth(state.plots[target as number])!
+                    return { ...used, plots: replacePlot(state.plots, target as number, ready) }
+                }
+                case "cutGrowth":
+                    return { ...used, plots: cutGrowth(state.plots, effect.ticks, state.tick) }
+                case "grantCoins":
+                    return { ...used, coins: state.coins + effect.amount }
+                case "growthRate":
+                case "orderRate":
+                    return {
+                        ...used,
+                        activeEffects: startEffect(
+                            state.activeEffects,
+                            def.id,
+                            effect,
+                            state.tick,
+                            durationFor(def, state.upgrades)!
+                        )
+                    }
+            }
+            return null
+        }
+
         default:
             // An unknown action type (from a bad log) is refused, not thrown.
             return null
@@ -229,22 +277,33 @@ function step(state: GameState, crops: CropTable): GameState {
     // 1. Tick
     const tick = state.tick + 1
 
-    // 2. Growth
-    const plots = state.plots.map((p) => updateGrowth(p, tick))
+    // 2. Effects move crops' and orders' deadlines before growth and failures are checked
+    const moved = tickEffects(state.activeEffects, state.plots, state.orders, tick)
 
-    // 3. Failed orders
-    const open = state.orders.filter((o) => !isExpired(o, tick))
-    const failed = state.orders.length - open.length
+    // 3. Growth
+    const plots = moved.plots.map((p) => updateGrowth(p, tick))
+
+    // 4. Failed orders
+    const open = moved.orders.filter((o) => !isExpired(o, tick))
+    const failed = moved.orders.length - open.length
     const ordersFailed = state.ordersFailed + failed
     // Survival: each failed order costs a life, never going below 0.
     const lives = state.mode === "survival" ? Math.max(0, state.lives - failed) : state.lives
 
-    const next: GameState = { ...state, tick, plots, orders: open, ordersFailed, lives }
+    const next: GameState = {
+        ...state,
+        tick,
+        plots,
+        orders: open,
+        ordersFailed,
+        lives,
+        activeEffects: moved.active
+    }
 
-    // 4. End of run
+    // 5. End of run
     if (isRunOver(next)) return { ...next, status: "ended" }
 
-    // 5. New orders, using the rules for the current difficulty
+    // 6. New orders, using the rules for the current difficulty
     const rules = orderRules(next)
     const orders = [...open]
     let ordersRng = state.rng.orders
@@ -263,7 +322,7 @@ function step(state: GameState, crops: CropTable): GameState {
         rng: { ...state.rng, orders: ordersRng }
     }
 
-    // 6. Upgrade offer, drawn from its own stream after the orders
+    // 7. Upgrade offer, drawn from its own stream after the orders
     const pool = offerPool(withOrders)
     if (pool === null || !isOfferDue(withOrders)) return withOrders
     const [offer, upgradesRng] = rollOffer(withOrders, pool, crops)

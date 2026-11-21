@@ -1,0 +1,236 @@
+import { describe, it, expect } from "vitest"
+import {
+    rateShift,
+    shiftPlot,
+    shiftOrder,
+    tickEffects,
+    startEffect,
+    cutGrowth,
+    finishGrowth
+} from "./effects"
+import { progress, updateGrowth } from "./plot"
+import { isExpired, timeLeft } from "./orders"
+import type { ActiveEffect, Order, Plot } from "./types"
+
+function growing(plantedAt: number, readyAt: number): Plot {
+    return { state: "growing", cropId: "garlic", plantedAt, readyAt }
+}
+
+function order(expiresAt: number, timeLimit = 100): Order {
+    return { id: 0, required: { garlic: 2 }, value: 4, expiresAt, timeLimit }
+}
+
+function effect(
+    kind: "growthRate" | "orderRate",
+    pct: number,
+    startedAt = 0,
+    endsAt = 100
+): ActiveEffect {
+    return { source: kind, effect: { kind, pct }, startedAt, endsAt }
+}
+
+// Shifts on ticks startedAt+1 ... startedAt+n.
+function shifts(pct: number, n: number): number[] {
+    return Array.from({ length: n }, (_, i) => rateShift(pct, 0, i + 1))
+}
+
+// Runs tickEffects from tick `from + 1` to `to`, then growth, like step does.
+function run(active: ActiveEffect[], plots: Plot[], orders: Order[], from: number, to: number) {
+    let state = { active, plots, orders }
+    for (let t = from + 1; t <= to; t++) {
+        state = tickEffects(state.active, state.plots, state.orders, t)
+        state = { ...state, plots: state.plots.map((p) => updateGrowth(p, t)) }
+    }
+    return state
+}
+
+describe("rateShift", () => {
+    it("pct 0 gives +1 every tick and pct 200 gives -1 every tick", () => {
+        expect(shifts(0, 5)).toEqual([1, 1, 1, 1, 1])
+        expect(shifts(200, 5)).toEqual([-1, -1, -1, -1, -1])
+    })
+
+    it("pct 50 gives +1 every 2nd tick and pct 150 gives -1 every 2nd tick", () => {
+        expect(shifts(50, 6)).toEqual([0, 1, 0, 1, 0, 1])
+        expect(shifts(150, 6)).toEqual([0, -1, 0, -1, 0, -1])
+    })
+
+    it("adds up to trunc(n × (100 − pct) / 100)", () => {
+        for (const pct of [0, 25, 50, 75, 130, 150, 200, 300]) {
+            for (const n of [1, 7, 33, 100]) {
+                const sum = shifts(pct, n).reduce((a, b) => a + b, 0)
+                expect(sum).toBe(Math.trunc((n * (100 - pct)) / 100) + 0)
+            }
+        }
+    })
+
+    it("is 0 when now <= startedAt", () => {
+        expect(rateShift(0, 10, 10)).toBe(0)
+        expect(rateShift(0, 10, 5)).toBe(0)
+    })
+})
+
+describe("shiftPlot", () => {
+    it("moves readyAt and plantedAt together, so progress holds after a +1 shift", () => {
+        const plot = growing(0, 100)
+        const before = progress(plot, 40)
+        const moved = shiftPlot(plot, 1, 41)
+        expect(moved).toEqual(growing(1, 101))
+        expect(progress(moved, 41)).toBeCloseTo(before)
+    })
+
+    it("never pulls readyAt below now, and moves plantedAt by the clamped amount", () => {
+        expect(shiftPlot(growing(10, 50), -30, 40)).toEqual(growing(0, 40))
+    })
+
+    it("returns the same object for empty and ready plots and for a 0 shift", () => {
+        const empty: Plot = { state: "empty" }
+        const ready: Plot = { state: "ready", cropId: "garlic" }
+        const plot = growing(0, 100)
+        expect(shiftPlot(empty, 5, 1)).toBe(empty)
+        expect(shiftPlot(ready, 5, 1)).toBe(ready)
+        expect(shiftPlot(plot, 0, 1)).toBe(plot)
+    })
+})
+
+describe("shiftOrder", () => {
+    it("moves expiresAt, keeps timeLimit, never below now; 0 returns the same object", () => {
+        const o = order(50)
+        expect(shiftOrder(o, 3, 10)).toEqual({ ...o, expiresAt: 53 })
+        expect(shiftOrder(o, -60, 10)).toEqual({ ...o, expiresAt: 10 })
+        expect(shiftOrder(o, 0, 10)).toBe(o)
+    })
+})
+
+describe("tickEffects", () => {
+    it("orderRate 0 holds timeLeft for its whole length; the order fails that much later", () => {
+        const freeze = effect("orderRate", 0, 10, 40)
+        let state = { active: [freeze], plots: [] as Plot[], orders: [order(60)] }
+        for (let t = 11; t <= 40; t++) {
+            state = tickEffects(state.active, state.plots, state.orders, t)
+            expect(timeLeft(state.orders[0], t)).toBe(50)
+        }
+        expect(state.orders[0].expiresAt).toBe(90)
+        expect(isExpired(state.orders[0], 90)).toBe(false)
+        expect(isExpired(state.orders[0], 91)).toBe(true)
+    })
+
+    it("growthRate 0 holds a crop for its whole length; it is ready that many ticks late", () => {
+        const end = run([effect("growthRate", 0, 0, 30)], [growing(0, 50)], [], 0, 80)
+        expect(end.plots[0]).toEqual({ state: "ready", cropId: "garlic" })
+        const before = run([effect("growthRate", 0, 0, 30)], [growing(0, 50)], [], 0, 79)
+        expect(before.plots[0].state).toBe("growing")
+    })
+
+    it("growthRate 200 makes a crop ready in half its time", () => {
+        const at = (t: number) =>
+            run([effect("growthRate", 200, 0, 1000)], [growing(0, 100)], [], 0, t).plots[0].state
+        expect(at(49)).toBe("growing")
+        expect(at(50)).toBe("ready")
+    })
+
+    it("drops an effect on tick endsAt + 1 without moving anything that tick", () => {
+        const freeze = effect("orderRate", 0, 0, 5)
+        const o = order(50)
+        const last = tickEffects([freeze], [], [o], 5)
+        expect(last.active).toEqual([freeze])
+        expect(last.orders[0].expiresAt).toBe(51)
+        const after = tickEffects([freeze], [], [o], 6)
+        expect(after.active).toEqual([])
+        expect(after.orders[0]).toBe(o)
+    })
+
+    it("adds the shifts of two effects on the same clock", () => {
+        const a = { ...effect("orderRate", 0), source: "a" }
+        const b = { ...effect("orderRate", 0), source: "b" }
+        expect(tickEffects([a, b], [], [order(50)], 1).orders[0].expiresAt).toBe(52)
+    })
+
+    it("a crop effect never moves orders, and an order effect never moves plots", () => {
+        const plots = [growing(0, 100)]
+        const orders = [order(50)]
+        const g = tickEffects([effect("growthRate", 0)], plots, orders, 1)
+        expect(g.orders).toBe(orders)
+        expect(g.plots[0]).toEqual(growing(1, 101))
+        const o = tickEffects([effect("orderRate", 0)], plots, orders, 1)
+        expect(o.plots).toBe(plots)
+        expect(o.orders[0].expiresAt).toBe(51)
+    })
+
+    it("returns the same arrays with nothing active", () => {
+        const active: ActiveEffect[] = []
+        const plots = [growing(0, 100)]
+        const orders = [order(50)]
+        const out = tickEffects(active, plots, orders, 3)
+        expect(out.active).toBe(active)
+        expect(out.plots).toBe(plots)
+        expect(out.orders).toBe(orders)
+    })
+
+    it("never changes its inputs", () => {
+        const active = [effect("growthRate", 0), effect("orderRate", 0)]
+        const plots = [growing(0, 100), { state: "empty" } as Plot]
+        const orders = [order(50)]
+        const copy = structuredClone({ active, plots, orders })
+        tickEffects(active, plots, orders, 1)
+        expect({ active, plots, orders }).toEqual(copy)
+    })
+})
+
+describe("startEffect", () => {
+    const freeze = { kind: "orderRate", pct: 0 } as const
+
+    it("appends a new source with endsAt = now + durationTicks", () => {
+        expect(startEffect([], "orderFreeze", freeze, 10, 100)).toEqual([
+            { source: "orderFreeze", effect: freeze, startedAt: 10, endsAt: 110 }
+        ])
+    })
+
+    it("adds time to a running effect from the same source and keeps startedAt", () => {
+        const once = startEffect([], "orderFreeze", freeze, 10, 100)
+        const twice = startEffect(once, "orderFreeze", freeze, 50, 100)
+        expect(twice).toEqual([
+            { source: "orderFreeze", effect: freeze, startedAt: 10, endsAt: 210 }
+        ])
+        expect(once[0].endsAt).toBe(110)
+    })
+
+    it("a 100-tick effect moves clocks on exactly 100 steps", () => {
+        let state = {
+            active: startEffect([], "f", freeze, 0, 100),
+            plots: [] as Plot[],
+            orders: [order(500)]
+        }
+        for (let t = 1; t <= 150; t++)
+            state = tickEffects(state.active, state.plots, state.orders, t)
+        expect(state.orders[0].expiresAt).toBe(600)
+        expect(state.active).toEqual([])
+    })
+})
+
+describe("cutGrowth / finishGrowth", () => {
+    it("cutGrowth brings growing crops closer, clamped at now, and readies crops at now", () => {
+        const plots: Plot[] = [
+            growing(0, 100),
+            growing(0, 30),
+            { state: "empty" },
+            { state: "ready", cropId: "carrot" }
+        ]
+        const out = cutGrowth(plots, 50, 10)
+        expect(out[0]).toEqual(growing(-50, 50))
+        expect(out[1]).toEqual({ state: "ready", cropId: "garlic" })
+        expect(out[2]).toBe(plots[2])
+        expect(out[3]).toBe(plots[3])
+    })
+
+    it("cutGrowth returns the same array when nothing grows", () => {
+        const plots: Plot[] = [{ state: "empty" }]
+        expect(cutGrowth(plots, 50, 10)).toBe(plots)
+    })
+
+    it("finishGrowth readies a growing plot and refuses empty and ready plots", () => {
+        expect(finishGrowth(growing(0, 100))).toEqual({ state: "ready", cropId: "garlic" })
+        expect(finishGrowth({ state: "empty" })).toBeNull()
+        expect(finishGrowth({ state: "ready", cropId: "garlic" })).toBeNull()
+    })
+})

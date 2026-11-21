@@ -12,6 +12,8 @@ import { PauseView } from "../views/PauseView"
 import { BuyLifeView } from "../views/BuyLifeView"
 import { GameOverView } from "../views/GameOverView"
 import { UpgradePickView } from "../views/UpgradePickView"
+import { PowerUpBar } from "../views/PowerUpBar"
+import { POWER_UPS, powerUpTargets } from "../../sim/powerups"
 
 const MS_PER_TICK = 1000 / TICKS_PER_SECOND
 const MAX_CATCH_UP_TICKS = 5 // a background tab doesn't jump ahead when it comes back
@@ -30,6 +32,7 @@ export class Game extends Scene {
     private elapsed: number
     private paused: boolean
     private pickerPlot: number | null // plot the plant picker is open for
+    private choosingSlot: number | null // power-up slot whose plot target is being picked
 
     private orders: OrdersView
     private stats: StatsView
@@ -39,6 +42,7 @@ export class Game extends Scene {
     private buyLife: BuyLifeView
     private gameOver: GameOverView
     private upgradePick: UpgradePickView
+    private powerUpBar: PowerUpBar
     private debug: GameObjects.Text
 
     constructor() {
@@ -55,11 +59,12 @@ export class Game extends Scene {
         this.cameras.main.setBackgroundColor(COLORS.background)
 
         this.crops = this.registry.get("crops") as CropTable
-        this.state = createGame(this.seed, { mode: this.mode, allowPowerUps: false })
+        this.state = createGame(this.seed, { mode: this.mode, allowPowerUps: true })
         this.log = []
         this.elapsed = 0
         this.paused = false
         this.pickerPlot = null
+        this.choosingSlot = null
 
         this.orders = new OrdersView(this, (id) => this.onOrderClick(id))
         this.stats = new StatsView(this, this.crops)
@@ -87,6 +92,7 @@ export class Game extends Scene {
                     : { type: "chooseUpgrade", upgradeId, target }
             )
         )
+        this.powerUpBar = new PowerUpBar(this, (slot) => this.onPowerUpClick(slot))
         this.gameOver = new GameOverView(
             this,
             () => this.restartNewSeed(),
@@ -99,7 +105,10 @@ export class Game extends Scene {
 
         const keys = this.input.keyboard!
         keys.on("keydown-P", () => this.togglePause())
-        keys.on("keydown-ESC", () => this.togglePause())
+        keys.on("keydown-ESC", () => {
+            if (this.choosingSlot !== null) this.stopChoosing()
+            else this.togglePause()
+        })
         keys.on("keydown-R", () => this.scene.restart({ seed: this.seed, mode: this.mode }))
         keys.on("keydown-L", () => this.printLog())
 
@@ -120,14 +129,20 @@ export class Game extends Scene {
             this.state = step(this.state, this.crops)
             this.elapsed -= MS_PER_TICK
         }
-        if (this.state.status === "ended" || this.state.upgradeOffer !== null) this.closePicker()
+        if (this.state.status === "ended" || this.state.upgradeOffer !== null) {
+            this.closePicker()
+            this.choosingSlot = null
+        }
         this.render()
     }
 
     private render(): void {
         this.orders.update(this.state)
         this.stats.update(this.state)
-        this.plots.update(this.state, this.pickerPlot)
+        // Drop target mode once nothing can be targeted (the last growing crop turned ready).
+        if (this.choosingSlot !== null && this.targets() === null) this.choosingSlot = null
+        this.plots.update(this.state, this.pickerPlot, this.targets())
+        this.powerUpBar.update(this.state, this.choosingSlot)
         this.pause.update(this.paused)
         this.buyLife.update(this.state)
         this.upgradePick.update(this.state)
@@ -144,7 +159,10 @@ export class Game extends Scene {
     private togglePause(): void {
         if (this.state.status === "ended") return
         this.paused = !this.paused
-        if (this.paused) this.closePicker()
+        if (this.paused) {
+            this.closePicker()
+            this.choosingSlot = null
+        }
         this.render()
     }
 
@@ -165,9 +183,46 @@ export class Game extends Scene {
         return true
     }
 
+    // Plots the power-up being aimed can go on, or null when not choosing (or none are valid).
+    private targets(): number[] | null {
+        if (this.choosingSlot === null) return null
+        const targets = powerUpTargets(this.state, this.choosingSlot)
+        return targets.length > 0 ? targets : null
+    }
+
+    // Untargeted power-up: use it. Plot power-up: start (or cancel) choosing its plot.
+    private onPowerUpClick(slot: number): void {
+        if (this.paused) return
+        const def = POWER_UPS.powerUps[this.state.powerUps[slot]]
+        if (def === undefined) return
+        if (def.target === null) {
+            this.stopChoosing()
+            this.act({ type: "usePowerUp", slot })
+            return
+        }
+        this.closePicker()
+        this.choosingSlot = this.choosingSlot === slot ? null : slot
+        this.render()
+    }
+
+    private stopChoosing(): void {
+        this.choosingSlot = null
+        this.render()
+    }
+
     // Empty plot: open the plant picker. Ready plot: harvest it. Growing plot: nothing.
+    // While a power-up's target is being chosen, a click picks (or cancels) instead.
     private onPlotClick(plot: number): void {
         if (this.paused || this.state.status === "ended" || this.state.upgradeOffer !== null) return
+        if (this.choosingSlot !== null) {
+            const slot = this.choosingSlot
+            this.choosingSlot = null
+            if (powerUpTargets(this.state, slot).includes(plot)) {
+                this.act({ type: "usePowerUp", slot, target: plot })
+            }
+            this.render()
+            return
+        }
         switch (this.state.plots[plot].state) {
             case "empty":
                 this.pickerPlot = plot

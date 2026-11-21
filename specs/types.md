@@ -6,13 +6,13 @@ Shared types for the simulation. Contains only types, so it is exported with `ex
 
 ### Basic values
 
-| Type         | Definition                                                    | Meaning                                                         |
-| ------------ | ------------------------------------------------------------- | --------------------------------------------------------------- |
-| `RNGSeed`    | `number`                                                      | The seed a run starts from                                      |
-| `RNGState`   | `number`                                                      | One generator's current position, stored in `GameState.rng`     |
-| `RNGStreams` | `{ orders: RNGState; upgrades: RNGState; harvest: RNGState }` | One generator per system, so their draws don't shift each other |
-| `GameMode`   | `'survival' \| 'timed' \| 'puzzle'`                           | Which mode the run is in                                        |
-| `GameStatus` | `'running' \| 'ended'`                                        | Whether `step` should keep advancing the game                   |
+| Type         | Definition                                                                     | Meaning                                                         |
+| ------------ | ------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| `RNGSeed`    | `number`                                                                       | The seed a run starts from                                      |
+| `RNGState`   | `number`                                                                       | One generator's current position, stored in `GameState.rng`     |
+| `RNGStreams` | `{ orders: RNGState; upgrades: RNGState; harvest: RNGState; drops: RNGState }` | One generator per system, so their draws don't shift each other |
+| `GameMode`   | `'survival' \| 'timed' \| 'puzzle'`                                            | Which mode the run is in                                        |
+| `GameStatus` | `'running' \| 'ended'`                                                         | Whether `step` should keep advancing the game                   |
 
 ### `Crop` and `CropTable`
 
@@ -36,7 +36,7 @@ type Plot =
     | { state: "ready"; cropId: string }
 ```
 
-- `plantedAt` is the tick the crop was planted on; it is only used to draw progress.
+- `plantedAt` is the tick the crop was planted on, moved by the same amount as `readyAt` whenever an effect moves the crop's clock (see [effects.md](effects.md)). It is only used to draw progress.
 - `readyAt` is the tick the crop becomes ready on. `plant` sets it to `plantedAt + growTicks`, and it is stored rather than worked out so later changes to growth speed don't affect crops already in the ground.
 - `cropId` can only be read after checking `state`, so an empty plot can never have a crop.
 
@@ -93,6 +93,9 @@ Everything that changes during a run. If `step` or `replay` would give a differe
 | `upgrades`                        | `OwnedUpgrade` copies picked this run (id, tier, target), in pick order             |
 | `upgradeOffer`                    | `OfferCard`s (id, tier) while the player chooses, else `null`. Time stops while set |
 | `offersMade`                      | Upgrade offers made this run. Sets when the next one is due                         |
+| `allowPowerUps`                   | Copied from `GameConfig.allowPowerUps`, so the rules can read it                    |
+| `powerUps`                        | Held power-up ids, one per slot, in the order they dropped                          |
+| `activeEffects`                   | `ActiveEffect`s working right now (see [effects.md](effects.md))                    |
 
 The Survival level and the next life's price are worked out from `ordersCompleted` and `livesBought` (see [difficulty.md](difficulty.md)), so they are not stored. The same goes for the upgrade `Modifiers`, which are added up from `upgrades` (see [upgrades.md](upgrades.md)).
 
@@ -115,6 +118,7 @@ type Action =
     | { type: "deliver"; orderId: number }
     | { type: "buyLife" }
     | { type: "chooseUpgrade"; upgradeId: string; target?: number | string }
+    | { type: "usePowerUp"; slot: number; target?: number }
 ```
 
 One player move, passed to `applyAction` (see [main.md](main.md)).
@@ -123,11 +127,16 @@ One player move, passed to `applyAction` (see [main.md](main.md)).
 - `orderId` is an `Order.id`, not a position in the list, so it stays correct when other orders are removed.
 - `upgradeId` must be the id of one of the cards in `GameState.upgradeOffer`.
 - `target` is a plot index or crop id, required for targeted upgrades and left out for the rest (see [upgrades.md](upgrades.md)).
+- `slot` is an index into `GameState.powerUps`. `usePowerUp`'s `target` is a plot index, required only for power-ups with `target: "plot"` (see [powerups.md](powerups.md)).
 - Plain data only, so actions can be stored in the log and saved as JSON.
 
 ### Upgrade types
 
 `Tier`, `Pool`, `Modifiers`, `ModifierStat`, `StatDef`, `TierDef`, `UpgradeEffect`, `UpgradeDef`, `UpgradeConfig`, `UpgradeTarget`, `OwnedUpgrade` and `OfferCard`, described in [upgrades.md](upgrades.md). `Modifiers` is never stored in `GameState`; it is worked out from `GameState.upgrades`. `UpgradeTable` is replaced by `UpgradeConfig`.
+
+### Effect and power-up types
+
+`LastingEffect`, `InstantEffect`, `Effect` and `ActiveEffect`, described in [effects.md](effects.md). `PowerUpDef` and `PowerUpConfig`, described in [powerups.md](powerups.md). Power-up definitions are fixed data and are not stored in `GameState`; the state holds only ids (`powerUps`) and running effects (`activeEffects`).
 
 ### `LogEntry`
 

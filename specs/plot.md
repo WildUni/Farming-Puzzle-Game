@@ -17,7 +17,7 @@ Turns the list in `src/data/crops.json` into a table keyed by crop id. Run it on
 ### `plant(plot, cropId, now, crops, growthPct = 100): Plot | null`
 
 - Returns `{ state: 'growing', cropId, plantedAt: now, readyAt: now + scalePct(growTicks, growthPct) }` (see [upgrades.md](upgrades.md)). At the default 100% that is `now + growTicks`.
-- The ready tick is fixed when the crop is planted. Anything that changes growth speed later (upgrades, events) only affects crops planted after it; a power-up that finishes a crop early sets `readyAt` directly.
+- The ready tick is fixed when the crop is planted. Growth-speed upgrades only affect crops planted after them. Power-ups and events move a growing crop's `readyAt` and `plantedAt` through `effects.ts` instead (see [effects.md](effects.md)).
 - Returns `null` if the plot is not empty.
 - Returns `null` if `cropId` is not in the crop table. Only the table's own keys count, so ids like `"toString"` are rejected. This keeps unknown ids out of plots, so later lookups can trust them.
 
@@ -58,4 +58,5 @@ The `now >= readyAt` check comes first, so a plot whose `readyAt` was pulled bac
 ## Open items
 
 - [x] Store the ready tick on the plot (`readyAt`) so growth-speed upgrades and instant-grow power-ups don't change crops retroactively.
-- [ ] Plot modifiers (fertilizer, weeds, blocked plots). Effects that change speed _while_ a crop grows (weeds at half speed) can push `readyAt` back each tick they're active, or a stored `progress` field can replace `plantedAt`/`readyAt` if that gets awkward.
+- [ ] Plot modifiers (fertilizer, weeds, blocked plots).
+- [x] Effects that change speed _while_ a crop grows move `readyAt` and `plantedAt` together, a little each tick (see [effects.md](effects.md)), so `progress` keeps working without a stored progress field.
