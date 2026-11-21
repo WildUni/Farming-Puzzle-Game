@@ -1,6 +1,6 @@
 # effects.ts
 
-Effects that change a run's clocks: how fast crops grow and how fast order timers run. Power-ups use them now (see [powerups.md](powerups.md)); events will use the same effects later, so Order freeze and Slow day, or Growth boost and Rain shower, run the same code.
+Effects that change a run's clocks: how fast crops grow and how fast order timers run. Power-ups (see [powerups.md](powerups.md)) and events (see [events.md](events.md)) use the same effects, so Growth boost and Rain shower, or Order freeze and a later Slow day, run the same code. A few lasting effects don't move a clock but change what an action does while they work (Crows block harvesting, Generous customer adds coins to deliveries).
 
 `plot.ts` and `orders.ts` fix a crop's `readyAt` and an order's `expiresAt` when they are made. An effect never adds a new clock. It **moves those deadlines**: once when an instant effect fires, or a little on every tick while a lasting effect is active. So the `Plot` and `Order` shapes don't change, every number stays a whole tick, and replay stays exact.
 
@@ -10,8 +10,10 @@ Like the other rule modules, `effects.ts` never reads or returns a whole `GameSt
 
 - **Lasting effect.** Works for a number of ticks, then ends. Stored in `GameState.activeEffects` while it works.
 - **Instant effect.** Happens once, when it is used. Never stored.
-- **Source.** The id of what started a lasting effect (a power-up id now, an event id later). One active effect per source: starting it again while it is active adds time instead of a second copy.
+- **Source.** The id of what started a lasting effect: a power-up id or an event id. The two lists never share an id. One active effect per source: starting it again while it is active adds time instead of a second copy.
 - **Rate.** A lasting effect's `pct`: how fast its clock runs while it is active, as a % of normal. `0` stops the clock, `50` is half speed, `150` is one and a half times as fast.
+- **Working ticks.** A lasting effect started on tick `s` with length `d` has `endsAt = s + d`. Rate effects move clocks on ticks `s + 1 … endsAt` (in `step`). Action effects (`blockHarvest`, `deliverBonus`) apply to actions on ticks `s … endsAt − 1`. Both cover exactly `d` ticks.
+- **Excluded plots.** A lasting effect can leave some plots out (`exclude`). Bad events leave out Greenhouse plots; everything else excludes nothing.
 
 ## Types (in [types.md](types.md))
 
@@ -19,23 +21,29 @@ Like the other rule modules, `effects.ts` never reads or returns a whole `GameSt
 type LastingEffect =
     | { kind: "growthRate"; pct: number } // growing crops' clocks
     | { kind: "orderRate"; pct: number } // open orders' timers
+    | { kind: "blockHarvest" } // harvest is refused
+    | { kind: "deliverBonus"; coins: number } // each delivery pays this many more coins (Survival)
 
 type InstantEffect =
     | { kind: "cutGrowth"; ticks: number } // every growing crop gets this many ticks closer to ready
     | { kind: "finishGrowth" } // one growing crop becomes ready now (targets a plot)
     | { kind: "grantCoins"; amount: number }
+    | { kind: "stealCrop" } // one plot's crop is lost (targets a plot)
 
 type Effect = LastingEffect | InstantEffect
 
 type ActiveEffect = {
-    source: string // power-up id (later: event id)
+    source: string // power-up id or event id
     effect: LastingEffect
     startedAt: number // tick it started on
-    endsAt: number // last tick it moves a clock on
+    endsAt: number // startedAt + length
+    exclude: number[] // plots it leaves out, ascending
 }
 ```
 
-`pct`, `ticks` and `amount` are whole numbers. `pct >= 0` and `pct !== 100`; `ticks >= 1`; `amount >= 1`. The files that use effects (`powerups.json`, later `events.json`) check this when they load.
+`pct`, `ticks`, `amount` and `coins` are whole numbers. `pct >= 0` and `pct !== 100`; `ticks`, `amount` and `coins` are `>= 1`. The files that use effects (`powerups.json`, `events.json`) check this when they load, and each says which kinds it allows.
+
+`growthRate` and `orderRate` are **rate effects**; `blockHarvest` and `deliverBonus` are **action effects**.
 
 ## The rate rule
 
@@ -77,6 +85,8 @@ Moving an open order by `shift` changes only `expiresAt`. `timeLimit` stays the 
 
 Each active effect works out its own shift, and the shifts on one clock add up before the clamp. Order freeze (`orderRate 0`) together with a later Slow day (`orderRate 50`) pushes timers by `+1` on some ticks and `+2` on others. Effects that only touch crops never move orders, and the other way round.
 
+A crop's total is the sum over the `growthRate` effects that don't exclude its plot, so a Greenhouse plot under Frost keeps growing while a Sunny spell still speeds it up. Two `deliverBonus` effects add their coins; `blockHarvest` blocks a plot if any working one doesn't exclude it.
+
 ## Exports
 
 ### `rateShift(pct: number, startedAt: number, now: number): number`
@@ -96,8 +106,10 @@ Moves one order's timer by `shift`, as in [Moving an order's timer](#moving-an-o
 What lasting effects do on one tick. `step` calls it right after the tick moves forward (see [main.md](main.md)).
 
 1. Drops every effect with `endsAt < now`. Those effects move nothing on this tick.
-2. Adds up the remaining `growthRate` shifts and moves every growing plot by the total.
+2. For each growing plot, adds up the remaining `growthRate` shifts whose `exclude` doesn't list it, and moves the plot by that total.
 3. Adds up the remaining `orderRate` shifts and moves every open order by the total.
+
+Action effects move nothing here; they are only dropped once they end.
 
 Rules:
 
@@ -105,12 +117,12 @@ Rules:
 - With `active` empty, returns all three inputs as they are.
 - Keeps the order of `active`, `plots` and `orders`.
 
-### `startEffect(active, source, effect, now, durationTicks): ActiveEffect[]`
+### `startEffect(active, source, effect, now, durationTicks, exclude = []): ActiveEffect[]`
 
 Starts a lasting effect, or adds time to one already running.
 
-- No active effect has `source`: appends `{ source, effect, startedAt: now, endsAt: now + durationTicks }`.
-- One does: replaces it with the same entry, but `endsAt` raised by `durationTicks`. `startedAt` stays, so its shifts carry on without a jump.
+- No active effect has `source`: appends `{ source, effect, startedAt: now, endsAt: now + durationTicks, exclude }`.
+- One does: replaces it with the same entry, but `endsAt` raised by `durationTicks`. `startedAt` and `exclude` stay, so its shifts carry on without a jump.
 - `durationTicks` is a whole number `>= 1`.
 - Never changes `active`; returns a new array.
 
@@ -123,6 +135,18 @@ Moves every growing plot by `−ticks`, then runs `updateGrowth(plot, now)` on t
 ### `finishGrowth(plot: Plot): Plot | null`
 
 Makes a growing crop ready now: `{ state: "ready", cropId }`. Returns `null` for an empty or ready plot.
+
+### `stealCrop(plot: Plot): Plot | null`
+
+A growing or ready plot becomes `{ state: "empty" }`. Returns `null` for an empty plot, so the caller can tell the event found nothing.
+
+### `harvestBlocked(active: ActiveEffect[], plot: number, now: number): boolean`
+
+`true` when some `blockHarvest` effect with `startedAt <= now < endsAt` doesn't list `plot` in `exclude`. `harvest` uses it.
+
+### `deliverBonusAt(active: ActiveEffect[], now: number): number`
+
+The sum of `coins` over `deliverBonus` effects with `startedAt <= now < endsAt`; `0` when there are none. `deliver` adds it in Survival.
 
 `grantCoins` needs no helper: `usePowerUp` adds `amount` to `coins` itself.
 
@@ -159,13 +183,15 @@ Makes a growing crop ready now: `{ state: "ready", cropId }`. Returns `null` for
 - A `growthRate 200` effect makes a crop ready in half its time (rounded as the rule says).
 - The effect is dropped on tick `endsAt + 1` and moves nothing on that tick.
 - Two effects on the same clock add their shifts.
+- A `growthRate 0` effect with `exclude: [1]` holds plot 0 and leaves plot 1 growing.
+- Action effects move nothing, and are dropped on `endsAt + 1` like the rest.
 - A crop effect never moves orders and an order effect never moves plots.
 - With nothing active, returns the inputs as they are (same arrays).
 - Never changes its inputs.
 
 **`startEffect`**
 
-- A new source is appended with `endsAt = now + durationTicks`.
+- A new source is appended with `endsAt = now + durationTicks` and the given `exclude` (`[]` by default).
 - The same source again adds `durationTicks` to `endsAt` and keeps `startedAt`; the list still has one entry for it.
 - A 100-tick effect moves clocks on exactly 100 steps.
 
@@ -174,12 +200,15 @@ Makes a growing crop ready now: `{ state: "ready", cropId }`. Returns `null` for
 - `cutGrowth` brings every growing crop `ticks` closer, clamped at `now`; a crop brought to `now` is `ready`; empty and ready plots are untouched.
 - `finishGrowth` turns a growing plot ready and returns `null` for empty and ready plots.
 
+**`stealCrop` / `harvestBlocked` / `deliverBonusAt`**
+
+- `stealCrop` empties growing and ready plots and returns `null` for an empty one.
+- `harvestBlocked` is `true` from `startedAt` to `endsAt − 1`, `false` on `endsAt`, and `false` on an excluded plot.
+- `deliverBonusAt` sums working bonuses, is `0` on `endsAt`, and `0` with none.
+
 ## Open items
 
-- [ ] Effects on one plot only (`plot` on `ActiveEffect`), for events such as Frost on one plot or a Greenhouse-protected plot. Everything is run-wide for now.
-- [ ] More effect kinds for events: `blockHarvest` (Crows), `resetPlot` (Moles), `bonusCoinsNextOrder` (Generous customer). See [the events plan](#events-later).
+- [x] Leaving plots out of an effect (`exclude`), for Greenhouse plots under bad events.
+- [ ] Effects that hit only one chosen plot (Frost on one plot, Lucky clover), if events need them: an `only` list next to `exclude`.
+- [x] Effect kinds for the first events: `blockHarvest` (Crows), `stealCrop` (Moles), `deliverBonus` (Generous customer).
 - [ ] Should a lasting effect started again reset to its full length instead of adding time? Adding time is simpler to explain on a button ("+10 s").
-
-## Events (later)
-
-Events (`events.ts`, its own spec) will start lasting effects with `startEffect(active, eventId, …)` and fire instant ones through the same helpers. `tickEffects` won't need changing: it already moves every clock by the sum of what is active, whatever started it.

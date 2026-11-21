@@ -5,6 +5,7 @@ import { buildCropTable } from "./plot"
 import { canFulfill } from "./orders"
 import { UPGRADES, validTargets } from "./upgrades"
 import { powerUpTargets } from "./powerups"
+import { EVENTS } from "./events"
 import { TIMED_MODE_TICKS } from "./game_constants"
 import type { Action, Crop, CropTable, GameConfig, GameState, LogEntry } from "./types"
 
@@ -15,8 +16,8 @@ const cropList: Crop[] = [
 ]
 const crops: CropTable = buildCropTable(cropList)
 
-const survival: GameConfig = { mode: "survival", allowPowerUps: false }
-const timed: GameConfig = { mode: "timed", allowPowerUps: false }
+const survival: GameConfig = { mode: "survival", allowPowerUps: false, allowEvents: false }
+const timed: GameConfig = { mode: "timed", allowPowerUps: false, allowEvents: false }
 
 // The pick for an open offer: the card at `index` (or the first), with its first valid target.
 function pickCard(state: GameState, index = 0): Action {
@@ -387,8 +388,8 @@ describe("replay: upgrade offers", () => {
 })
 
 describe("replay: power-ups", () => {
-    const survivalOn: GameConfig = { mode: "survival", allowPowerUps: true }
-    const timedOn: GameConfig = { mode: "timed", allowPowerUps: true }
+    const survivalOn: GameConfig = { mode: "survival", allowPowerUps: true, allowEvents: false }
+    const timedOn: GameConfig = { mode: "timed", allowPowerUps: true, allowEvents: false }
 
     // Uses every held power-up as soon as it can (Ready one on its first valid plot), then
     // plays like botMoves. Slot 0 is tried repeatedly since each use moves the others up.
@@ -431,5 +432,22 @@ describe("replay: power-ups", () => {
         expect(off.ok).toBe(false)
         // With power-ups off nothing drops, so the run differs no later than the first use.
         if (!off.ok) expect(off.entry).toBeLessThanOrEqual(firstUse)
+    })
+})
+
+describe("replay: events", () => {
+    const configs: [string, GameConfig][] = [
+        ["Survival", { mode: "survival", allowPowerUps: true, allowEvents: true }],
+        ["Timed", { mode: "timed", allowPowerUps: true, allowEvents: true }]
+    ]
+
+    it.each(configs)("replays a %s run with events and power-ups equal", (_, cfg) => {
+        for (const seed of [1, 2, 3]) {
+            const { state, log } = play(seed, cfg, 2500)
+            // At least one event has been announced: either one is pending or the schedule moved on.
+            const ran = state.event !== null || state.nextEventAt > EVENTS.firstEventTicks
+            expect(ran).toBe(true)
+            expect(replayState(seed, cfg, log, state.tick, crops)).toEqual(state)
+        }
     })
 })

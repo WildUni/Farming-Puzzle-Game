@@ -1,22 +1,127 @@
 {
     "stats": {
-        "extraPlots": { "base": 0, "min": 0, "max": 2 },
-        "growthPct": { "base": 100, "min": 20, "max": 100 },
-        "yieldBonus": { "base": 0, "min": 0, "max": 3 },
-        "bumperChance": { "base": 0, "min": 0, "max": 50 },
-        "orderTimePct": { "base": 100, "min": 100, "max": 200 },
-        "coinsPerOrder": { "base": 0, "min": 0, "max": 20 },
-        "lifePricePct": { "base": 100, "min": 25, "max": 100 },
-        "dropChance": { "base": 8, "min": 0, "max": 40 },
-        "powerUpSlots": { "base": 2, "min": 1, "max": 3 },
-        "powerUpDurationPct": { "base": 100, "min": 100, "max": 200 }
+        "extraPlots": {
+            "base": 0,
+            "min": 0,
+            "max": 2
+        },
+        "growthPct": {
+            "base": 100,
+            "min": 20,
+            "max": 100
+        },
+        "yieldBonus": {
+            "base": 0,
+            "min": 0,
+            "max": 3
+        },
+        "bumperChance": {
+            "base": 0,
+            "min": 0,
+            "max": 50
+        },
+        "orderTimePct": {
+            "base": 100,
+            "min": 100,
+            "max": 200
+        },
+        "coinsPerOrder": {
+            "base": 0,
+            "min": 0,
+            "max": 20
+        },
+        "lifePricePct": {
+            "base": 100,
+            "min": 25,
+            "max": 100
+        },
+        "dropChance": {
+            "base": 8,
+            "min": 0,
+            "max": 40
+        },
+        "powerUpSlots": {
+            "base": 2,
+            "min": 1,
+            "max": 3
+        },
+        "powerUpDurationPct": {
+            "base": 100,
+            "min": 100,
+            "max": 200
+        },
+        "warnBonusSeconds": {
+            "base": 0,
+            "min": 0,
+            "max": 5
+        },
+        "goodEventPct": {
+            "base": 40,
+            "min": 0,
+            "max": 70
+        },
+        "eventGapPct": {
+            "base": 100,
+            "min": 100,
+            "max": 200
+        },
+        "rainCutPct": {
+            "base": 100,
+            "min": 100,
+            "max": 300
+        },
+        "sunnyDurationPct": {
+            "base": 100,
+            "min": 100,
+            "max": 250
+        },
+        "deliverBonusPct": {
+            "base": 100,
+            "min": 100,
+            "max": 250
+        },
+        "frostDurationPct": {
+            "base": 100,
+            "min": 25,
+            "max": 100
+        },
+        "crowDurationPct": {
+            "base": 100,
+            "min": 25,
+            "max": 100
+        },
+        "moleBlockChance": {
+            "base": 0,
+            "min": 0,
+            "max": 75
+        },
+        "shielded": {
+            "base": 0,
+            "min": 0,
+            "max": 1
+        }
     },
     "tiers": {
-        "common": { "weight": 40, "sellPrice": 5 },
-        "uncommon": { "weight": 30, "sellPrice": 10 },
-        "rare": { "weight": 15, "sellPrice": 20 },
-        "epic": { "weight": 10, "sellPrice": 35 },
-        "legendary": { "weight": 5, "sellPrice": 60 }
+        "common": {
+            "weight": 40,
+            "sellPrice": 5
+        },
+        "uncommon": {
+            "weight": 30,
+            "sellPrice": 10
+        },
+        "rare": {
+            "weight": 15,
+            "sellPrice": 20
+        },
+        "epic": {
+            "weight": 10,
+            "sellPrice": 35
+        },
+        "legendary": {
+            "weight": 5,
+            "sellPrice": 60
+        }
     },
     "upgrades": [
         {
@@ -26,7 +131,12 @@
             "pools": ["survival", "timed"],
             "maxCopies": 5,
             "sellable": true,
-            "effects": [{ "stat": "growthPct", "perTier": [-2, -4, -7, -12, -20] }]
+            "effects": [
+                {
+                    "stat": "growthPct",
+                    "perTier": [-2, -4, -7, -12, -20]
+                }
+            ]
         },
         {
             "id": "patientCustomers",
@@ -35,7 +145,12 @@
             "pools": ["survival", "timed"],
             "maxCopies": 5,
             "sellable": true,
-            "effects": [{ "stat": "orderTimePct", "perTier": [3, 6, 10, 15, 25] }]
+            "effects": [
+                {
+                    "stat": "orderTimePct",
+                    "perTier": [3, 6, 10, 15, 25]
+                }
+            ]
         },
         {
             "id": "bigTips",
@@ -44,7 +159,12 @@
             "pools": ["survival", "timed"],
             "maxCopies": 5,
             "sellable": true,
-            "effects": [{ "stat": "coinsPerOrder", "perTier": [1, 2, 3, 5, 8] }]
+            "effects": [
+                {
+                    "stat": "coinsPerOrder",
+                    "perTier": [1, 2, 3, 5, 8]
+                }
+            ]
         },
         {
             "id": "lifeDiscount",
@@ -53,7 +173,12 @@
             "pools": ["survival"],
             "maxCopies": 5,
             "sellable": true,
-            "effects": [{ "stat": "lifePricePct", "perTier": [-3, -6, -10, -15, -25] }]
+            "effects": [
+                {
+                    "stat": "lifePricePct",
+                    "perTier": [-3, -6, -10, -15, -25]
+                }
+            ]
         },
         {
             "id": "bumperHarvest",
@@ -62,7 +187,12 @@
             "pools": ["survival", "timed"],
             "maxCopies": 5,
             "sellable": true,
-            "effects": [{ "stat": "bumperChance", "perTier": [5, 8, 12, 18, 25] }]
+            "effects": [
+                {
+                    "stat": "bumperChance",
+                    "perTier": [5, 8, 12, 18, 25]
+                }
+            ]
         },
         {
             "id": "favoriteCrop",
@@ -74,8 +204,14 @@
             "target": "crop",
             "targetRule": "stackable",
             "effects": [
-                { "stat": "growthPct", "perTier": [-3, -6, -10, -15, -25] },
-                { "stat": "yieldBonus", "perTier": [1, 1, 1, 2, 3] }
+                {
+                    "stat": "growthPct",
+                    "perTier": [-3, -6, -10, -15, -25]
+                },
+                {
+                    "stat": "yieldBonus",
+                    "perTier": [1, 1, 1, 2, 3]
+                }
             ]
         },
         {
@@ -86,7 +222,12 @@
             "tier": "rare",
             "maxCopies": 2,
             "sellable": false,
-            "effects": [{ "stat": "extraPlots", "amount": 1 }]
+            "effects": [
+                {
+                    "stat": "extraPlots",
+                    "amount": 1
+                }
+            ]
         },
         {
             "id": "luckyDrops",
@@ -96,7 +237,12 @@
             "maxCopies": 5,
             "sellable": true,
             "needs": ["powerUps"],
-            "effects": [{ "stat": "dropChance", "perTier": [2, 3, 5, 8, 12] }]
+            "effects": [
+                {
+                    "stat": "dropChance",
+                    "perTier": [2, 3, 5, 8, 12]
+                }
+            ]
         },
         {
             "id": "longLasting",
@@ -106,7 +252,12 @@
             "maxCopies": 5,
             "sellable": true,
             "needs": ["powerUps"],
-            "effects": [{ "stat": "powerUpDurationPct", "perTier": [10, 15, 25, 35, 50] }]
+            "effects": [
+                {
+                    "stat": "powerUpDurationPct",
+                    "perTier": [10, 15, 25, 35, 50]
+                }
+            ]
         },
         {
             "id": "bigPockets",
@@ -117,7 +268,166 @@
             "maxCopies": 1,
             "sellable": false,
             "needs": ["powerUps"],
-            "effects": [{ "stat": "powerUpSlots", "amount": 1 }]
+            "effects": [
+                {
+                    "stat": "powerUpSlots",
+                    "amount": 1
+                }
+            ]
+        },
+        {
+            "id": "earlyWarning",
+            "name": "Early warning",
+            "text": "Events are announced {0} s earlier",
+            "pools": ["survival", "timed"],
+            "tier": "rare",
+            "maxCopies": 1,
+            "sellable": true,
+            "needs": ["events"],
+            "effects": [
+                {
+                    "stat": "warnBonusSeconds",
+                    "amount": 3
+                }
+            ]
+        },
+        {
+            "id": "goodFortune",
+            "name": "Good fortune",
+            "text": "+{0}% chance an event is a good one",
+            "pools": ["survival", "timed"],
+            "maxCopies": 5,
+            "sellable": true,
+            "needs": ["events"],
+            "effects": [
+                {
+                    "stat": "goodEventPct",
+                    "perTier": [3, 5, 8, 12, 15]
+                }
+            ]
+        },
+        {
+            "id": "calmSkies",
+            "name": "Calm skies",
+            "text": "{0}% longer between events",
+            "pools": ["survival", "timed"],
+            "maxCopies": 5,
+            "sellable": true,
+            "needs": ["events"],
+            "effects": [
+                {
+                    "stat": "eventGapPct",
+                    "perTier": [5, 8, 12, 18, 25]
+                }
+            ]
+        },
+        {
+            "id": "rainmaker",
+            "name": "Rainmaker",
+            "text": "Rain showers cut {0}% more growth time",
+            "pools": ["survival", "timed"],
+            "maxCopies": 3,
+            "sellable": true,
+            "needs": ["events"],
+            "effects": [
+                {
+                    "stat": "rainCutPct",
+                    "perTier": [20, 30, 50, 75, 100]
+                }
+            ]
+        },
+        {
+            "id": "longSummer",
+            "name": "Long summer",
+            "text": "Sunny spells last {0}% longer",
+            "pools": ["survival", "timed"],
+            "maxCopies": 3,
+            "sellable": true,
+            "needs": ["events"],
+            "effects": [
+                {
+                    "stat": "sunnyDurationPct",
+                    "perTier": [15, 25, 40, 60, 100]
+                }
+            ]
+        },
+        {
+            "id": "bigSpender",
+            "name": "Big spender",
+            "text": "Generous customers pay {0}% more",
+            "pools": ["survival"],
+            "maxCopies": 3,
+            "sellable": true,
+            "needs": ["events"],
+            "effects": [
+                {
+                    "stat": "deliverBonusPct",
+                    "perTier": [20, 35, 50, 75, 100]
+                }
+            ]
+        },
+        {
+            "id": "frostCover",
+            "name": "Frost cover",
+            "text": "Frost lasts {0}% less",
+            "pools": ["survival", "timed"],
+            "maxCopies": 3,
+            "sellable": true,
+            "needs": ["events"],
+            "effects": [
+                {
+                    "stat": "frostDurationPct",
+                    "perTier": [-10, -15, -25, -35, -50]
+                }
+            ]
+        },
+        {
+            "id": "crowDecoy",
+            "name": "Crow decoy",
+            "text": "Crows stay {0}% less",
+            "pools": ["survival", "timed"],
+            "maxCopies": 3,
+            "sellable": true,
+            "needs": ["events"],
+            "effects": [
+                {
+                    "stat": "crowDurationPct",
+                    "perTier": [-10, -15, -25, -35, -50]
+                }
+            ]
+        },
+        {
+            "id": "moleTraps",
+            "name": "Mole traps",
+            "text": "{0}% chance to stop Moles",
+            "pools": ["survival", "timed"],
+            "maxCopies": 3,
+            "sellable": true,
+            "needs": ["events"],
+            "effects": [
+                {
+                    "stat": "moleBlockChance",
+                    "perTier": [10, 15, 20, 30, 40]
+                }
+            ]
+        },
+        {
+            "id": "greenhouse",
+            "name": "Greenhouse",
+            "text": "One plot is safe from bad events",
+            "pools": ["survival", "timed"],
+            "tier": "epic",
+            "maxCopies": 2,
+            "sellable": false,
+            "needs": ["events"],
+            "target": "plot",
+            "targetRule": "oncePerTarget",
+            "effects": [
+                {
+                    "stat": "shielded",
+                    "amount": 1
+                }
+            ]
         }
     ]
 }

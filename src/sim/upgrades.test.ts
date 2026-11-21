@@ -38,7 +38,17 @@ function rawConfig(): Record<string, unknown> {
             lifePricePct: { base: 100, min: 25, max: 100 },
             dropChance: { base: 0, min: 0, max: 40 },
             powerUpSlots: { base: 2, min: 1, max: 3 },
-            powerUpDurationPct: { base: 100, min: 100, max: 200 }
+            powerUpDurationPct: { base: 100, min: 100, max: 200 },
+            warnBonusSeconds: { base: 0, min: 0, max: 5 },
+            goodEventPct: { base: 40, min: 0, max: 70 },
+            eventGapPct: { base: 100, min: 100, max: 200 },
+            rainCutPct: { base: 100, min: 100, max: 300 },
+            sunnyDurationPct: { base: 100, min: 100, max: 250 },
+            deliverBonusPct: { base: 100, min: 100, max: 250 },
+            frostDurationPct: { base: 100, min: 25, max: 100 },
+            crowDurationPct: { base: 100, min: 25, max: 100 },
+            moleBlockChance: { base: 0, min: 0, max: 75 },
+            shielded: { base: 0, min: 0, max: 1 }
         },
         tiers: {
             common: { weight: 40, sellPrice: 1 },
@@ -124,7 +134,10 @@ function own(id: string, tier: Tier = "common", target: number | string | null =
 }
 
 function survival(overrides: Partial<GameState> = {}): GameState {
-    return { ...createGame(1, { mode: "survival", allowPowerUps: false }), ...overrides }
+    return {
+        ...createGame(1, { mode: "survival", allowPowerUps: false, allowEvents: false }),
+        ...overrides
+    }
 }
 
 // Advances an RNG state n times.
@@ -265,7 +278,17 @@ describe("modifiersFor", () => {
             lifePricePct: 100,
             dropChance: 0,
             powerUpSlots: 2,
-            powerUpDurationPct: 100
+            powerUpDurationPct: 100,
+            warnBonusSeconds: 0,
+            goodEventPct: 40,
+            eventGapPct: 100,
+            rainCutPct: 100,
+            sunnyDurationPct: 100,
+            deliverBonusPct: 100,
+            frostDurationPct: 100,
+            crowDurationPct: 100,
+            moleBlockChance: 0,
+            shielded: 0
         })
     })
 
@@ -428,9 +451,33 @@ describe("eligibleUpgrades", () => {
         expect(eligibleUpgrades(two, "timed", crops, config)).toEqual([])
     })
 
+    it("lists an event upgrade only when events are on", () => {
+        const off = eligibleUpgrades(survival(), "survival", crops)
+        const on = eligibleUpgrades(survival({ allowEvents: true }), "survival", crops)
+        const ids = Object.values(UPGRADES.upgrades)
+            .filter((d) => d.needs.includes("events"))
+            .map((d) => d.id)
+        expect(ids).toHaveLength(10)
+        for (const id of ids) {
+            expect(off).not.toContain(id)
+            expect(on).toContain(id)
+        }
+    })
+
+    it("offers Greenhouse once per plot", () => {
+        const s = survival({ allowEvents: true })
+        expect(validTargets([], "greenhouse", s.plots.length, crops)).toEqual([0, 1, 2, 3])
+        const owned = [own("greenhouse", "epic", 1)]
+        expect(validTargets(owned, "greenhouse", s.plots.length, crops)).toEqual([0, 2, 3])
+    })
+
     it("lists a power-up upgrade only when power-ups are on", () => {
         const off = eligibleUpgrades(survival(), "survival", crops)
-        const on = eligibleUpgrades(survival({ allowPowerUps: true }), "survival", crops)
+        const on = eligibleUpgrades(
+            survival({ allowPowerUps: true, allowEvents: false }),
+            "survival",
+            crops
+        )
         for (const id of ["luckyDrops", "longLasting", "bigPockets"]) {
             expect(UPGRADES.upgrades[id].needs).toEqual(["powerUps"])
             expect(off).not.toContain(id)

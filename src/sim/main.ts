@@ -19,13 +19,22 @@ import { plant, harvest, updateGrowth } from "./plot"
 import { createOrder, fulfill, isExpired } from "./orders"
 import { DIFFICULTY, levelFor, orderRulesFor, lifePrice } from "./difficulty"
 import { UPGRADES, modifiersFor, modifiersAt, scalePct, rollOffer, validTargets } from "./upgrades"
-import { tickEffects, startEffect, cutGrowth, finishGrowth } from "./effects"
+import {
+    tickEffects,
+    startEffect,
+    cutGrowth,
+    finishGrowth,
+    harvestBlocked,
+    deliverBonusAt
+} from "./effects"
+import { EVENTS, announceEvent, gapTicks, startEvent } from "./events"
 import { POWER_UPS, rollDrop, canUsePowerUp, durationFor } from "./powerups"
 
 // Salts for the separate streams. The orders stream uses the seed itself (see specs/mulberry.md).
 const UPGRADE_STREAM_SALT = 1
 const HARVEST_STREAM_SALT = 2
 const DROPS_STREAM_SALT = 3
+const EVENTS_STREAM_SALT = 4
 
 function createGame(seed: RNGSeed, config: GameConfig): GameState {
     return {
@@ -36,7 +45,8 @@ function createGame(seed: RNGSeed, config: GameConfig): GameState {
             orders: seedRNG(seed),
             upgrades: seedStream(seed, UPGRADE_STREAM_SALT),
             harvest: seedStream(seed, HARVEST_STREAM_SALT),
-            drops: seedStream(seed, DROPS_STREAM_SALT)
+            drops: seedStream(seed, DROPS_STREAM_SALT),
+            events: seedStream(seed, EVENTS_STREAM_SALT)
         },
         plots: Array.from({ length: START_PLOTS }, (): Plot => ({ state: "empty" })),
         inventory: {},
@@ -53,7 +63,10 @@ function createGame(seed: RNGSeed, config: GameConfig): GameState {
         offersMade: 0,
         allowPowerUps: config.allowPowerUps,
         powerUps: [],
-        activeEffects: []
+        activeEffects: [],
+        allowEvents: config.allowEvents,
+        event: null,
+        nextEventAt: EVENTS.firstEventTicks
     }
 }
 
@@ -116,6 +129,8 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
 
         case "harvest": {
             if (!isPlotIndex(state, action.plot)) return null
+            // Crows: no harvesting on this plot while they're here.
+            if (harvestBlocked(state.activeEffects, action.plot, state.tick)) return null
             const result = harvest(state.plots[action.plot])
             if (result === null) return null
             const { plot, cropId } = result
@@ -154,7 +169,10 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
             if (order === undefined || isExpired(order, state.tick)) return null
             const inventory = fulfill(order, state.inventory)
             if (inventory === null) return null
-            const pay = DIFFICULTY.coinsPerOrder + modifiersFor(state.upgrades).coinsPerOrder
+            const pay =
+                DIFFICULTY.coinsPerOrder +
+                modifiersFor(state.upgrades).coinsPerOrder +
+                deliverBonusAt(state.activeEffects, state.tick)
             return {
                 ...state,
                 inventory,
@@ -277,13 +295,19 @@ function step(state: GameState, crops: CropTable): GameState {
     // 1. Tick
     const tick = state.tick + 1
 
-    // 2. Effects move crops' and orders' deadlines before growth and failures are checked
-    const moved = tickEffects(state.activeEffects, state.plots, state.orders, tick)
+    // 2. Events: the announced one starts on its startsAt tick, and is cleared once it ends
+    let ev = startEvent({ ...state, tick })
+    if (ev.event !== null && tick >= ev.event.endsAt) {
+        ev = { ...ev, event: null, nextEventAt: tick + gapTicks(ev) }
+    }
 
-    // 3. Growth
+    // 3. Effects move crops' and orders' deadlines before growth and failures are checked
+    const moved = tickEffects(ev.activeEffects, ev.plots, ev.orders, tick)
+
+    // 4. Growth
     const plots = moved.plots.map((p) => updateGrowth(p, tick))
 
-    // 4. Failed orders
+    // 5. Failed orders
     const open = moved.orders.filter((o) => !isExpired(o, tick))
     const failed = moved.orders.length - open.length
     const ordersFailed = state.ordersFailed + failed
@@ -291,7 +315,7 @@ function step(state: GameState, crops: CropTable): GameState {
     const lives = state.mode === "survival" ? Math.max(0, state.lives - failed) : state.lives
 
     const next: GameState = {
-        ...state,
+        ...ev,
         tick,
         plots,
         orders: open,
@@ -300,14 +324,14 @@ function step(state: GameState, crops: CropTable): GameState {
         activeEffects: moved.active
     }
 
-    // 5. End of run
+    // 6. End of run
     if (isRunOver(next)) return { ...next, status: "ended" }
 
-    // 6. New orders, using the rules for the current difficulty
+    // 7. New orders, using the rules for the current difficulty
     const rules = orderRules(next)
     const orders = [...open]
-    let ordersRng = state.rng.orders
-    let nextOrderId = state.nextOrderId
+    let ordersRng = next.rng.orders
+    let nextOrderId = next.nextOrderId
     while (orders.length < rules.maxOpenOrders) {
         const [order, after] = createOrder(nextOrderId, tick, ordersRng, crops, rules)
         orders.push(order)
@@ -319,19 +343,31 @@ function step(state: GameState, crops: CropTable): GameState {
         ...next,
         orders,
         nextOrderId,
-        rng: { ...state.rng, orders: ordersRng }
+        rng: { ...next.rng, orders: ordersRng }
     }
 
-    // 7. Upgrade offer, drawn from its own stream after the orders
-    const pool = offerPool(withOrders)
-    if (pool === null || !isOfferDue(withOrders)) return withOrders
-    const [offer, upgradesRng] = rollOffer(withOrders, pool, crops)
+    // 8. Event announcement, from its own stream after the orders
+    const announced = announceDue(withOrders)
+
+    // 9. Upgrade offer, drawn from its own stream after the orders
+    const pool = offerPool(announced)
+    if (pool === null || !isOfferDue(announced)) return announced
+    const [offer, upgradesRng] = rollOffer(announced, pool, crops)
     return {
-        ...withOrders,
-        rng: { ...withOrders.rng, upgrades: upgradesRng },
+        ...announced,
+        rng: { ...announced.rng, upgrades: upgradesRng },
         upgradeOffer: offer.length > 0 ? offer : null,
-        offersMade: withOrders.offersMade + 1
+        offersMade: announced.offersMade + 1
     }
+}
+
+// Announces the next event when one is due; with nothing eligible, tries again a gap later.
+function announceDue(state: GameState): GameState {
+    if (!state.allowEvents || state.event !== null || state.tick < state.nextEventAt) return state
+    const [event, events] = announceEvent(state)
+    const rng = { ...state.rng, events }
+    if (event === null) return { ...state, rng, nextEventAt: state.tick + gapTicks(state) }
+    return { ...state, rng, event }
 }
 
 export { createGame, applyAction, step, canBuyLife, orderRules, lifePriceFor }

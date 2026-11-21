@@ -1,6 +1,12 @@
 type RNGState = number
 // One generator per system, so one system's draws never shift another's.
-type RNGStreams = { orders: RNGState; upgrades: RNGState; harvest: RNGState; drops: RNGState }
+type RNGStreams = {
+    orders: RNGState
+    upgrades: RNGState
+    harvest: RNGState
+    drops: RNGState
+    events: RNGState
+}
 type RNGSeed = number
 type GameMode = "survival" | "timed" | "puzzle"
 type GameStatus = "running" | "ended"
@@ -63,6 +69,9 @@ type GameState = {
     allowPowerUps: boolean // copied from GameConfig so the rules can read it
     powerUps: string[] // held power-up ids, one per slot, in drop order
     activeEffects: ActiveEffect[] // lasting effects working right now
+    allowEvents: boolean // copied from GameConfig so the rules can read it
+    event: RunEvent | null // the announced or running event
+    nextEventAt: number // first tick a new event may be announced on
 }
 
 // What the run's upgrades add up to. Worked out from GameState.upgrades, never stored.
@@ -77,12 +86,22 @@ type Modifiers = {
     dropChance: number // % chance that a harvest drops a power-up
     powerUpSlots: number // power-ups the player can hold at once
     powerUpDurationPct: number // % of a lasting power-up's length
+    warnBonusSeconds: number // extra seconds of warning before an event
+    goodEventPct: number // % chance an announced event is a good one
+    eventGapPct: number // % of the gap between events
+    rainCutPct: number // % of Rain shower's growth cut
+    sunnyDurationPct: number // % of Sunny spell's length
+    deliverBonusPct: number // % of Generous customer's bonus coins
+    frostDurationPct: number // % of Frost's length
+    crowDurationPct: number // % of Crows' length
+    moleBlockChance: number // % chance Moles do nothing
+    shielded: number // 1 on a Greenhouse plot: bad events skip it
 }
 
 type ModifierStat = keyof Modifiers
 
 // Game systems an upgrade can need to be on in the run before it is offered.
-type GameSystem = "powerUps"
+type GameSystem = "powerUps" | "events"
 
 type Tier = "common" | "uncommon" | "rare" | "epic" | "legendary"
 type Pool = "survival" | "timed" | "shop"
@@ -131,19 +150,23 @@ type Action =
 type LastingEffect =
     | { kind: "growthRate"; pct: number } // growing crops' clocks run at pct% of normal
     | { kind: "orderRate"; pct: number } // open orders' timers run at pct% of normal
+    | { kind: "blockHarvest" } // harvest is refused
+    | { kind: "deliverBonus"; coins: number } // each delivery pays this many more coins (Survival)
 
 type InstantEffect =
     | { kind: "cutGrowth"; ticks: number } // every growing crop gets this many ticks closer
     | { kind: "finishGrowth" } // one growing crop becomes ready now (targets a plot)
     | { kind: "grantCoins"; amount: number }
+    | { kind: "stealCrop" } // one plot's crop is lost (targets a plot)
 
 type Effect = LastingEffect | InstantEffect
 
 type ActiveEffect = {
-    source: string // power-up id (later: event id)
+    source: string // power-up id or event id
     effect: LastingEffect
     startedAt: number // tick it started on
-    endsAt: number // last tick it moves a clock on
+    endsAt: number // startedAt + length
+    exclude: number[] // plots it leaves out, ascending
 }
 
 // Power-ups. See specs/powerups.md.
@@ -160,11 +183,46 @@ type PowerUpDef = {
 
 type PowerUpConfig = { powerUps: Record<string, PowerUpDef> } // id -> definition
 
+// Events. See specs/events.md.
+type EventKind = "good" | "bad"
+
+type EventDef = {
+    id: string
+    name: string
+    kind: EventKind
+    modes: GameMode[]
+    weight: number
+    warnTicks: number
+    durationTicks: number | null // lasting effects only
+    effect: Effect
+    target: "plot" | null
+    durationStat: ModifierStat | null // a ...Pct stat scaling the length
+    amountStat: ModifierStat | null // a ...Pct stat scaling the effect's amount
+    blockStat: ModifierStat | null // a ...Chance stat: % chance the event does nothing
+}
+
+type EventConfig = {
+    firstEventTicks: number
+    timedGapTicks: number
+    events: Record<string, EventDef> // id -> definition
+}
+
+// The announced or running event. Every number is fixed at announcement.
+type RunEvent = {
+    id: string
+    announcedAt: number
+    startsAt: number // the tick it fires on
+    endsAt: number // startsAt + length; equals startsAt for instant events
+    plot: number | null // the target, for plot events
+    amount: number | null // effect amount after amountStat
+}
+
 type LogEntry = { tick: number; action: Action }
 
 type GameConfig = {
     mode: GameMode
     allowPowerUps: boolean
+    allowEvents: boolean
 }
 
 export type {
@@ -202,5 +260,9 @@ export type {
     Effect,
     ActiveEffect,
     PowerUpDef,
-    PowerUpConfig
+    PowerUpConfig,
+    EventKind,
+    EventDef,
+    EventConfig,
+    RunEvent
 }

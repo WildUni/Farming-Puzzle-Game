@@ -1,7 +1,7 @@
 // Survival tuning: lives, coins, life prices and the difficulty curve.
 // Every number comes from src/data/difficulty.json. See specs/difficulty.md.
 import type { OrderRules } from "./types"
-import { ORDER_TICKS } from "./game_constants"
+import { ORDER_TICKS, TICKS_PER_SECOND } from "./game_constants"
 import rawDifficulty from "../data/difficulty.json"
 
 type LevelRow = {
@@ -9,6 +9,7 @@ type LevelRow = {
     maxOpenOrders: number
     minAmount: number
     maxAmount: number
+    eventGapSeconds: number
 }
 
 type DifficultyConfig = {
@@ -71,7 +72,8 @@ function validateDifficulty(raw: unknown): DifficultyConfig {
         const maxOpenOrders = wholeAtLeast(row, "maxOpenOrders", 1, `${at}.maxOpenOrders`)
         const minAmount = wholeAtLeast(row, "minAmount", 1, `${at}.minAmount`)
         const maxAmount = wholeAtLeast(row, "maxAmount", minAmount, `${at}.maxAmount`)
-        return { orderTimeMultiplier: mult, maxOpenOrders, minAmount, maxAmount }
+        const eventGapSeconds = wholeAtLeast(row, "eventGapSeconds", 1, `${at}.eventGapSeconds`)
+        return { orderTimeMultiplier: mult, maxOpenOrders, minAmount, maxAmount, eventGapSeconds }
     })
 
     return { startLives, coinsPerOrder, lifePrice: { base, growth }, ordersPerLevel, levels }
@@ -95,11 +97,18 @@ function orderRulesFor(level: number, config: DifficultyConfig = DIFFICULTY): Or
     }
 }
 
+// Ticks between one event ending and the next announcement at a level. Past the end: last row.
+function eventGapTicks(level: number, config: DifficultyConfig = DIFFICULTY): number {
+    return (
+        config.levels[Math.min(level, config.levels.length - 1)].eventGapSeconds * TICKS_PER_SECOND
+    )
+}
+
 // Price of the next life after `livesBought` purchases: round(base x growth^n).
 function lifePrice(livesBought: number, config: DifficultyConfig = DIFFICULTY): number {
     const { base, growth } = config.lifePrice
     return Math.round(base * growth ** livesBought)
 }
 
-export { validateDifficulty, DIFFICULTY, levelFor, orderRulesFor, lifePrice }
+export { validateDifficulty, DIFFICULTY, levelFor, orderRulesFor, eventGapTicks, lifePrice }
 export type { DifficultyConfig, LevelRow }

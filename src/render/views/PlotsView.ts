@@ -3,7 +3,8 @@
 import { GameObjects, Scene } from "phaser"
 import type { GameState } from "../../sim/types"
 import { progress } from "../../sim/plot"
-import { plotText } from "../format"
+import { plotOverlays, plotText } from "../format"
+import type { PlotOverlay } from "../format"
 import { COLORS, TEXT } from "../theme"
 
 const SIZE = 140
@@ -18,6 +19,8 @@ type Square = {
     label: GameObjects.Text
     track: GameObjects.Rectangle // growth bar background
     bar: GameObjects.Rectangle // growth bar, fills as the crop grows
+    tint: GameObjects.Rectangle // see-through colour over the plot (frost, sun)
+    marks: GameObjects.Text // short words for event markers along the top
 }
 
 export class PlotsView {
@@ -35,15 +38,32 @@ export class PlotsView {
     update(state: GameState, selected: number | null, targets: number[] | null = null): void {
         if (this.squares.length !== state.plots.length) this.build(state.plots.length)
 
+        const overlays = plotOverlays(state)
         state.plots.forEach((plot, i) => {
-            const { box, label, track, bar } = this.squares[i]
+            const { box, label, track, bar, tint, marks } = this.squares[i]
+            const here = overlays[i]
             box.setFillStyle(COLORS.plot[plot.state])
             const isTarget = targets !== null && targets.includes(i)
             const lit = targets === null ? plot.state === "ready" || i === selected : isTarget
-            if (lit) box.setStrokeStyle(4, COLORS.highlight)
+            if (here.includes("target")) box.setStrokeStyle(5, COLORS.eventTarget)
+            else if (lit) box.setStrokeStyle(4, COLORS.highlight)
             else box.setStrokeStyle(2, COLORS.plotStroke)
+            const tinted = here.includes("frozen") || here.includes("fast")
+            tint.setVisible(tinted)
+            if (tinted) {
+                tint.setFillStyle(
+                    here.includes("frozen") ? COLORS.frozenTint : COLORS.sunnyTint,
+                    0.35
+                )
+            }
+            marks.setText(
+                here
+                    .filter((m) => m !== "target")
+                    .map(markText)
+                    .join(" ")
+            )
             const alpha = targets !== null && !isTarget ? 0.45 : 1
-            for (const part of [box, label, track, bar]) part.setAlpha(alpha)
+            for (const part of [box, label, track, bar, tint, marks]) part.setAlpha(alpha)
             label.setText(plotText(plot, state.tick))
             const growing = plot.state === "growing"
             track.setVisible(growing)
@@ -55,7 +75,7 @@ export class PlotsView {
     // Lays out `count` squares. Rebuilt whenever the plot count changes.
     private build(count: number): void {
         this.squares.forEach((s) => {
-            for (const part of [s.box, s.label, s.track, s.bar]) part.destroy()
+            for (const part of [s.box, s.label, s.track, s.bar, s.tint, s.marks]) part.destroy()
         })
 
         const cols = Math.ceil(Math.sqrt(count))
@@ -80,7 +100,28 @@ export class PlotsView {
             const bar = this.scene.add
                 .rectangle(barX, barY, BAR_W, BAR_H, COLORS.barFill)
                 .setOrigin(0)
-            return { box, label, track, bar }
+            // The tint sits over the box but lets clicks through to it.
+            const tint = this.scene.add.rectangle(x, y, SIZE, SIZE, COLORS.frozenTint, 0.35)
+            const marks = this.scene.add
+                .text(x, y - SIZE / 2 + 6, "", { ...TEXT.label, fontSize: 14 })
+                .setOrigin(0.5, 0)
+            return { box, label, track, bar, tint, marks }
         })
+    }
+}
+
+// Word shown on a plot for each marker. The target is drawn as a red outline instead.
+function markText(mark: PlotOverlay): string {
+    switch (mark) {
+        case "blocked":
+            return "CROWS"
+        case "frozen":
+            return "FROST"
+        case "fast":
+            return "SUN"
+        case "shield":
+            return "SAFE"
+        case "target":
+            return ""
     }
 }

@@ -55,7 +55,10 @@ function rawConfig(): Record<string, unknown> {
 const config: PowerUpConfig = validatePowerUps(rawConfig())
 
 function state(overrides: Partial<GameState> = {}): GameState {
-    return { ...createGame(1, { mode: "survival", allowPowerUps: true }), ...overrides }
+    return {
+        ...createGame(1, { mode: "survival", allowPowerUps: true, allowEvents: false }),
+        ...overrides
+    }
 }
 
 // Upgrades that set dropChance to exactly `pct` on top of the shipped base.
@@ -108,6 +111,7 @@ describe("validatePowerUps", () => {
         ["a weight of 0", (r) => (r.powerUps[0].weight = 0)],
         ["a fractional weight", (r) => (r.powerUps[0].weight = 1.5)],
         ["an unknown effect kind", (r) => (r.powerUps[2].effect = { kind: "explode" })],
+        ["an event-only effect kind", (r) => (r.powerUps[2].effect = { kind: "blockHarvest" })],
         ["a rate of 100", (r) => (r.powerUps[1].effect = { kind: "orderRate", pct: 100 })],
         ["a negative rate", (r) => (r.powerUps[1].effect = { kind: "orderRate", pct: -1 })],
         ["a cut of 0 ticks", (r) => (r.powerUps[2].effect = { kind: "cutGrowth", ticks: 0 })],
@@ -139,10 +143,12 @@ describe("dropTable", () => {
 
 describe("rollDrop", () => {
     it("draws nothing with power-ups off, at 0% chance, or with nothing to drop", () => {
-        const off = state({ allowPowerUps: false })
+        const off = state({ allowPowerUps: false, allowEvents: false })
         expect(rollDrop(off)).toEqual([null, off.rng.drops])
         const one: PowerUpConfig = { powerUps: { coins: config.powerUps.coins } }
-        const timed = { ...createGame(1, { mode: "timed", allowPowerUps: true }) }
+        const timed = {
+            ...createGame(1, { mode: "timed", allowPowerUps: true, allowEvents: false })
+        }
         expect(rollDrop(timed, one)).toEqual([null, timed.rng.drops])
     })
 
@@ -150,7 +156,9 @@ describe("rollDrop", () => {
         let misses = 0
         let hits = 0
         for (let seed = 0; seed < 200; seed++) {
-            const s = { ...createGame(seed, { mode: "survival", allowPowerUps: true }) }
+            const s = {
+                ...createGame(seed, { mode: "survival", allowPowerUps: true, allowEvents: false })
+            }
             const [drop, rng] = rollDrop(s)
             if (drop === null) {
                 misses++
@@ -167,7 +175,11 @@ describe("rollDrop", () => {
     it("every hit in a one-item config is that item", () => {
         const one: PowerUpConfig = { powerUps: { freeze: config.powerUps.freeze } }
         const drops = Array.from({ length: 200 }, (_, seed) => {
-            const s = createGame(seed, { mode: "survival", allowPowerUps: true })
+            const s = createGame(seed, {
+                mode: "survival",
+                allowPowerUps: true,
+                allowEvents: false
+            })
             return rollDrop(s, one)[0]
         })
         expect(drops).toContain("freeze")
@@ -225,7 +237,7 @@ describe("powerUpTargets / canUsePowerUp", () => {
             [s, 1, 1],
             [s, 2, null],
             [s, 0.5, null],
-            [{ ...s, allowPowerUps: false }, 1, null],
+            [{ ...s, allowPowerUps: false, allowEvents: false }, 1, null],
             [{ ...s, status: "ended" }, 1, null],
             [{ ...s, upgradeOffer: [{ id: "bigTips", tier: "common" }] }, 1, null]
         ]

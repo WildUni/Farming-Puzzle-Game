@@ -6,7 +6,10 @@ import {
     tickEffects,
     startEffect,
     cutGrowth,
-    finishGrowth
+    finishGrowth,
+    stealCrop,
+    harvestBlocked,
+    deliverBonusAt
 } from "./effects"
 import { progress, updateGrowth } from "./plot"
 import { isExpired, timeLeft } from "./orders"
@@ -26,7 +29,7 @@ function effect(
     startedAt = 0,
     endsAt = 100
 ): ActiveEffect {
-    return { source: kind, effect: { kind, pct }, startedAt, endsAt }
+    return { source: kind, effect: { kind, pct }, startedAt, endsAt, exclude: [] }
 }
 
 // Shifts on ticks startedAt+1 ... startedAt+n.
@@ -182,7 +185,7 @@ describe("startEffect", () => {
 
     it("appends a new source with endsAt = now + durationTicks", () => {
         expect(startEffect([], "orderFreeze", freeze, 10, 100)).toEqual([
-            { source: "orderFreeze", effect: freeze, startedAt: 10, endsAt: 110 }
+            { source: "orderFreeze", effect: freeze, startedAt: 10, endsAt: 110, exclude: [] }
         ])
     })
 
@@ -190,7 +193,7 @@ describe("startEffect", () => {
         const once = startEffect([], "orderFreeze", freeze, 10, 100)
         const twice = startEffect(once, "orderFreeze", freeze, 50, 100)
         expect(twice).toEqual([
-            { source: "orderFreeze", effect: freeze, startedAt: 10, endsAt: 210 }
+            { source: "orderFreeze", effect: freeze, startedAt: 10, endsAt: 210, exclude: [] }
         ])
         expect(once[0].endsAt).toBe(110)
     })
@@ -232,5 +235,67 @@ describe("cutGrowth / finishGrowth", () => {
         expect(finishGrowth(growing(0, 100))).toEqual({ state: "ready", cropId: "garlic" })
         expect(finishGrowth({ state: "empty" })).toBeNull()
         expect(finishGrowth({ state: "ready", cropId: "garlic" })).toBeNull()
+    })
+})
+
+describe("plot exclusion and action effects", () => {
+    function action(
+        effect: ActiveEffect["effect"],
+        startedAt: number,
+        endsAt: number,
+        exclude: number[] = []
+    ): ActiveEffect {
+        return { source: effect.kind, effect, startedAt, endsAt, exclude }
+    }
+
+    it("a growthRate 0 effect with exclude [1] holds plot 0 and leaves plot 1 growing", () => {
+        const frost = { ...effect("growthRate", 0), exclude: [1] }
+        const plots = [growing(0, 100), growing(0, 100)]
+        const out = tickEffects([frost], plots, [], 1)
+        expect(out.plots[0]).toEqual(growing(1, 101))
+        expect(out.plots[1]).toBe(plots[1])
+    })
+
+    it("startEffect stores exclude and keeps it when time is added", () => {
+        const frost = { kind: "growthRate", pct: 0 } as const
+        const once = startEffect([], "frost", frost, 0, 10, [2])
+        expect(once[0].exclude).toEqual([2])
+        expect(startEffect(once, "frost", frost, 5, 10)[0].exclude).toEqual([2])
+    })
+
+    it("action effects move nothing and are dropped on endsAt + 1", () => {
+        const crows = action({ kind: "blockHarvest" }, 0, 5)
+        const plots = [growing(0, 100)]
+        const orders = [order(50)]
+        const during = tickEffects([crows], plots, orders, 3)
+        expect(during.plots).toBe(plots)
+        expect(during.orders).toBe(orders)
+        expect(during.active).toEqual([crows])
+        expect(tickEffects([crows], plots, orders, 6).active).toEqual([])
+    })
+
+    it("stealCrop empties growing and ready plots and returns null for an empty one", () => {
+        expect(stealCrop(growing(0, 100))).toEqual({ state: "empty" })
+        expect(stealCrop({ state: "ready", cropId: "garlic" })).toEqual({ state: "empty" })
+        expect(stealCrop({ state: "empty" })).toBeNull()
+    })
+
+    it("harvestBlocked works from startedAt to endsAt - 1, and never on an excluded plot", () => {
+        const crows = [action({ kind: "blockHarvest" }, 10, 16, [2])]
+        expect(harvestBlocked(crows, 0, 9)).toBe(false)
+        expect(harvestBlocked(crows, 0, 10)).toBe(true)
+        expect(harvestBlocked(crows, 0, 15)).toBe(true)
+        expect(harvestBlocked(crows, 0, 16)).toBe(false)
+        expect(harvestBlocked(crows, 2, 12)).toBe(false)
+        expect(harvestBlocked([], 0, 12)).toBe(false)
+    })
+
+    it("deliverBonusAt sums working bonuses and is 0 on endsAt or with none", () => {
+        const a = action({ kind: "deliverBonus", coins: 3 }, 0, 10)
+        const b = { ...action({ kind: "deliverBonus", coins: 2 }, 5, 20), source: "b" }
+        expect(deliverBonusAt([a, b], 7)).toBe(5)
+        expect(deliverBonusAt([a, b], 10)).toBe(2)
+        expect(deliverBonusAt([a], 10)).toBe(0)
+        expect(deliverBonusAt([], 3)).toBe(0)
     })
 })

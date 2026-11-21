@@ -1,7 +1,14 @@
 import { describe, it, expect } from "vitest"
-import { validateDifficulty, DIFFICULTY, levelFor, orderRulesFor, lifePrice } from "./difficulty"
+import {
+    validateDifficulty,
+    DIFFICULTY,
+    levelFor,
+    orderRulesFor,
+    eventGapTicks,
+    lifePrice
+} from "./difficulty"
 import type { DifficultyConfig } from "./difficulty"
-import { ORDER_TICKS } from "./game_constants"
+import { ORDER_TICKS, TICKS_PER_SECOND } from "./game_constants"
 import shipped from "../data/difficulty.json"
 
 // A small valid config, so tests don't depend on the tuned numbers.
@@ -11,9 +18,27 @@ const config: DifficultyConfig = {
     lifePrice: { base: 10, growth: 1.5 },
     ordersPerLevel: 3,
     levels: [
-        { orderTimeMultiplier: 1.5, maxOpenOrders: 1, minAmount: 2, maxAmount: 4 },
-        { orderTimeMultiplier: 1, maxOpenOrders: 2, minAmount: 3, maxAmount: 6 },
-        { orderTimeMultiplier: 0.5, maxOpenOrders: 3, minAmount: 5, maxAmount: 9 }
+        {
+            orderTimeMultiplier: 1.5,
+            maxOpenOrders: 1,
+            minAmount: 2,
+            maxAmount: 4,
+            eventGapSeconds: 30
+        },
+        {
+            orderTimeMultiplier: 1,
+            maxOpenOrders: 2,
+            minAmount: 3,
+            maxAmount: 6,
+            eventGapSeconds: 20
+        },
+        {
+            orderTimeMultiplier: 0.5,
+            maxOpenOrders: 3,
+            minAmount: 5,
+            maxAmount: 9,
+            eventGapSeconds: 10
+        }
     ]
 }
 
@@ -53,7 +78,12 @@ describe("validateDifficulty", () => {
         ["maxOpenOrders 0", broken((c) => (c.levels[0].maxOpenOrders = 0))],
         ["minAmount 0", broken((c) => (c.levels[0].minAmount = 0))],
         ["maxAmount below minAmount", broken((c) => (c.levels[2].maxAmount = 4))],
-        ["maxAmount fractional", broken((c) => (c.levels[2].maxAmount = 9.5))]
+        ["maxAmount fractional", broken((c) => (c.levels[2].maxAmount = 9.5))],
+        ["eventGapSeconds 0", broken((c) => (c.levels[0].eventGapSeconds = 0))],
+        [
+            "eventGapSeconds missing",
+            broken((c) => delete (c.levels[0] as Partial<(typeof c.levels)[0]>).eventGapSeconds)
+        ]
     ])("throws for %s", (_, raw) => {
         expect(() => validateDifficulty(raw)).toThrow(Error)
     })
@@ -137,5 +167,18 @@ describe("shipped curve", () => {
 
     it("allows two or more open orders by the last level", () => {
         expect(orderRulesFor(DIFFICULTY.levels.length - 1).maxOpenOrders).toBeGreaterThanOrEqual(2)
+    })
+})
+
+describe("eventGapTicks", () => {
+    it("follows each row, and uses the last row past the end", () => {
+        expect(eventGapTicks(0, config)).toBe(30 * TICKS_PER_SECOND)
+        expect(eventGapTicks(2, config)).toBe(10 * TICKS_PER_SECOND)
+        expect(eventGapTicks(9, config)).toBe(10 * TICKS_PER_SECOND)
+    })
+
+    it("never goes up from one shipped level to the next", () => {
+        const gaps = DIFFICULTY.levels.map((_, i) => eventGapTicks(i))
+        for (let i = 1; i < gaps.length; i++) expect(gaps[i]).toBeLessThanOrEqual(gaps[i - 1])
     })
 })

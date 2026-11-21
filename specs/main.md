@@ -8,24 +8,27 @@ Whole-game functions. This module coordinates the other modules: it owns `GameSt
 
 Returns a fresh state for a new run.
 
-| Field                                      | Starting value                                                                                                       |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| `mode`                                     | `config.mode`                                                                                                        |
-| `status`                                   | `'running'`                                                                                                          |
-| `tick`                                     | `0`                                                                                                                  |
-| `rng`                                      | `{ orders: seedRNG(seed), upgrades: seedStream(seed, 1), harvest: seedStream(seed, 2), drops: seedStream(seed, 3) }` |
-| `plots`                                    | `START_PLOTS` empty plots, each a separate object                                                                    |
-| `inventory`                                | `{}`                                                                                                                 |
-| `orders`                                   | `[]`                                                                                                                 |
-| `nextOrderId`                              | `0`                                                                                                                  |
-| `score`, `ordersCompleted`, `ordersFailed` | `0`                                                                                                                  |
-| `lives`                                    | Survival: `DIFFICULTY.startLives`. Other modes: `0`                                                                  |
-| `coins`, `livesBought`                     | `0`                                                                                                                  |
-| `upgrades`                                 | `[]`                                                                                                                 |
-| `upgradeOffer`                             | `null`                                                                                                               |
-| `offersMade`                               | `0`                                                                                                                  |
-| `allowPowerUps`                            | `config.allowPowerUps`                                                                                               |
-| `powerUps`, `activeEffects`                | `[]`                                                                                                                 |
+| Field                                      | Starting value                                                                                                                                    |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mode`                                     | `config.mode`                                                                                                                                     |
+| `status`                                   | `'running'`                                                                                                                                       |
+| `tick`                                     | `0`                                                                                                                                               |
+| `rng`                                      | `{ orders: seedRNG(seed), upgrades: seedStream(seed, 1), harvest: seedStream(seed, 2), drops: seedStream(seed, 3), events: seedStream(seed, 4) }` |
+| `plots`                                    | `START_PLOTS` empty plots, each a separate object                                                                                                 |
+| `inventory`                                | `{}`                                                                                                                                              |
+| `orders`                                   | `[]`                                                                                                                                              |
+| `nextOrderId`                              | `0`                                                                                                                                               |
+| `score`, `ordersCompleted`, `ordersFailed` | `0`                                                                                                                                               |
+| `lives`                                    | Survival: `DIFFICULTY.startLives`. Other modes: `0`                                                                                               |
+| `coins`, `livesBought`                     | `0`                                                                                                                                               |
+| `upgrades`                                 | `[]`                                                                                                                                              |
+| `upgradeOffer`                             | `null`                                                                                                                                            |
+| `offersMade`                               | `0`                                                                                                                                               |
+| `allowPowerUps`                            | `config.allowPowerUps`                                                                                                                            |
+| `powerUps`, `activeEffects`                | `[]`                                                                                                                                              |
+| `allowEvents`                              | `config.allowEvents`                                                                                                                              |
+| `event`                                    | `null`                                                                                                                                            |
+| `nextEventAt`                              | `EVENTS.firstEventTicks`                                                                                                                          |
 
 Rules:
 
@@ -67,6 +70,7 @@ Returns a **new** state, or `null` if the move is not allowed. A `null` result m
 
 - `plot` must be a valid index, as for `plant`.
 - Calls `harvest(plots[plot])`. Returns `null` if the plot is not `'ready'` (empty or still growing).
+- Returns `null` while `harvestBlocked(activeEffects, plot, tick)`: Crows are there and the plot isn't shielded (see [events.md](events.md)).
 - Empties that plot and adds `crops[cropId].yield + yieldBonus` to `inventory[cropId]` (starting from 0 if missing), with `yieldBonus` from `modifiersAt(upgrades, { plot, cropId })`.
 - **Bumper harvest:** if `bumperChance` from the same `modifiersAt` is above 0, draws `roll = randomInt(rng.harvest, 0, 99)`, stores the new state in `rng.harvest`, and adds 1 more crop when `roll < bumperChance`. With `bumperChance` 0 it draws nothing (see [upgrades.md](upgrades.md)).
 - **Power-up drop:** then calls `rollDrop(state)`, stores the new `rng.drops`, and appends the dropped id to `powerUps` if there is one and `powerUps.length < powerUpSlots`. A drop with every slot full is lost. With power-ups off or `dropChance` 0 it draws nothing (see [powerups.md](powerups.md)).
@@ -77,7 +81,7 @@ Returns a **new** state, or `null` if the move is not allowed. A `null` result m
 - Returns `null` if the order `isExpired` at `state.tick` (`tick > expiresAt`). Delivering on tick `expiresAt` itself is allowed. With the tick order above this can't normally happen, but it keeps `applyAction` safe to call on any state.
 - Calls `fulfill(order, inventory)`. Returns `null` if the inventory is short.
 - Removes the order from `orders` (other orders keep their order), stores the new inventory, adds `order.value` to `score`, and adds 1 to `ordersCompleted`.
-- **Survival:** also adds `DIFFICULTY.coinsPerOrder + coinsPerOrder` (the modifier) to `coins`. Other modes don't earn coins.
+- **Survival:** also adds `DIFFICULTY.coinsPerOrder + coinsPerOrder` (the modifier) `+ deliverBonusAt(activeEffects, tick)` (Generous customer) to `coins`. Other modes don't earn coins.
 - Does not create a new order. That is `step`'s job. Filling an order can raise the level (see [difficulty.md](difficulty.md)); orders `step` creates from then on use the new level's rules, while orders already open keep their time limit and amount.
 
 **`buyLife`** `{ type: 'buyLife' }`
@@ -128,16 +132,18 @@ Moves the game forward one tick. This is the only way time passes in a run.
 Returns a **new** state. The steps run in this order, each one using the result of the one before:
 
 1. **Tick:** `tick` becomes `state.tick + 1`. Every later step uses this new tick.
-2. **Effects:** `tickEffects(activeEffects, plots, orders, tick)` drops lasting effects that have ended and moves crops' and orders' deadlines for the ones still active (see [effects.md](effects.md)). It runs before growth and failed orders, so a crop pulled to this tick turns ready now, and an order pushed past this tick doesn't fail.
-3. **Growth:** every plot is passed through `updateGrowth(plot, tick)`. A growing plot becomes `'ready'` on its `readyAt` tick (_p + growTicks_ for a crop planted on tick _p_). Empty and ready plots don't change.
-4. **Failed orders:** every order where `isExpired(order, tick)` (`tick > expiresAt`) is removed, and `ordersFailed` goes up by 1 for each. The other orders keep their order in the list.
+2. **Events start and end:** if the announced event's `startsAt` is this tick it starts (an instant effect fires, or a lasting one goes through `startEffect`; Moles may draw its block roll from `rng.events`). Then, if its `endsAt` is this tick or earlier, `event` becomes `null` and `nextEventAt = tick + gapTicks(state)`. See [events.md](events.md).
+3. **Effects:** `tickEffects(activeEffects, plots, orders, tick)` drops lasting effects that have ended and moves crops' and orders' deadlines for the ones still active (see [effects.md](effects.md)). It runs before growth and failed orders, so a crop pulled to this tick turns ready now, and an order pushed past this tick doesn't fail.
+4. **Growth:** every plot is passed through `updateGrowth(plot, tick)`. A growing plot becomes `'ready'` on its `readyAt` tick (_p + growTicks_ for a crop planted on tick _p_). Empty and ready plots don't change.
+5. **Failed orders:** every order where `isExpired(order, tick)` (`tick > expiresAt`) is removed, and `ordersFailed` goes up by 1 for each. The other orders keep their order in the list.
     - **Survival:** each failed order also costs one life. `lives` never goes below 0, even when more orders fail on one tick than there are lives left.
-5. **End of run:** if the mode's end condition is met, `status` becomes `'ended'` and `step` stops here. No new orders are created.
+6. **End of run:** if the mode's end condition is met, `status` becomes `'ended'` and `step` stops here. No new orders are created.
     - **Timed:** `tick >= TIMED_MODE_TICKS`. Ticks `0` to `TIMED_MODE_TICKS − 1` are playable.
     - **Survival:** `lives` is 0. Once ended, `applyAction` refuses every action, including `buyLife`.
     - **Puzzle:** no end condition yet (see Open items).
-6. **New orders:** with `rules = orderRules(state)`, while fewer than `rules.maxOpenOrders` orders are open, create one with `createOrder(nextOrderId, tick, rng.orders, crops, rules)`, add it to the **end** of `orders`, store the returned state in `rng.orders`, and add 1 to `nextOrderId`. This also creates the first orders, on tick 1, and refills a slot the tick after an order is delivered or failed. If more orders are open than `maxOpenOrders` allows, none are removed; no new ones are made until the count drops.
-7. **Upgrade offer (Survival):** if `ordersCompleted >= (offersMade + 1) × ORDERS_PER_UPGRADE`, `rollOffer(state, "survival", crops)` picks the offer from `rng.upgrades`, `upgradeOffer` is set to it (or stays `null` if nothing is eligible), the new state is stored in `rng.upgrades` and `offersMade` goes up by 1.
+7. **New orders:** with `rules = orderRules(state)`, while fewer than `rules.maxOpenOrders` orders are open, create one with `createOrder(nextOrderId, tick, rng.orders, crops, rules)`, add it to the **end** of `orders`, store the returned state in `rng.orders`, and add 1 to `nextOrderId`. This also creates the first orders, on tick 1, and refills a slot the tick after an order is delivered or failed. If more orders are open than `maxOpenOrders` allows, none are removed; no new ones are made until the count drops.
+8. **Event announcement:** if `allowEvents`, no event is announced or running and `tick >= nextEventAt`, `announceEvent(state)` picks the next event from `rng.events` and stores it in `event`; if nothing is eligible, `nextEventAt = tick + gapTicks(state)`. Skipped when the run ended on this step.
+9. **Upgrade offer (Survival):** if `ordersCompleted >= (offersMade + 1) × ORDERS_PER_UPGRADE`, `rollOffer(state, "survival", crops)` picks the offer from `rng.upgrades`, `upgradeOffer` is set to it (or stays `null` if nothing is eligible), the new state is stored in `rng.upgrades` and `offersMade` goes up by 1.
 
 **Rules**
 
@@ -145,7 +151,7 @@ Returns a **new** state. The steps run in this order, each one using the result 
 - While `upgradeOffer` is not `null`, returns `state` unchanged: time stops until `chooseUpgrade`.
 - Never changes `state` or anything inside it.
 - Never changes `inventory`, `score`, `ordersCompleted`, `coins`, `livesBought` or `powerUps`. Those only change through `applyAction`. `lives` only goes down in `step`. `activeEffects` only gains entries through `usePowerUp`; `step` only removes ended ones.
-- `rng.orders` changes only when orders are created (exactly two draws per order). `rng.upgrades` changes only when an upgrade offer is made (exactly two draws per card). `step` never touches `rng.harvest` or `rng.drops`. No stream's draws depend on another's, so upgrade picks, harvests, drops and power-up use never change which orders come next.
+- `rng.orders` changes only when orders are created (exactly two draws per order). `rng.upgrades` changes only when an upgrade offer is made (exactly two draws per card). `rng.events` changes only when an event is announced (two or three draws) or Moles' block roll is made (one draw). `step` never touches `rng.harvest` or `rng.drops`. No stream's draws depend on another's, so upgrade picks, harvests, drops, power-up use and events never change which orders come next.
 - Deterministic: the same arguments always give an equal result, so the same seed and the same actions always give the same run.
 
 ## Tests (`main.test.ts`)
@@ -239,6 +245,12 @@ Returns a **new** state. The steps run in this order, each one using the result 
 - The offer flow: no offer before `ORDERS_PER_UPGRADE` filled orders, an offer on the next step, time stopped and other actions refused while it is open, `chooseUpgrade` accepting only an offered id with a valid target (or none, for untargeted upgrades), the next offer at `2 × ORDERS_PER_UPGRADE`, none in Timed, none when nothing is eligible.
 - Making an offer leaves `rng.orders` unchanged.
 - Each modifier changes its rule: `growthPct` on `plant`'s `readyAt` (and not on crops already growing), `yieldBonus` on harvest, `bumperChance` on harvest (one draw from `rng.harvest`, none without it), both per plot and crop for targeted copies, `coinsPerOrder` on deliver, `orderTimePct` on new orders, `lifePricePct` on `buyLife` and `canBuyLife`, `extraPlots` adding an empty plot (and none past its cap).
+
+**Events** (see [events.md](events.md) for the full list)
+
+- `createGame` copies `allowEvents` and sets `nextEventAt` to `firstEventTicks`.
+- Events start before effects move clocks and before growth, so Rain shower readies crops on its start tick; they are announced after new orders, so announcing never shifts `rng.orders`.
+- Crows refuse `harvest` and Generous customer adds to `deliver`'s coins, each only on their working ticks.
 
 **Power-ups and effects** (see [powerups.md](powerups.md) and [effects.md](effects.md) for the full lists)
 

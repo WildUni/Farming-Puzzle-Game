@@ -14,6 +14,7 @@ import {
 } from "./game_constants"
 import { DIFFICULTY, lifePrice, levelFor, orderRulesFor } from "./difficulty"
 import { UPGRADES, effectAmount, modifiersFor, rollOffer, scalePct } from "./upgrades"
+import { EVENTS } from "./events"
 import type {
     Action,
     Crop,
@@ -26,8 +27,8 @@ import type {
     Tier
 } from "./types"
 
-const config: GameConfig = { mode: "survival", allowPowerUps: false }
-const timed: GameConfig = { mode: "timed", allowPowerUps: false }
+const config: GameConfig = { mode: "survival", allowPowerUps: false, allowEvents: false }
+const timed: GameConfig = { mode: "timed", allowPowerUps: false, allowEvents: false }
 
 const cropList: Crop[] = [
     { id: "garlic", growTicks: 80, yield: 2, value: 2 },
@@ -99,12 +100,18 @@ describe("createGame", () => {
             orders: seedRNG(1),
             upgrades: seedStream(1, 1),
             harvest: seedStream(1, 2),
-            drops: seedStream(1, 3)
+            drops: seedStream(1, 3),
+            events: seedStream(1, 4)
         })
+        expect(g.allowEvents).toBe(false)
+        expect(g.event).toBeNull()
+        expect(g.nextEventAt).toBe(EVENTS.firstEventTicks)
         expect(g.allowPowerUps).toBe(false)
         expect(g.powerUps).toEqual([])
         expect(g.activeEffects).toEqual([])
-        expect(createGame(1, { ...config, allowPowerUps: true }).allowPowerUps).toBe(true)
+        expect(
+            createGame(1, { ...config, allowPowerUps: true, allowEvents: false }).allowPowerUps
+        ).toBe(true)
     })
 
     it("gives Timed runs no lives", () => {
@@ -114,7 +121,9 @@ describe("createGame", () => {
     it("always starts a new run with 0 coins", () => {
         for (const seed of [0, 1, 2, 99, 2 ** 32 - 1, -5]) {
             for (const mode of ["survival", "timed", "puzzle"] as const) {
-                expect(createGame(seed, { mode, allowPowerUps: false }).coins).toBe(0)
+                expect(
+                    createGame(seed, { mode, allowPowerUps: false, allowEvents: false }).coins
+                ).toBe(0)
             }
         }
     })
@@ -1010,7 +1019,7 @@ describe("upgrades: modifiers change the rules", () => {
 })
 
 describe("power-ups: drops and use", () => {
-    const on: GameConfig = { mode: "survival", allowPowerUps: true }
+    const on: GameConfig = { mode: "survival", allowPowerUps: true, allowEvents: false }
     const growingPlot = (readyAt: number): Plot => ({
         state: "growing",
         cropId: "garlic",
@@ -1146,7 +1155,7 @@ describe("power-ups: drops and use", () => {
         const s = withPowerUps({ plots, powerUps: ["readyOne", "coinBag"] })
         const refused: [GameState, Action][] = [
             [
-                { ...s, allowPowerUps: false },
+                { ...s, allowPowerUps: false, allowEvents: false },
                 { type: "usePowerUp", slot: 1 }
             ],
             [s, { type: "usePowerUp", slot: 2 }],

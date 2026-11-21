@@ -79,6 +79,7 @@ Rules:
 - A full Survival run, played until lives run out by a player that also buys lives whenever it can, ends with `status: 'ended'`, has `buyLife` entries in its log, and replays equal.
 - The scripted players pick the first card on each offer, with the first of its `validTargets` when it is targeted; their Survival runs have `chooseUpgrade` entries (some with a `target`) and replay equal.
 - With power-ups on, scripted players that use every power-up as soon as they can (Ready one on its first valid plot) have `usePowerUp` entries in their logs and replay equal in both modes (see [powerups.md](powerups.md)).
+- With events on, scripted Survival and Timed runs replay equal, and at least one event has run in each (see [events.md](events.md)). Events add no actions, so they need no new log entries.
 - `after-end`: an action logged after a Survival run ran out of lives.
 - Actions on tick 0, and several actions on the same tick, replay correctly.
 - The same arguments give equal results, and the log is not changed.

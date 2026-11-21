@@ -6,13 +6,13 @@ Shared types for the simulation. Contains only types, so it is exported with `ex
 
 ### Basic values
 
-| Type         | Definition                                                                     | Meaning                                                         |
-| ------------ | ------------------------------------------------------------------------------ | --------------------------------------------------------------- |
-| `RNGSeed`    | `number`                                                                       | The seed a run starts from                                      |
-| `RNGState`   | `number`                                                                       | One generator's current position, stored in `GameState.rng`     |
-| `RNGStreams` | `{ orders: RNGState; upgrades: RNGState; harvest: RNGState; drops: RNGState }` | One generator per system, so their draws don't shift each other |
-| `GameMode`   | `'survival' \| 'timed' \| 'puzzle'`                                            | Which mode the run is in                                        |
-| `GameStatus` | `'running' \| 'ended'`                                                         | Whether `step` should keep advancing the game                   |
+| Type         | Definition                                                                                       | Meaning                                                         |
+| ------------ | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| `RNGSeed`    | `number`                                                                                         | The seed a run starts from                                      |
+| `RNGState`   | `number`                                                                                         | One generator's current position, stored in `GameState.rng`     |
+| `RNGStreams` | `{ orders: RNGState; upgrades: RNGState; harvest: RNGState; drops: RNGState; events: RNGState }` | One generator per system, so their draws don't shift each other |
+| `GameMode`   | `'survival' \| 'timed' \| 'puzzle'`                                                              | Which mode the run is in                                        |
+| `GameStatus` | `'running' \| 'ended'`                                                                           | Whether `step` should keep advancing the game                   |
 
 ### `Crop` and `CropTable`
 
@@ -96,6 +96,9 @@ Everything that changes during a run. If `step` or `replay` would give a differe
 | `allowPowerUps`                   | Copied from `GameConfig.allowPowerUps`, so the rules can read it                    |
 | `powerUps`                        | Held power-up ids, one per slot, in the order they dropped                          |
 | `activeEffects`                   | `ActiveEffect`s working right now (see [effects.md](effects.md))                    |
+| `allowEvents`                     | Copied from `GameConfig.allowEvents`, so the rules can read it                      |
+| `event`                           | The announced or running `RunEvent`, else `null` (see [events.md](events.md))       |
+| `nextEventAt`                     | First tick a new event may be announced on                                          |
 
 The Survival level and the next life's price are worked out from `ordersCompleted` and `livesBought` (see [difficulty.md](difficulty.md)), so they are not stored. The same goes for the upgrade `Modifiers`, which are added up from `upgrades` (see [upgrades.md](upgrades.md)).
 
@@ -134,9 +137,9 @@ One player move, passed to `applyAction` (see [main.md](main.md)).
 
 `Tier`, `Pool`, `Modifiers`, `ModifierStat`, `StatDef`, `TierDef`, `UpgradeEffect`, `UpgradeDef`, `UpgradeConfig`, `UpgradeTarget`, `OwnedUpgrade` and `OfferCard`, described in [upgrades.md](upgrades.md). `Modifiers` is never stored in `GameState`; it is worked out from `GameState.upgrades`. `UpgradeTable` is replaced by `UpgradeConfig`.
 
-### Effect and power-up types
+### Effect, power-up and event types
 
-`LastingEffect`, `InstantEffect`, `Effect` and `ActiveEffect`, described in [effects.md](effects.md). `PowerUpDef` and `PowerUpConfig`, described in [powerups.md](powerups.md). Power-up definitions are fixed data and are not stored in `GameState`; the state holds only ids (`powerUps`) and running effects (`activeEffects`).
+`LastingEffect`, `InstantEffect`, `Effect` and `ActiveEffect`, described in [effects.md](effects.md). `PowerUpDef` and `PowerUpConfig`, described in [powerups.md](powerups.md). `EventKind`, `EventDef`, `EventConfig` and `RunEvent`, described in [events.md](events.md); event definitions are fixed data, and the state holds only the one `RunEvent`. Power-up definitions are fixed data and are not stored in `GameState`; the state holds only ids (`powerUps`) and running effects (`activeEffects`).
 
 ### `LogEntry`
 
@@ -149,7 +152,7 @@ One line of the action log: the move and the tick it was made on. Used by `repla
 ### `GameConfig`
 
 ```ts
-type GameConfig = { mode: GameMode; allowPowerUps: boolean }
+type GameConfig = { mode: GameMode; allowPowerUps: boolean; allowEvents: boolean }
 ```
 
 Settings chosen before a run. Fixed for the whole run.

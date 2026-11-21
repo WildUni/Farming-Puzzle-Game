@@ -1,6 +1,6 @@
 # mulberry.ts
 
-Seeded random number generator (mulberry32). Each state is a single number. `GameState.rng` holds one state per system (`orders`, `upgrades`, `harvest`, `drops`), so a run can be saved and replayed exactly, and one system's draws never shift another's.
+Seeded random number generator (mulberry32). Each state is a single number. `GameState.rng` holds one state per system (`orders`, `upgrades`, `harvest`, `drops`, `events`), so a run can be saved and replayed exactly, and one system's draws never shift another's.
 
 ## Exports
 
@@ -14,7 +14,7 @@ Starting state for a separate stream from the same run seed. Mixes the salt into
 
 - The same seed and salt always give the same state; different salts give unrelated states.
 - mulberry32's state is a counter, so every stream is a position on the same cycle of 2^32 values. Mixing puts each stream at a scattered position, so two streams only overlap if a run draws a large share of 2^32 numbers, which never happens.
-- `GameState.rng.orders` uses `seedRNG(seed)` itself, so order sequences are the same as before streams existed. Other streams use `seedStream` with a fixed salt each: `upgrades` uses salt `1`, `harvest` uses salt `2`, `drops` (power-up drops) uses salt `3`. Salt `4` is kept for events.
+- `GameState.rng.orders` uses `seedRNG(seed)` itself, so order sequences are the same as before streams existed. Other streams use `seedStream` with a fixed salt each: `upgrades` uses salt `1`, `harvest` uses salt `2`, `drops` (power-up drops) uses salt `3`, `events` uses salt `4`.
 
 ### `nextValue(state: RNGState): [number, RNGState]`
 
@@ -51,7 +51,7 @@ Advances the generator once.
 - Negative seeds are converted to unsigned 32-bit integers.
 - `randomInt` stays in range, reaches every value, uses one draw, and returns `min` when `min === max`.
 - `pick` returns items from the list, reaches every item, uses one draw, is deterministic, never changes the list, and throws on an empty list.
-- `seedStream` is deterministic, gives different states for salts `1`, `2` and `3` and from `seedRNG(seed)`, and its first 1,000 values don't match the first 1,000 values of `seedRNG(seed)` position by position.
+- `seedStream` is deterministic, gives different states for salts `1` to `4` and from `seedRNG(seed)`, and its first 1,000 values don't match the first 1,000 values of `seedRNG(seed)` position by position.
 
 ## Open items
 

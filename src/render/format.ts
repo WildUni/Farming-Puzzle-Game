@@ -20,6 +20,7 @@ import { levelFor } from "../sim/difficulty"
 import { lifePriceFor } from "../sim/main"
 import { copyCount, effectAmount } from "../sim/upgrades"
 import { POWER_UPS, durationFor } from "../sim/powerups"
+import { EVENTS, shieldedPlots } from "../sim/events"
 
 const MAX_HEARTS = 5 // more lives than this show as a count
 
@@ -222,8 +223,13 @@ function powerUpButtonText(def: PowerUpDef, upgrades: readonly OwnedUpgrade[]): 
 }
 
 // Lasting effects still to run a tick: an effect on its endsAt tick has done its last one.
-function shownEffects(state: GameState): ActiveEffect[] {
+function runningEffects(state: GameState): ActiveEffect[] {
     return state.activeEffects.filter((a) => a.endsAt > state.tick)
+}
+
+// The running effects started by power-ups. Event effects show on the event banner instead.
+function shownEffects(state: GameState): ActiveEffect[] {
+    return runningEffects(state).filter((a) => a.source in POWER_UPS.powerUps)
 }
 
 // "Order freeze 7s": the effect's source name and whole seconds left, rounding up.
@@ -235,7 +241,57 @@ function activeEffectText(effect: ActiveEffect, now: number): string {
 
 // True while an effect stops order timers, so their countdown bars can be drawn frozen.
 function ordersFrozen(state: GameState): boolean {
-    return shownEffects(state).some((a) => a.effect.kind === "orderRate" && a.effect.pct === 0)
+    return runningEffects(state).some((a) => a.effect.kind === "orderRate" && a.effect.pct === 0)
+}
+
+// Seconds from `now` until `tick`, rounded up.
+function secondsUntil(tick: number, now: number): number {
+    return Math.ceil((tick - now) / TICKS_PER_SECOND)
+}
+
+// Text on the event banner: "Frost in 4s" or "Moles → Plot 2 in 4s" during the warning,
+// "Frost 6s" while a lasting event runs. null when there is nothing to show.
+function eventBannerText(state: GameState): string | null {
+    const event = state.event
+    if (event === null) return null
+    const { name } = EVENTS.events[event.id]
+    if (state.tick < event.startsAt) {
+        const where = event.plot === null ? "" : ` → ${targetText(event.plot)}`
+        return `${name}${where} in ${secondsUntil(event.startsAt, state.tick)}s`
+    }
+    if (state.tick < event.endsAt) return `${name} ${secondsUntil(event.endsAt, state.tick)}s`
+    return null
+}
+
+// True when the banner's event is a good one, for its colour.
+function eventIsGood(state: GameState): boolean {
+    return state.event !== null && EVENTS.events[state.event.id].kind === "good"
+}
+
+type PlotOverlay = "target" | "blocked" | "frozen" | "fast" | "shield"
+
+// Markers drawn on each plot: the plot a plot event will hit, harvest blocked, growth stopped or
+// slowed, growth sped up, and Greenhouse protection.
+function plotOverlays(state: GameState): PlotOverlay[][] {
+    const { event, tick } = state
+    const shielded = shieldedPlots(state)
+    const working = state.activeEffects.filter((a) => a.startedAt <= tick && tick < a.endsAt)
+    return state.plots.map((_, i) => {
+        const marks: PlotOverlay[] = []
+        if (event !== null && event.plot === i && tick < event.startsAt) marks.push("target")
+        const here = working.filter((a) => !a.exclude.includes(i))
+        if (here.some((a) => a.effect.kind === "blockHarvest")) marks.push("blocked")
+        if (here.some((a) => a.effect.kind === "growthRate" && a.effect.pct < 100)) {
+            marks.push("frozen")
+        }
+        if (here.some((a) => a.effect.kind === "growthRate" && a.effect.pct > 100)) {
+            marks.push("fast")
+        }
+        if (shielded.includes(i)) marks.push("shield")
+        return marks
+    })
 }
 
 export { powerUpButtonText, shownEffects, activeEffectText, ordersFrozen }
+export { eventBannerText, eventIsGood, plotOverlays }
+export type { PlotOverlay }

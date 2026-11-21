@@ -29,6 +29,11 @@ const COLORS = {
     powerUp: 0x2f6fd6, // a held power-up's slot button
     powerUpHover: 0x4a86e8,
     slotEmpty: 0x5f6b52, // a slot with no power-up in it
+    eventGood: 0x2e8b3a, // event banner for a good event
+    eventBad: 0xb3362c, // event banner for a bad event
+    eventTarget: 0xff3b30, // outline on the plot a plot event will hit
+    frozenTint: 0x9fd8ff, // plot under a slowing or stopping effect
+    sunnyTint: 0xffd54a, // plot under a speeding-up effect
     shade: 0x000000, // dims the board while paused
     // Frame of an upgrade card, by tier.
     tier: {

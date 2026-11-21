@@ -1,0 +1,71 @@
+{
+    "firstEventSeconds": 30,
+    "timedGapSeconds": 40,
+    "events": [
+        {
+            "id": "rainShower",
+            "name": "Rain shower",
+            "kind": "good",
+            "modes": ["survival", "timed"],
+            "weight": 30,
+            "warnSeconds": 3,
+            "effect": { "kind": "cutGrowth", "ticks": 50 },
+            "amountStat": "rainCutPct"
+        },
+        {
+            "id": "sunnySpell",
+            "name": "Sunny spell",
+            "kind": "good",
+            "modes": ["survival", "timed"],
+            "weight": 20,
+            "warnSeconds": 3,
+            "seconds": 15,
+            "effect": { "kind": "growthRate", "pct": 150 },
+            "durationStat": "sunnyDurationPct"
+        },
+        {
+            "id": "generousCustomer",
+            "name": "Generous customer",
+            "kind": "good",
+            "modes": ["survival"],
+            "weight": 15,
+            "warnSeconds": 5,
+            "seconds": 20,
+            "effect": { "kind": "deliverBonus", "coins": 3 },
+            "amountStat": "deliverBonusPct"
+        },
+        {
+            "id": "frost",
+            "name": "Frost",
+            "kind": "bad",
+            "modes": ["survival", "timed"],
+            "weight": 30,
+            "warnSeconds": 5,
+            "seconds": 8,
+            "effect": { "kind": "growthRate", "pct": 0 },
+            "durationStat": "frostDurationPct"
+        },
+        {
+            "id": "crows",
+            "name": "Crows",
+            "kind": "bad",
+            "modes": ["survival", "timed"],
+            "weight": 30,
+            "warnSeconds": 5,
+            "seconds": 6,
+            "effect": { "kind": "blockHarvest" },
+            "durationStat": "crowDurationPct"
+        },
+        {
+            "id": "moles",
+            "name": "Moles",
+            "kind": "bad",
+            "modes": ["survival", "timed"],
+            "weight": 25,
+            "warnSeconds": 5,
+            "target": "plot",
+            "effect": { "kind": "stealCrop" },
+            "blockStat": "moleBlockChance"
+        }
+    ]
+}

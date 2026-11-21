@@ -5,6 +5,9 @@ import {
     activeEffectText,
     shownEffects,
     ordersFrozen,
+    eventBannerText,
+    eventIsGood,
+    plotOverlays,
     timerText,
     plotText,
     orderText,
@@ -34,7 +37,8 @@ import { lifePrice, levelFor, DIFFICULTY } from "../sim/difficulty"
 import { TIMED_MODE_TICKS, ORDER_TICKS } from "../sim/game_constants"
 import { UPGRADES, effectAmount, scalePct } from "../sim/upgrades"
 import { POWER_UPS } from "../sim/powerups"
-import type { ActiveEffect, GameState, Order } from "../sim/types"
+import { EVENTS } from "../sim/events"
+import type { ActiveEffect, GameState, Order, RunEvent } from "../sim/types"
 
 const crops = buildCropTable([
     { id: "garlic", growTicks: 80, yield: 2, value: 2 },
@@ -42,7 +46,7 @@ const crops = buildCropTable([
 ])
 
 function game(mode: GameState["mode"]): GameState {
-    return createGame(1, { mode, allowPowerUps: false })
+    return createGame(1, { mode, allowPowerUps: false, allowEvents: false })
 }
 
 describe("formatClock", () => {
@@ -331,7 +335,8 @@ describe("power-up text", () => {
         source: "orderFreeze",
         effect: { kind: "orderRate", pct: 0 },
         startedAt: 0,
-        endsAt
+        endsAt,
+        exclude: []
     })
 
     it("powerUpButtonText gives the name and fills {seconds} from durationFor", () => {
@@ -352,5 +357,81 @@ describe("power-up text", () => {
         expect(shownEffects(s)).toEqual([effect(60)])
         expect(ordersFrozen(s)).toBe(true)
         expect(ordersFrozen({ ...s, activeEffects: [effect(50)] })).toBe(false)
+    })
+
+    it("shownEffects lists only power-up effects", () => {
+        const frost: ActiveEffect = {
+            source: "frost",
+            effect: { kind: "growthRate", pct: 0 },
+            startedAt: 0,
+            endsAt: 60,
+            exclude: []
+        }
+        const s = { ...game("survival"), tick: 10, activeEffects: [frost, effect(60)] }
+        expect(shownEffects(s)).toEqual([effect(60)])
+    })
+})
+
+describe("event text", () => {
+    const run = (overrides: Partial<RunEvent>): RunEvent => ({
+        id: "frost",
+        announcedAt: 0,
+        startsAt: 50,
+        endsAt: 130,
+        plot: null,
+        amount: null,
+        ...overrides
+    })
+    const at = (tick: number, event: RunEvent | null) => ({ ...game("survival"), tick, event })
+
+    it("eventBannerText shows the warning, then the time left, rounding up", () => {
+        expect(eventBannerText(at(10, run({})))).toBe("Frost in 4s")
+        expect(eventBannerText(at(49, run({})))).toBe("Frost in 1s")
+        expect(eventBannerText(at(50, run({})))).toBe("Frost 8s")
+        expect(eventBannerText(at(129, run({})))).toBe("Frost 1s")
+        expect(eventBannerText(at(130, run({})))).toBeNull()
+        expect(eventBannerText(at(10, null))).toBeNull()
+    })
+
+    it("eventBannerText names a plot event's plot, and instant events only show a warning", () => {
+        const moles = run({ id: "moles", startsAt: 50, endsAt: 50, plot: 1 })
+        expect(eventBannerText(at(20, moles))).toBe("Moles → Plot 2 in 3s")
+        expect(eventBannerText(at(50, moles))).toBeNull()
+    })
+
+    it("eventIsGood follows the event's kind", () => {
+        expect(eventIsGood(at(0, run({ id: "sunnySpell" })))).toBe(true)
+        expect(eventIsGood(at(0, run({})))).toBe(false)
+        expect(eventIsGood(at(0, null))).toBe(false)
+        expect(EVENTS.events.sunnySpell.kind).toBe("good")
+    })
+
+    it("plotOverlays marks the target, crows, frost, sun and Greenhouse plots", () => {
+        const base = game("survival")
+        const working = (effect: ActiveEffect["effect"], exclude: number[] = []): ActiveEffect => ({
+            source: effect.kind,
+            effect,
+            startedAt: 10,
+            endsAt: 20,
+            exclude
+        })
+        const s = {
+            ...base,
+            tick: 12,
+            event: run({ id: "moles", startsAt: 30, endsAt: 30, plot: 0 }),
+            upgrades: [{ id: "greenhouse", tier: "epic" as const, target: 3 }],
+            activeEffects: [
+                working({ kind: "blockHarvest" }, [3]),
+                working({ kind: "growthRate", pct: 0 }, [3]),
+                working({ kind: "growthRate", pct: 150 })
+            ]
+        }
+        expect(plotOverlays(s)).toEqual([
+            ["target", "blocked", "frozen", "fast"],
+            ["blocked", "frozen", "fast"],
+            ["blocked", "frozen", "fast"],
+            ["fast", "shield"]
+        ])
+        expect(plotOverlays({ ...s, tick: 20, event: null })).toEqual([[], [], [], ["shield"]])
     })
 })

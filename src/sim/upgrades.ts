@@ -33,16 +33,31 @@ const MODIFIER_STATS: readonly ModifierStat[] = [
     "lifePricePct",
     "dropChance",
     "powerUpSlots",
-    "powerUpDurationPct"
+    "powerUpDurationPct",
+    "warnBonusSeconds",
+    "goodEventPct",
+    "eventGapPct",
+    "rainCutPct",
+    "sunnyDurationPct",
+    "deliverBonusPct",
+    "frostDurationPct",
+    "crowDurationPct",
+    "moleBlockChance",
+    "shielded"
 ]
 
 // Stats read per plot and crop (by plant and harvest), so targeted upgrades may use them.
-const CONTEXT_STATS: readonly ModifierStat[] = ["growthPct", "yieldBonus", "bumperChance"]
+const CONTEXT_STATS: readonly ModifierStat[] = [
+    "growthPct",
+    "yieldBonus",
+    "bumperChance",
+    "shielded"
+]
 
 const POOLS: readonly Pool[] = ["survival", "timed", "shop"]
 
 // Systems an upgrade's `needs` may name.
-const GAME_SYSTEMS: readonly GameSystem[] = ["powerUps"]
+const GAME_SYSTEMS: readonly GameSystem[] = ["powerUps", "events"]
 
 // ---------------------------------------------------------------------------------------------
 // Validation
@@ -396,7 +411,7 @@ function validTargets(
 
 // True when every system `def` needs is on in this run.
 function systemsOn(def: UpgradeDef, state: GameState): boolean {
-    return def.needs.every((n) => n !== "powerUps" || state.allowPowerUps)
+    return def.needs.every((n) => (n === "powerUps" ? state.allowPowerUps : state.allowEvents))
 }
 
 // Ids that can be offered from `pool`, sorted so the list doesn't depend on the JSON's order.

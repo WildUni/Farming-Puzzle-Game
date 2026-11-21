@@ -19,17 +19,18 @@ Only Survival reads this module. Timed and Puzzle keep the fixed order rules in 
 }
 ```
 
-| Field                  | Meaning                                                                             |
-| ---------------------- | ----------------------------------------------------------------------------------- |
-| `startLives`           | Lives a Survival run starts with                                                    |
-| `coinsPerOrder`        | Coins paid for each filled order                                                    |
-| `lifePrice.base`       | Price of the first life bought                                                      |
-| `lifePrice.growth`     | Each later life costs this many times the one before                                |
-| `ordersPerLevel`       | Filled orders needed to go up one level                                             |
-| `levels`               | One row per level, easiest first. The last row is used for every level past the end |
-| `orderTimeMultiplier`  | Time limit of a new order, as a multiple of `ORDER_TICKS` (600 ticks = 60 s)        |
-| `maxOpenOrders`        | `step` keeps this many orders open at this level                                    |
-| `minAmount, maxAmount` | Range (inclusive) for the amount a new order asks for                               |
+| Field                  | Meaning                                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------------------ |
+| `startLives`           | Lives a Survival run starts with                                                           |
+| `coinsPerOrder`        | Coins paid for each filled order                                                           |
+| `lifePrice.base`       | Price of the first life bought                                                             |
+| `lifePrice.growth`     | Each later life costs this many times the one before                                       |
+| `ordersPerLevel`       | Filled orders needed to go up one level                                                    |
+| `levels`               | One row per level, easiest first. The last row is used for every level past the end        |
+| `orderTimeMultiplier`  | Time limit of a new order, as a multiple of `ORDER_TICKS` (600 ticks = 60 s)               |
+| `maxOpenOrders`        | `step` keeps this many orders open at this level                                           |
+| `minAmount, maxAmount` | Range (inclusive) for the amount a new order asks for                                      |
+| `eventGapSeconds`      | Seconds between one event ending and the next being announced (see [events.md](events.md)) |
 
 The default values are listed in the file itself. They were chosen so that:
 
@@ -47,6 +48,7 @@ type LevelRow = {
     maxOpenOrders: number
     minAmount: number
     maxAmount: number
+    eventGapSeconds: number
 }
 type DifficultyConfig = {
     startLives: number
@@ -80,6 +82,7 @@ Checks a parsed JSON value and returns it typed. Throws an `Error` naming the ba
 - `levels` is not a non-empty array.
 - A row's `orderTimeMultiplier` is not a number `> 0`, or gives fewer than 1 tick once rounded.
 - A row's `maxOpenOrders` or `minAmount` is not a whole number `>= 1`, or `maxAmount` is not a whole number `>= minAmount`.
+- A row's `eventGapSeconds` is not a whole number `>= 1`.
 
 A bad config is a setup mistake, not a player move, so this throws instead of returning `null`.
 
@@ -99,6 +102,10 @@ The order rules at a level. Levels past the end use the last row.
 
 - `orderTicks` is `round(ORDER_TICKS × orderTimeMultiplier)`.
 - `maxOpenOrders`, `minAmount` and `maxAmount` are copied from the row.
+
+### `eventGapTicks(level: number, config?): number`
+
+The gap between events at a level: `eventGapSeconds × TICKS_PER_SECOND` from the level's row (the last row past the end). `gapTicks` in `events.ts` applies the Calm skies modifier on top.
 
 ### `lifePrice(livesBought: number, config?): number`
 
@@ -131,6 +138,10 @@ Price of the next life when `livesBought` lives have already been bought this ru
 - Matches each row of the config, with `orderTicks = round(ORDER_TICKS × multiplier)`.
 - Levels past the end use the last row.
 
+**`eventGapTicks`**
+
+- Matches each row's `eventGapSeconds × TICKS_PER_SECOND`; levels past the end use the last row.
+
 **`lifePrice`**
 
 - The price sequence matches `round(base × growth ^ n)` from the config.
@@ -138,10 +149,10 @@ Price of the next life when `livesBought` lives have already been bought this ru
 
 **Curve sanity** (so tuning can't quietly make the game easier as it goes)
 
-- From one level to the next, `orderTicks` never goes up, `maxOpenOrders` never goes down, and `minAmount`/`maxAmount` never go down.
+- From one level to the next, `orderTicks` never goes up, `maxOpenOrders` never goes down, `minAmount`/`maxAmount` never go down, and `eventGapSeconds` never goes up.
 
 ## Open items
 
 - [ ] Pass the config into `createGame` (or record a rules version in the log) so a server replay knows which numbers a run used.
-- [ ] Events get more frequent as the level rises (Day 4).
+- [x] Events get more frequent as the level rises: `eventGapSeconds` per row (shipped 45, 40, 35, 30, 26, 22, 18).
 - [x] Upgrades that change prices, timers and coins read from `modifiersFor(state.upgrades)` on top of these numbers (see [upgrades.md](upgrades.md)). The functions here stay unmodified; `main.ts` applies the modifiers.

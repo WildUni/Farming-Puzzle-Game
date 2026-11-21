@@ -13,6 +13,7 @@ import { BuyLifeView } from "../views/BuyLifeView"
 import { GameOverView } from "../views/GameOverView"
 import { UpgradePickView } from "../views/UpgradePickView"
 import { PowerUpBar } from "../views/PowerUpBar"
+import { EventBanner } from "../views/EventBanner"
 import { POWER_UPS, powerUpTargets } from "../../sim/powerups"
 
 const MS_PER_TICK = 1000 / TICKS_PER_SECOND
@@ -43,6 +44,7 @@ export class Game extends Scene {
     private gameOver: GameOverView
     private upgradePick: UpgradePickView
     private powerUpBar: PowerUpBar
+    private eventBanner: EventBanner
     private debug: GameObjects.Text
 
     constructor() {
@@ -59,7 +61,11 @@ export class Game extends Scene {
         this.cameras.main.setBackgroundColor(COLORS.background)
 
         this.crops = this.registry.get("crops") as CropTable
-        this.state = createGame(this.seed, { mode: this.mode, allowPowerUps: true })
+        this.state = createGame(this.seed, {
+            mode: this.mode,
+            allowPowerUps: true,
+            allowEvents: true
+        })
         this.log = []
         this.elapsed = 0
         this.paused = false
@@ -93,6 +99,7 @@ export class Game extends Scene {
             )
         )
         this.powerUpBar = new PowerUpBar(this, (slot) => this.onPowerUpClick(slot))
+        this.eventBanner = new EventBanner(this)
         this.gameOver = new GameOverView(
             this,
             () => this.restartNewSeed(),
@@ -143,6 +150,7 @@ export class Game extends Scene {
         if (this.choosingSlot !== null && this.targets() === null) this.choosingSlot = null
         this.plots.update(this.state, this.pickerPlot, this.targets())
         this.powerUpBar.update(this.state, this.choosingSlot)
+        this.eventBanner.update(this.state)
         this.pause.update(this.paused)
         this.buyLife.update(this.state)
         this.upgradePick.update(this.state)

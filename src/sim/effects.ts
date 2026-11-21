@@ -33,18 +33,19 @@ function shiftOrder(order: Order, shift: number, now: number): Order {
 }
 
 // Maps `list` with `f`, returning `list` itself when no item changed.
-function mapSame<T>(list: T[], f: (item: T) => T): T[] {
+function mapSame<T>(list: T[], f: (item: T, i: number) => T): T[] {
     let changed = false
-    const out = list.map((item) => {
-        const next = f(item)
+    const out = list.map((item, i) => {
+        const next = f(item, i)
         if (next !== item) changed = true
         return next
     })
     return changed ? out : list
 }
 
-// What lasting effects do on one tick: drop the ones that ended, then move every growing crop
-// and open order by the sum of the remaining shifts of their kind.
+// What lasting effects do on one tick: drop the ones that ended, then move each growing crop by
+// the growthRate shifts that don't exclude its plot, and every open order by the orderRate shifts.
+// Action effects (blockHarvest, deliverBonus) move nothing.
 function tickEffects(
     active: ActiveEffect[],
     plots: Plot[],
@@ -55,32 +56,49 @@ function tickEffects(
     const running = active.filter((a) => a.endsAt >= now)
     const kept = running.length === active.length ? active : running
 
-    let growth = 0
+    const growth: { shift: number; exclude: number[] }[] = []
     let order = 0
     for (const a of kept) {
-        const shift = rateShift(a.effect.pct, a.startedAt, now)
-        if (a.effect.kind === "growthRate") growth += shift
+        const { effect } = a
+        if (effect.kind !== "growthRate" && effect.kind !== "orderRate") continue
+        const shift = rateShift(effect.pct, a.startedAt, now)
+        if (shift === 0) continue
+        if (effect.kind === "growthRate") growth.push({ shift, exclude: a.exclude })
         else order += shift
     }
 
+    const plotShift = (i: number) =>
+        growth.reduce((sum, g) => (g.exclude.includes(i) ? sum : sum + g.shift), 0)
+
     return {
         active: kept,
-        plots: growth === 0 ? plots : mapSame(plots, (p) => shiftPlot(p, growth, now)),
+        plots:
+            growth.length === 0
+                ? plots
+                : mapSame(plots, (p, i) => {
+                      const shift = plotShift(i)
+                      return shift === 0 ? p : shiftPlot(p, shift, now)
+                  }),
         orders: order === 0 ? orders : mapSame(orders, (o) => shiftOrder(o, order, now))
     }
 }
 
 // Starts a lasting effect from `source`, or adds `durationTicks` to the one already running.
+// `exclude` lists plots the effect leaves out (Greenhouse plots under a bad event).
 function startEffect(
     active: ActiveEffect[],
     source: string,
     effect: LastingEffect,
     now: number,
-    durationTicks: number
+    durationTicks: number,
+    exclude: number[] = []
 ): ActiveEffect[] {
     const i = active.findIndex((a) => a.source === source)
     if (i === -1) {
-        return [...active, { source, effect, startedAt: now, endsAt: now + durationTicks }]
+        return [
+            ...active,
+            { source, effect, startedAt: now, endsAt: now + durationTicks, exclude: [...exclude] }
+        ]
     }
     return active.map((a, j) => (j === i ? { ...a, endsAt: a.endsAt + durationTicks } : a))
 }
@@ -99,4 +117,42 @@ function finishGrowth(plot: Plot): Plot | null {
     return { state: "ready", cropId: plot.cropId }
 }
 
-export { rateShift, shiftPlot, shiftOrder, tickEffects, startEffect, cutGrowth, finishGrowth }
+// A growing or ready crop is lost. null for an empty plot, so the caller knows nothing happened.
+function stealCrop(plot: Plot): Plot | null {
+    if (plot.state === "empty") return null
+    return { state: "empty" }
+}
+
+// True when an action effect is working on tick `now`: from startedAt to endsAt - 1.
+function working(a: ActiveEffect, now: number): boolean {
+    return a.startedAt <= now && now < a.endsAt
+}
+
+// True when a working blockHarvest effect doesn't leave `plot` out.
+function harvestBlocked(active: ActiveEffect[], plot: number, now: number): boolean {
+    return active.some(
+        (a) => a.effect.kind === "blockHarvest" && working(a, now) && !a.exclude.includes(plot)
+    )
+}
+
+// Extra coins a delivery on tick `now` earns from working deliverBonus effects.
+function deliverBonusAt(active: ActiveEffect[], now: number): number {
+    return active.reduce(
+        (sum, a) =>
+            a.effect.kind === "deliverBonus" && working(a, now) ? sum + a.effect.coins : sum,
+        0
+    )
+}
+
+export {
+    rateShift,
+    shiftPlot,
+    shiftOrder,
+    tickEffects,
+    startEffect,
+    cutGrowth,
+    finishGrowth,
+    stealCrop,
+    harvestBlocked,
+    deliverBonusAt
+}

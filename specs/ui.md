@@ -81,7 +81,30 @@ A row of slot buttons under the plots, in both modes. Hidden when `allowPowerUps
 
 ### Active effects
 
-A line under the slot buttons lists each lasting effect with `endsAt > tick` and the seconds left (`activeEffectText`), e.g. `Order freeze 7s`. Seconds left are `ceil((endsAt − tick) / TICKS_PER_SECOND)`, so it never shows `0s` while the effect still has ticks to run. An effect on its `endsAt` tick has done its last tick and is not listed. While an Order freeze is active, order countdown bars are drawn in a frozen colour.
+A line under the slot buttons lists each lasting effect **started by a power-up** with `endsAt > tick` and the seconds left (`activeEffectText`), e.g. `Order freeze 7s`. Seconds left are `ceil((endsAt − tick) / TICKS_PER_SECOND)`, so it never shows `0s` while the effect still has ticks to run. An effect on its `endsAt` tick has done its last tick and is not listed. While an Order freeze is active, order countdown bars are drawn in a frozen colour. Event effects are shown by the event banner instead, so they are not listed twice.
+
+## Events (EventBanner)
+
+A banner across the top of the board, above the plots, shown while `state.event` is not `null`. Hidden when `allowEvents` is off. It never blocks clicks.
+
+- **Warning** (`tick < startsAt`): `eventBannerText` gives `Frost in 4s`, with the seconds until `startsAt` rounded up. A plot event adds its plot: `Moles → Plot 2 in 4s`.
+- **Running** (lasting events, `startsAt <= tick < endsAt`): `Frost 6s`, with the seconds until `endsAt` rounded up.
+- Instant events show their warning only; on the tick they start the banner is gone.
+- The banner is green for good events and red for bad ones.
+
+### Plot overlays
+
+Drawn by `PlotsView` from the state, on top of the plot's own colour:
+
+| When                                     | Overlay                                       |
+| ---------------------------------------- | --------------------------------------------- |
+| Moles announced, on its target plot      | Red dashed outline and a mole marker          |
+| Crows running, on each plot not excluded | A crow marker; clicking the plot does nothing |
+| Frost running, on each plot not excluded | A pale blue tint                              |
+| Sunny spell running                      | A warm tint on every plot                     |
+| Greenhouse plot (`shieldedPlots`)        | A small shield marker, always                 |
+
+The overlay rules come from `plotOverlays(state)` in `format.ts`, which returns one list of overlay names per plot, so they can be unit tested without Phaser.
 
 ## End of run (GameOverView)
 
@@ -110,12 +133,14 @@ Shown over the board as soon as `status` is `'ended'`.
 - `upgradeCardText` shows name, tier, description with that tier's values (a tiered and a non-tiered example, and one with two effects) and the copy count after picking.
 - `buyLifeText` shows the price with the `lifePricePct` modifier applied.
 - `powerUpButtonText` gives the name, then the text with `{seconds}` filled from `durationFor`, with and without Long-lasting.
-- `shownEffects` and `ordersFrozen` leave out an effect on its `endsAt` tick.
+- `shownEffects` and `ordersFrozen` leave out an effect on its `endsAt` tick; `shownEffects` lists only power-up effects.
+- `eventBannerText` for the warning of an untargeted and a plot event, for a running lasting event, rounding seconds up, and `null` with no event.
+- `plotOverlays` for each row of the overlay table, including a shielded plot left out of Frost and Crows.
 - `activeEffectText` shows the name and seconds left, rounding up: `1s` with one tick left, `10s` with 100.
 
 ## Open items
 
-- [ ] Plot upgrades: pick the plot on the board itself (valid plots highlighted, the rest greyed out) instead of a row of `Plot N` buttons, once a plot upgrade can be offered.
+- [ ] Plot upgrades: pick the plot on the board itself (valid plots highlighted, the rest greyed out) instead of a row of `Plot N` buttons, once a plot upgrade can be offered. Greenhouse is the first (see [events.md](events.md)).
 
 - [ ] Combo multiplier and rush waves in Timed (Day 5), with a combo row in the HUD and best combo on the summary.
 - [ ] High score per mode on the mode select (Day 5 saves).
