@@ -9,6 +9,7 @@ type RNGStreams = {
     lives: RNGState // Second chance rolls
     shrink: RNGState // Small order rolls
     rush: RNGState // Timed rush wave orders
+    shop: RNGState // shop stock
 }
 type RNGSeed = number
 type GameMode = "survival" | "timed" | "puzzle"
@@ -90,6 +91,8 @@ type GameState = {
     fertilizer: number // fertilizer held; doesn't count toward storage
     rerollsThisOffer: number // paid rerolls of the open offer; sets the next reroll's price
     miracleReadyAt: number // first tick Miracle grow can be used again (0: ready)
+    shop: ShopState | null // the open shop, or null while it is closed
+    shopVisits: number // shop visits so far this run, counting the open one
 }
 
 // What the run's upgrades add up to. Worked out from GameState.upgrades, never stored.
@@ -141,6 +144,12 @@ type Modifiers = {
     sellPricePct: number // % of the usual sell price (Premium produce)
     miracleGrow: number // 1: the Miracle grow button is unlocked
     miracleRechargeSeconds: number // seconds Miracle grow takes to recharge after a use
+    quickSoilSeconds: number // seconds taken off a crop's growth on a Quick soil plot
+    autoHarvest: number // 1: the plot harvests itself when ready (Auto-harvester)
+    interestPct: number // % of held coins added on each shop visit (Interest)
+    shopPricePct: number // % of the usual shop price (Discount card)
+    freeRestocks: number // shop restocks per visit that cost nothing (Free restock)
+    tierLuck: number // shifts free-pick tier weights toward higher tiers (Lucky stars)
 }
 
 type ModifierStat = keyof Modifiers
@@ -152,7 +161,7 @@ type Tier = "common" | "uncommon" | "rare" | "epic" | "legendary"
 type Pool = "survival" | "timed" | "shop"
 
 type StatDef = { base: number; min: number; max: number } // the total is clamped to [min, max]
-type TierDef = { weight: number; sellPrice: number }
+type TierDef = { weight: number }
 
 // amounts: five values (common first) for a tiered upgrade, one for a non-tiered one.
 type UpgradeEffect = { stat: ModifierStat; amounts: number[] }
@@ -161,9 +170,11 @@ type UpgradeDef = {
     id: string
     name: string
     text: string // {0}, {1}, ... are replaced by each effect's size at the card's tier
+    kind: "lasting" | "instant" // instant upgrades change something once and are never stored
+    instant: "promote" | null // what an instant upgrade does; null exactly for lasting ones
     pools: Pool[]
     tier: Tier | null // null = tiered (exists at every tier)
-    maxCopies: number
+    maxCopies: number // 0 for instant upgrades
     sellable: boolean
     effects: UpgradeEffect[]
     target: "plot" | "crop" | null
@@ -196,6 +207,39 @@ type Action =
     | { type: "useFertilizer"; plot: number }
     | { type: "rerollOffer" }
     | { type: "useMiracleGrow"; plot: number }
+    | { type: "buyItem"; slot: number; target?: number | string } // plot, crop id, or owned index
+    | { type: "sellUpgrade"; index: number }
+    | { type: "restockShop" }
+    | { type: "closeShop" }
+
+// The shop. See specs/shop.md.
+type ShopOpenRule =
+    | { kind: "orders"; every: number; offset: number }
+    | { kind: "seconds"; at: number[] } // seconds into the run
+    | { kind: "never" }
+
+type ShopModeConfig = { open: ShopOpenRule; pauses: boolean; openTicks: number | null }
+
+type ShopConfig = {
+    modes: Record<"survival" | "timed", ShopModeConfig>
+    stock: { upgrades: number; powerUps: number; life: boolean }
+    tierPrice: Record<Tier, number>
+    priceRise: { perCopyPct: number; perVisitPct: number }
+    restock: { base: number; growth: number }
+    sellRefundPct: number
+    interestMaxCoins: number
+}
+
+type ShopItem =
+    | { kind: "upgrade"; id: string; tier: Tier; sold: boolean }
+    | { kind: "powerUp"; id: string; sold: boolean }
+    | { kind: "life"; sold: boolean }
+
+type ShopState = {
+    stock: ShopItem[] // upgrade cards first, then power-ups, then the life slot
+    restocks: number // restocks bought this visit, free ones included
+    closesAt: number | null // tick a running shop closes on; null for a pausing shop
+}
 
 // Effects move crops' and orders' clocks. See specs/effects.md.
 type LastingEffect =
@@ -239,6 +283,7 @@ type PowerUpDef = {
     text: string // {seconds} is replaced by the length after powerUpDurationPct
     modes: GameMode[]
     weight: number
+    shopPrice: number // base price in the shop
     durationTicks: number | null // lasting effects only
     effect: Effect
     target: "plot" | "order" | null
@@ -328,5 +373,10 @@ export type {
     EventKind,
     EventDef,
     EventConfig,
-    RunEvent
+    RunEvent,
+    ShopOpenRule,
+    ShopModeConfig,
+    ShopConfig,
+    ShopItem,
+    ShopState
 }

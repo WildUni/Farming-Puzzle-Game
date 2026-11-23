@@ -14,7 +14,9 @@ empty --plant--> growing --updateGrowth (now reaches readyAt)--> ready --harvest
 
 Turns the list in `src/data/crops.json` into a table keyed by crop id. Run it once when the game loads.
 
-### `plant(plot, cropId, now, crops, growthPct = 100): Plot | null`
+### `plant(plot, cropId, now, crops, growthPct = 100, cutTicks = 0): Plot | null`
+
+`cutTicks` (Quick soil, see [shop.md](shop.md)) comes off the growth time after `growthPct`, never leaving less than 1 tick: `readyAt = now + max(1, scalePct(growTicks, growthPct) − cutTicks)`.
 
 - Returns `{ state: 'growing', cropId, plantedAt: now, readyAt: now + scalePct(growTicks, growthPct) }` (see [upgrades.md](upgrades.md)). At the default 100% that is `now + growTicks`.
 - The ready tick is fixed when the crop is planted. Growth-speed upgrades only affect crops planted after them. Power-ups and events move a growing crop's `readyAt` and `plantedAt` through `effects.ts` instead (see [effects.md](effects.md)).

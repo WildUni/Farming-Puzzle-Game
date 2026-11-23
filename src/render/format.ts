@@ -13,14 +13,15 @@ import type {
     UpgradeDef,
     UpgradeTarget
 } from "../sim/types"
-import { TICKS_PER_SECOND } from "../sim/game_constants"
+import { TICKS_PER_SECOND, TIERS } from "../sim/game_constants"
 import { MODES, upcomingRushWave } from "../sim/modes"
 import { progress } from "../sim/plot"
 import { timeLeft } from "../sim/orders"
 import { runLevel } from "../sim/difficulty"
 import { lifePriceFor, maxLivesFor, rerollPriceFor } from "../sim/main"
 import { sellValueFor, storageCap, storageUsed } from "../sim/economy"
-import { copyCount, effectAmount } from "../sim/upgrades"
+import { UPGRADES, copyCount, effectAmount } from "../sim/upgrades"
+import { itemPrice, restockPrice, sellBlock, sellRefund, stockItem } from "../sim/shop"
 import { POWER_UPS, durationFor } from "../sim/powerups"
 import { EVENTS, shieldedPlots } from "../sim/events"
 import { appliesTo, fogged } from "../sim/effects"
@@ -450,3 +451,86 @@ function miracleGrowText(state: GameState): string {
 }
 
 export { miracleGrowText }
+
+// ---------------------------------------------------------------------------------------------
+// Shop (see specs/ui.md)
+
+// Title line on the shop panel: the coins held.
+function shopTitleText(state: GameState): string {
+    return `Shop  ·  ${state.coins} coins`
+}
+
+// Text on a shop stock card: an upgrade like a pick card (Promotion has no copy count), a
+// power-up's button text, or a life with the hearts after buying (or Lives full).
+function shopItemText(state: GameState, slot: number): string {
+    const item = stockItem(state, slot)
+    if (item === null) return ""
+    switch (item.kind) {
+        case "upgrade": {
+            const def = UPGRADES.upgrades[item.id]
+            if (def.kind === "instant") {
+                return `${def.name}\n${tierName(item.tier)}\n${upgradeDescription(def, item.tier)}`
+            }
+            return upgradeCardText(def, item.tier, state.upgrades)
+        }
+        case "powerUp":
+            return `${powerUpButtonText(POWER_UPS.powerUps[item.id], state.upgrades)}\nPower-up`
+        case "life": {
+            const max = maxLivesFor(state)
+            if (state.lives >= max) return "Life\nLives full"
+            return `Life\n${heartsText(state.lives + 1, max)}`
+        }
+    }
+}
+
+// Label on a stock card's buy button: the price now, or SOLD.
+function shopPriceText(state: GameState, slot: number): string {
+    const item = stockItem(state, slot)
+    if (item === null) return ""
+    if (item.sold) return "SOLD"
+    return `Buy ${itemPrice(state, slot)}`
+}
+
+// One owned copy in the shop's list: name, tier, and its plot or crop when targeted.
+function ownedUpgradeText(copy: OwnedUpgrade): string {
+    const name = `${UPGRADES.upgrades[copy.id].name} (${tierName(copy.tier)})`
+    return copy.target === null ? name : `${name} · ${targetText(copy.target)}`
+}
+
+// Label on an owned copy's sell button: the refund, or why it can't be sold.
+function sellRefundText(state: GameState, index: number): string {
+    switch (sellBlock(state, index)) {
+        case null:
+            return `Sell +${sellRefund(state.upgrades[index])}`
+        case "required": {
+            const id = state.upgrades[index].id
+            const needer = state.upgrades.find((u) => UPGRADES.upgrades[u.id].requires.includes(id))
+            return `Needed by ${UPGRADES.upgrades[needer!.id].name}`
+        }
+        case "storage":
+            return "Barn too full"
+        default:
+            return "Can't sell"
+    }
+}
+
+// Label on the shop's restock button: the price, or free with Free restock.
+function restockText(state: GameState): string {
+    const price = restockPrice(state)
+    return price === 0 ? "Restock\nfree" : `Restock\n${price} coins`
+}
+
+// A Promotion target button: the copy and its tier now and after.
+function promotionTargetText(copy: OwnedUpgrade): string {
+    const next = TIERS[Math.min(TIERS.indexOf(copy.tier) + 1, TIERS.length - 1)]
+    return `${UPGRADES.upgrades[copy.id].name}\n${tierName(copy.tier)} → ${tierName(next)}`
+}
+
+// Time left on a running shop, or "" for a pausing one.
+function shopTimerText(state: GameState): string {
+    const closesAt = state.shop?.closesAt ?? null
+    return closesAt === null ? "" : `Shop closes in ${formatClock(closesAt - state.tick)}`
+}
+
+export { shopTitleText, shopItemText, shopPriceText, ownedUpgradeText, sellRefundText }
+export { restockText, promotionTargetText, shopTimerText }

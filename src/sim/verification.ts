@@ -1,5 +1,6 @@
 import type { RNGSeed, GameConfig, GameState, LogEntry, CropTable } from "./types"
 import { createGame, applyAction, step } from "./main"
+import { isShopPaused } from "./shop"
 
 type ReplayError =
     | "bad-tick" // an entry's tick is not a whole number from 0 to finalTick
@@ -8,20 +9,23 @@ type ReplayError =
     | "refused" // applyAction rejected an entry
     | "bad-final-tick" // finalTick is invalid, or the run ended before it
     | "offer-pending" // time had to pass while an upgrade offer was unanswered
+    | "shop-pending" // time had to pass while a pausing shop was open
 
 type ReplayResult =
     { ok: true; state: GameState } | { ok: false; error: ReplayError; entry: number | null } // entry: index in log
 
 // Steps until state.tick reaches target. Returns "ended" if the run ends first, and
-// "offer-pending" if an upgrade offer stops the clock before then.
+// "offer-pending" or "shop-pending" if an upgrade offer or a pausing shop stops the clock before
+// then.
 function stepUntil(
     state: GameState,
     target: number,
     crops: CropTable
-): GameState | "ended" | "offer-pending" {
+): GameState | "ended" | "offer-pending" | "shop-pending" {
     while (state.tick < target) {
         if (state.status === "ended") return "ended"
         if (state.upgradeOffer !== null) return "offer-pending"
+        if (isShopPaused(state)) return "shop-pending"
         state = step(state, crops)
     }
     return state
@@ -50,7 +54,9 @@ function replay(
         if (tick < state.tick) return { ok: false, error: "out-of-order", entry: i }
 
         const reached = stepUntil(state, tick, crops)
-        if (reached === "offer-pending") return { ok: false, error: "offer-pending", entry: i }
+        if (reached === "offer-pending" || reached === "shop-pending") {
+            return { ok: false, error: reached, entry: i }
+        }
         // Actions are refused once the run has ended, including on the ending tick.
         if (reached === "ended" || reached.status === "ended") {
             return { ok: false, error: "after-end", entry: i }
@@ -63,7 +69,9 @@ function replay(
     }
 
     const final = stepUntil(state, finalTick, crops)
-    if (final === "offer-pending") return { ok: false, error: "offer-pending", entry: null }
+    if (final === "offer-pending" || final === "shop-pending") {
+        return { ok: false, error: final, entry: null }
+    }
     if (final === "ended") return { ok: false, error: "bad-final-tick", entry: null }
     return { ok: true, state: final }
 }

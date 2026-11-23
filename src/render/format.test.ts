@@ -43,7 +43,15 @@ import {
     miracleGrowText,
     makeFertilizerText,
     fertilizeText,
-    rerollText
+    rerollText,
+    shopItemText,
+    shopPriceText,
+    sellRefundText,
+    ownedUpgradeText,
+    restockText,
+    promotionTargetText,
+    shopTitleText,
+    shopTimerText
 } from "./format"
 import { sellValue, storageUsed, rerollPrice } from "../sim/economy"
 import { ECONOMY } from "../sim/economy_config"
@@ -55,8 +63,9 @@ import { MODES, comboPct } from "../sim/modes"
 import { SCORING, comboPctFor } from "../sim/scoring"
 import { UPGRADES, effectAmount, modifiersFor, scalePct } from "../sim/upgrades"
 import { POWER_UPS } from "../sim/powerups"
+import { SHOP, sellRefund } from "../sim/shop"
 import { EVENTS } from "../sim/events"
-import type { ActiveEffect, GameState, Order, RunEvent } from "../sim/types"
+import type { ActiveEffect, GameState, Order, OwnedUpgrade, RunEvent, Tier } from "../sim/types"
 
 const crops = buildCropTable([
     { id: "garlic", growTicks: 80, yield: 2, value: 2, fertilizerCost: 4 },
@@ -765,5 +774,79 @@ describe("barn panel and reroll text", () => {
             ]
         }
         expect(plotOverlays(s)).toEqual([[], ["fertilized"]])
+    })
+})
+
+describe("shop text", () => {
+    const own = (
+        id: string,
+        tier: Tier = "common",
+        target: number | null = null
+    ): OwnedUpgrade => ({
+        id,
+        tier,
+        target
+    })
+    const shopState = (overrides: Partial<GameState> = {}): GameState => ({
+        ...createGame(1, { mode: "survival", allowPowerUps: true, allowEvents: false }),
+        coins: 200,
+        shopVisits: 1,
+        shop: {
+            stock: [
+                { kind: "upgrade", id: "bigTips", tier: "rare", sold: false },
+                { kind: "upgrade", id: "promotion", tier: "epic", sold: false },
+                { kind: "powerUp", id: "orderFreeze", sold: false },
+                { kind: "life", sold: true }
+            ],
+            restocks: 0,
+            closesAt: null
+        },
+        ...overrides
+    })
+
+    it("shopItemText for an upgrade, Promotion, a power-up and a life", () => {
+        const s = shopState({ lives: 2 })
+        expect(shopItemText(s, 0)).toBe(upgradeCardText(UPGRADES.upgrades.bigTips, "rare", []))
+        expect(shopItemText(s, 1)).toBe("Promotion\nEpic\nRaise one owned upgrade by one tier")
+        expect(shopItemText(s, 2)).toBe("Order freeze\nOrder timers stop for 10 s\nPower-up")
+        expect(shopItemText(s, 3)).toBe("Life\n♥♥♥")
+        expect(shopItemText(shopState(), 3)).toBe("Life\nLives full")
+    })
+
+    it("shopPriceText follows itemPrice, with Discount card, and says SOLD", () => {
+        const s = shopState()
+        expect(shopPriceText(s, 0)).toBe(`Buy ${SHOP.tierPrice.rare}`)
+        const discounted = shopState({ upgrades: [own("discountCard", "legendary")] })
+        expect(shopPriceText(discounted, 0)).toBe(`Buy ${(SHOP.tierPrice.rare * 80) / 100}`)
+        expect(shopPriceText(s, 3)).toBe("SOLD")
+    })
+
+    it("sellRefundText gives the refund or why a copy can't be sold", () => {
+        const s = shopState({
+            upgrades: [
+                own("bigTips", "epic"),
+                own("extraHeart", "rare"),
+                own("bumperHarvest"),
+                own("biggerBumper")
+            ]
+        })
+        expect(sellRefundText(s, 0)).toBe(`Sell +${sellRefund(own("bigTips", "epic"))}`)
+        expect(sellRefundText(s, 1)).toBe("Can't sell")
+        expect(sellRefundText(s, 2)).toBe("Needed by Bigger bumper")
+        const barn = shopState({ upgrades: [own("biggerBarn")], inventory: { garlic: 28 } })
+        expect(sellRefundText(barn, 0)).toBe("Barn too full")
+        expect(ownedUpgradeText(own("richSoil", "rare", 1))).toBe("Rich soil (Rare) · Plot 2")
+    })
+
+    it("restockText, promotionTargetText, shopTitleText and shopTimerText", () => {
+        expect(restockText(shopState())).toBe("Restock\n5 coins")
+        expect(restockText(shopState({ upgrades: [own("freeRestock", "rare")] }))).toBe(
+            "Restock\nfree"
+        )
+        expect(promotionTargetText(own("fastGrowth", "rare"))).toBe("Fast growth\nRare → Epic")
+        expect(shopTitleText(shopState())).toBe("Shop  ·  200 coins")
+        expect(shopTimerText(shopState())).toBe("")
+        const running = shopState({ tick: 100, shop: { stock: [], restocks: 0, closesAt: 111 } })
+        expect(shopTimerText(running)).toBe("Shop closes in 0:02")
     })
 })

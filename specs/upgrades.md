@@ -26,7 +26,7 @@ One object with three parts:
         "growthPct": { "base": 100, "min": 20, "max": 100 }
     },
     "tiers": {
-        "common": { "weight": 40, "sellPrice": 5 }
+        "common": { "weight": 40 }
     },
     "upgrades": [
         {
@@ -68,10 +68,9 @@ All three are whole numbers with `min <= base <= max`.
 
 One entry per tier, no more and no fewer.
 
-| Field       | Meaning                                                                           |
-| ----------- | --------------------------------------------------------------------------------- |
-| `weight`    | Relative chance of this tier when rolling a card. Whole number `>= 0`             |
-| `sellPrice` | Coins paid for selling a copy of this tier in the shop (later). Whole number >= 0 |
+| Field    | Meaning                                                               |
+| -------- | --------------------------------------------------------------------- |
+| `weight` | Relative chance of this tier when rolling a card. Whole number `>= 0` |
 
 At least one weight must be above 0. Shipped weights: common 40, uncommon 30, rare 15, epic 10, legendary 5 (they add up to 100).
 
@@ -211,7 +210,7 @@ type Modifiers = {
 type ModifierStat = keyof Modifiers
 type GameSystem = "powerUps" | "events"
 type StatDef = { base: number; min: number; max: number }
-type TierDef = { weight: number; sellPrice: number }
+type TierDef = { weight: number }
 type UpgradeEffect = { stat: ModifierStat; amounts: number[] } // tiered: 5 values; non-tiered: 1
 type UpgradeDef = {
     id: string
@@ -258,7 +257,8 @@ Checks a parsed JSON value and returns it in the typed shape. Throws an `Error` 
 
 - `raw` is not an object with `stats`, `tiers` and a non-empty `upgrades` list.
 - `stats` is missing a `Modifiers` field or has an extra one; a `base`, `min` or `max` is not a whole number; or `min <= base <= max` fails.
-- `tiers` is missing a tier or has an extra one; a `weight` or `sellPrice` is not a whole number `>= 0`; or every weight is 0.
+- `tiers` is missing a tier or has an extra one; a tier has a field other than `weight`; a `weight` is not a whole number `>= 0`; or every weight is 0. (The shop's refund replaced `sellPrice`; see [shop.md](shop.md).)
+- `kind`, when present, is not `"lasting"` or `"instant"`; an instant upgrade has no `instant` action, no `tier`, or has `maxCopies`, `sellable`, `effects`, `target`, `targetRule` or `requires`; a lasting one has `instant`.
 - An upgrade's `id`, `name` or `text` is not a non-empty string, or an `id` is used twice.
 - `pools` is empty, has a repeat, or has a value that is not a pool.
 - `tier`, when present, is not a tier.
@@ -578,7 +578,7 @@ The last three Day 7 upgrades. All numbers are placeholders.
 Each later phase adds to this design without changing the stored shapes above.
 
 1. **Timed offers and rerolls.** Done: `offerPool` gives the mode's pool (`survival` or `timed`; Puzzle makes none), so `isOfferDue` and `rollOffer` work in both modes. Rerolls shipped on Day 6 (see [economy.md](economy.md)); in Timed they are paid from order and selling coins.
-2. **Shop** (its own `shop.ts` and spec). Stock is drawn from the mode's pool plus `shop`, from `rng.upgrades` or its own stream. `sellUpgrade { index }` removes `upgrades[index]` and pays its tier's `sellPrice`; only `sellable` upgrades, only while the shop is open. Selling frees a copy and, for targeted upgrades, its target.
+2. **Shop.** Done: see [shop.md](shop.md), which also adds the shop-only upgrades and stats, Lucky stars (`luckyWeights` in `rollOffer`), Promotion (`kind: "instant"`, `promotionTargets`) and `plantCutTicks`. `eligibleUpgrades` takes one pool or a list of pools; `rollOffer`'s draw is shared with the shop's stock as `rollCards`.
 3. **More upgrade kinds**, behind a `kind` field: `instant` (Promotion: changes an owned copy's tier and is not stored), `active` (Miracle grow: owning it unlocks a `useAbility` action, its recharge is a stat), `economy` (Interest, Discount card, Free restock: stats read by the shop).
 4. **Upgrades for events, power-ups and storage** ship with those systems. Still waiting: Price floor, Haggler (selling); Keen eye, Interest, Discount card, Free restock, Lucky stars, Promotion, Rich soil, Quick soil, Auto-harvester (shop); Four-leaf (Lucky clover); Irrigation, Guard dog (tap actions for Drought and Raccoon); Clear orders (Mix-up); Festival spirit, Weed killer, Loaded coin (tradeoff events);. The Timed pool's six are in (see [Timed pool](#timed-pool)). The power-up upgrades are in (see [Shipped with power-ups](#shipped-with-power-ups)); they use `needs` rather than `requires`, since they depend on a system being on, not on another upgrade. The event upgrades use `"events"` the same way. Other chance-based upgrades (Second chance, Lucky drops) draw from a stream of their own, as Bumper harvest does.
 

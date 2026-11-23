@@ -1,7 +1,8 @@
 // Survival tuning: coins, life prices and the difficulty curve.
 // Every number comes from src/data/difficulty.json. See specs/difficulty.md.
 import type { GameState, OrderRules } from "./types"
-import { modifiersFor } from "./upgrades"
+import { modifiersFor, scalePct } from "./upgrades"
+import { MODES } from "./modes"
 import { ORDER_TICKS, TICKS_PER_SECOND } from "./game_constants"
 import rawDifficulty from "../data/difficulty.json"
 
@@ -120,6 +121,17 @@ function lifePrice(livesBought: number, config: DifficultyConfig = DIFFICULTY): 
     return Math.round(base * growth ** livesBought)
 }
 
+// Price of the run's next life, with the lifePricePct upgrade modifier applied. buyLife and the
+// shop's life slot both charge this.
+function lifePriceFor(state: GameState): number {
+    return scalePct(lifePrice(state.livesBought), modifiersFor(state.upgrades).lifePricePct)
+}
+
+// Most lives a Survival run can hold: MODES.survival.maxLives plus Extra heart's extraLives.
+function maxLivesFor(state: GameState): number {
+    return MODES.survival.maxLives + modifiersFor(state.upgrades).extraLives
+}
+
 export {
     validateDifficulty,
     DIFFICULTY,
@@ -127,6 +139,8 @@ export {
     runLevel,
     orderRulesFor,
     eventGapTicks,
-    lifePrice
+    lifePrice,
+    lifePriceFor,
+    maxLivesFor
 }
 export type { DifficultyConfig, LevelRow }

@@ -43,6 +43,7 @@ type ReplayError =
     | "refused" // applyAction rejected an entry
     | "bad-final-tick" // finalTick is not a whole number >= 0, or the run ended before it
     | "offer-pending" // time had to pass while an upgrade offer was unanswered
+    | "shop-pending" // time had to pass while a pausing shop was open (see shop.md)
 
 type ReplayResult =
     { ok: true; state: GameState } | { ok: false; error: ReplayError; entry: number | null } // entry: index in log, or null

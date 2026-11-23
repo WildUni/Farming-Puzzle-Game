@@ -30,6 +30,7 @@ function rawConfig(): Record<string, unknown> {
                 text: "Ready now",
                 modes: ["survival", "timed"],
                 weight: 1,
+                shopPrice: 5,
                 target: "plot",
                 effect: { kind: "finishGrowth" }
             },
@@ -39,6 +40,7 @@ function rawConfig(): Record<string, unknown> {
                 text: "Stop for {seconds} s",
                 modes: ["survival", "timed"],
                 weight: 3,
+                shopPrice: 5,
                 seconds: 4,
                 effect: { kind: "orderRate", pct: 0 }
             },
@@ -48,6 +50,7 @@ function rawConfig(): Record<string, unknown> {
                 text: "+5 coins",
                 modes: ["survival"],
                 weight: 2,
+                shopPrice: 5,
                 effect: { kind: "grantCoins", amount: 5 }
             }
         ]
@@ -292,6 +295,7 @@ describe("power-ups: second batch rules", () => {
             text: "Extra",
             modes: ["survival"],
             weight: 1,
+            shopPrice: 5,
             ...fields
         }
         return { powerUps: [...list, extra] }

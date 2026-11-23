@@ -153,6 +153,8 @@ One player move, passed to `applyAction` (see [main.md](main.md)).
 
 ### Upgrade types
 
+`ShopOpenRule`, `ShopModeConfig`, `ShopConfig`, `ShopItem` and `ShopState`, the `GameState` fields `shop` and `shopVisits`, `rng.shop`, `PowerUpDef.shopPrice`, and the actions `buyItem`, `sellUpgrade`, `restockShop` and `closeShop` are described in [shop.md](shop.md).
+
 `Tier`, `Pool`, `Modifiers`, `ModifierStat`, `StatDef`, `TierDef`, `UpgradeEffect`, `UpgradeDef`, `UpgradeConfig`, `UpgradeTarget`, `OwnedUpgrade` and `OfferCard`, described in [upgrades.md](upgrades.md). `Modifiers` is never stored in `GameState`; it is worked out from `GameState.upgrades`. `UpgradeTable` is replaced by `UpgradeConfig`.
 
 ### Effect, power-up and event types

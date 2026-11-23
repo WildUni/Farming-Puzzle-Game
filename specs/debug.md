@@ -28,6 +28,10 @@ Adds one copy of upgrade `id` at `tier`, as if it had been picked.
 - Adds plots for `extraPlots` the same way `chooseUpgrade` does. `main.ts` exports that part as `withUpgrade(state, copy)` so the two can't differ.
 - Doesn't touch an open upgrade offer.
 
+### `debugOpenShop(state, crops): GameState | null`
+
+Opens a shop visit now with `openShop`, as if one were due (it counts as a visit). `null` once the run has ended, in Puzzle, or while a shop or an upgrade offer is open. The debug menu's **Shop** section has an **Open shop** button for it. `debugUpgrade` returns `null` for an instant upgrade (Promotion), since there is no copy to add.
+
 ### `debugPowerUp(state, id): GameState | null`
 
 Gives power-up `id`, appended to `powerUps`.

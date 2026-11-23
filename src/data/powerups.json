@@ -7,7 +7,10 @@
             "modes": ["survival", "timed"],
             "weight": 30,
             "target": "plot",
-            "effect": { "kind": "finishGrowth" }
+            "shopPrice": 8,
+            "effect": {
+                "kind": "finishGrowth"
+            }
         },
         {
             "id": "growthBoost",
@@ -15,7 +18,11 @@
             "text": "Every growing crop is 5 s closer to ready",
             "modes": ["survival", "timed"],
             "weight": 30,
-            "effect": { "kind": "cutGrowth", "ticks": 50 }
+            "shopPrice": 6,
+            "effect": {
+                "kind": "cutGrowth",
+                "ticks": 50
+            }
         },
         {
             "id": "orderFreeze",
@@ -24,7 +31,11 @@
             "modes": ["survival", "timed"],
             "weight": 20,
             "seconds": 10,
-            "effect": { "kind": "orderRate", "pct": 0 }
+            "shopPrice": 10,
+            "effect": {
+                "kind": "orderRate",
+                "pct": 0
+            }
         },
         {
             "id": "coinBag",
@@ -32,7 +43,11 @@
             "text": "+10 coins",
             "modes": ["survival"],
             "weight": 20,
-            "effect": { "kind": "grantCoins", "amount": 10 }
+            "shopPrice": 1,
+            "effect": {
+                "kind": "grantCoins",
+                "amount": 10
+            }
         },
         {
             "id": "readyAll",
@@ -40,7 +55,10 @@
             "text": "Every growing crop is ready now",
             "modes": ["survival", "timed"],
             "weight": 8,
-            "effect": { "kind": "finishAll" }
+            "shopPrice": 20,
+            "effect": {
+                "kind": "finishAll"
+            }
         },
         {
             "id": "finishOne",
@@ -49,7 +67,10 @@
             "modes": ["survival", "timed"],
             "weight": 6,
             "target": "order",
-            "effect": { "kind": "fillOrder" }
+            "shopPrice": 15,
+            "effect": {
+                "kind": "fillOrder"
+            }
         },
         {
             "id": "finishAll",
@@ -57,7 +78,10 @@
             "text": "Fill every order, for no score",
             "modes": ["survival", "timed"],
             "weight": 2,
-            "effect": { "kind": "fillAllOrders" }
+            "shopPrice": 30,
+            "effect": {
+                "kind": "fillAllOrders"
+            }
         },
         {
             "id": "goldRush",
@@ -66,7 +90,11 @@
             "modes": ["survival"],
             "weight": 10,
             "seconds": 15,
-            "effect": { "kind": "deliverBonus", "coins": 5 }
+            "shopPrice": 12,
+            "effect": {
+                "kind": "deliverBonus",
+                "coins": 5
+            }
         },
         {
             "id": "cleanSlate",
@@ -74,7 +102,10 @@
             "text": "Clear every plot to replant",
             "modes": ["survival", "timed"],
             "weight": 8,
-            "effect": { "kind": "clearField" }
+            "shopPrice": 5,
+            "effect": {
+                "kind": "clearField"
+            }
         },
         {
             "id": "goodOmen",
@@ -83,7 +114,10 @@
             "modes": ["survival", "timed"],
             "weight": 10,
             "needs": ["events"],
-            "effect": { "kind": "goodEvent" }
+            "shopPrice": 10,
+            "effect": {
+                "kind": "goodEvent"
+            }
         }
     ]
 }

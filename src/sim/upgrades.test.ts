@@ -77,14 +77,20 @@ function rawConfig(): Record<string, unknown> {
             doubleDeliveryPct: { base: 0, min: 0, max: 100 },
             sellPricePct: { base: 100, min: 100, max: 200 },
             miracleGrow: { base: 0, min: 0, max: 1 },
-            miracleRechargeSeconds: { base: 60, min: 20, max: 60 }
+            miracleRechargeSeconds: { base: 60, min: 20, max: 60 },
+            quickSoilSeconds: { base: 0, min: 0, max: 10 },
+            autoHarvest: { base: 0, min: 0, max: 1 },
+            interestPct: { base: 0, min: 0, max: 25 },
+            shopPricePct: { base: 100, min: 50, max: 100 },
+            freeRestocks: { base: 0, min: 0, max: 1 },
+            tierLuck: { base: 0, min: 0, max: 60 }
         },
         tiers: {
-            common: { weight: 40, sellPrice: 1 },
-            uncommon: { weight: 30, sellPrice: 2 },
-            rare: { weight: 15, sellPrice: 3 },
-            epic: { weight: 10, sellPrice: 4 },
-            legendary: { weight: 5, sellPrice: 5 }
+            common: { weight: 40 },
+            uncommon: { weight: 30 },
+            rare: { weight: 15 },
+            epic: { weight: 10 },
+            legendary: { weight: 5 }
         },
         upgrades: [
             {
@@ -214,9 +220,9 @@ describe("validateUpgrades", () => {
         ["a fractional stat bound", (r) => (r.stats.growthPct.min = 1.5)],
         ["min above base", (r) => (r.stats.growthPct.min = 101)],
         ["a missing tier", (r) => delete r.tiers.epic],
-        ["an extra tier", (r) => (r.tiers.mythic = { weight: 1, sellPrice: 1 })],
+        ["an extra tier", (r) => (r.tiers.mythic = { weight: 1 })],
         ["a negative weight", (r) => (r.tiers.common.weight = -1)],
-        ["a negative sell price", (r) => (r.tiers.common.sellPrice = -1)],
+        ["a field other than weight on a tier", (r) => (r.tiers.common.sellPrice = 1)],
         [
             "every weight 0",
             (r) => {
@@ -276,6 +282,74 @@ describe("validateUpgrades", () => {
         const raw = rawConfig()
         change(raw)
         expect(() => validateUpgrades(raw)).toThrow(/upgrades config/)
+    })
+
+    // An instant upgrade (Promotion) added to the small config.
+    function withInstant(fields: Raw = {}): Raw {
+        const raw = rawConfig() as Raw
+        raw.upgrades.push({
+            id: "promo",
+            name: "Promo",
+            text: "Raise one",
+            kind: "instant",
+            instant: "promote",
+            pools: ["shop"],
+            tier: "epic",
+            ...fields
+        })
+        return raw
+    }
+
+    it("reads an instant upgrade as never stored, and every other upgrade as lasting", () => {
+        const config = validateUpgrades(withInstant())
+        expect(config.upgrades.promo).toMatchObject({
+            kind: "instant",
+            instant: "promote",
+            tier: "epic",
+            maxCopies: 0,
+            sellable: false,
+            effects: [],
+            target: null
+        })
+        expect(config.upgrades.grow).toMatchObject({ kind: "lasting", instant: null })
+    })
+
+    const badInstant: [string, Raw][] = [
+        ["an unknown kind", { kind: "magic" }],
+        ["an unknown instant action", { instant: "double" }],
+        ["no tier", { tier: undefined }],
+        ["maxCopies", { maxCopies: 1 }],
+        ["effects", { effects: [{ stat: "growthPct", amount: -1 }] }],
+        ["a target", { target: "plot", targetRule: "oncePerTarget" }]
+    ]
+    it.each(badInstant)("throws for an instant upgrade with %s", (_, fields) => {
+        const raw = withInstant(fields)
+        const last = raw.upgrades[raw.upgrades.length - 1]
+        for (const k of Object.keys(last)) if (last[k] === undefined) delete last[k]
+        expect(() => validateUpgrades(raw)).toThrow(/upgrades config/)
+    })
+
+    it("throws for `instant` on a lasting upgrade, and allows the new per-plot stats on targets", () => {
+        const raw = rawConfig() as Raw
+        raw.upgrades[0].instant = "promote"
+        expect(() => validateUpgrades(raw)).toThrow(/upgrades config/)
+        const plot = rawConfig() as Raw
+        plot.upgrades.push({
+            id: "auto",
+            name: "Auto",
+            text: "Auto",
+            pools: ["shop"],
+            tier: "epic",
+            maxCopies: 1,
+            sellable: false,
+            target: "plot",
+            targetRule: "oncePerTarget",
+            effects: [
+                { stat: "autoHarvest", amount: 1 },
+                { stat: "quickSoilSeconds", amount: 5 }
+            ]
+        })
+        expect(() => validateUpgrades(plot)).not.toThrow()
     })
 })
 
@@ -344,7 +418,13 @@ describe("modifiersFor", () => {
             doubleDeliveryPct: 0,
             sellPricePct: 100,
             miracleGrow: 0,
-            miracleRechargeSeconds: 60
+            miracleRechargeSeconds: 60,
+            quickSoilSeconds: 0,
+            autoHarvest: 0,
+            interestPct: 0,
+            shopPricePct: 100,
+            freeRestocks: 0,
+            tierLuck: 0
         })
     })
 

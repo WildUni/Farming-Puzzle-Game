@@ -18,8 +18,10 @@ import { EventBanner } from "../views/EventBanner"
 import { RushBanner } from "../views/RushBanner"
 import { DebugPanel } from "../views/DebugPanel"
 import { BarnView } from "../views/BarnView"
+import { ShopView } from "../views/ShopView"
 import { POWER_UPS, powerUpTargets } from "../../sim/powerups"
 import { fertilizerTargets } from "../../sim/economy"
+import { isShopPaused } from "../../sim/shop"
 
 const MS_PER_TICK = 1000 / TICKS_PER_SECOND
 const MAX_CATCH_UP_TICKS = 5 // a background tab doesn't jump ahead when it comes back
@@ -55,6 +57,7 @@ export class Game extends Scene {
     private eventBanner: EventBanner
     private rushBanner: RushBanner
     private barn: BarnView
+    private shop: ShopView
     private debugPanel: DebugPanel | null // dev builds only
     private debugged: boolean // the debug menu changed this run, so its log won't replay
     private debug: GameObjects.Text
@@ -131,6 +134,15 @@ export class Game extends Scene {
             makeFertilizer: (cropId) => this.act({ type: "makeFertilizer", cropId }),
             fertilize: () => this.toggleFertilizing()
         })
+        this.shop = new ShopView(this, this.crops, {
+            buy: (slot, target) =>
+                this.act(
+                    target === null ? { type: "buyItem", slot } : { type: "buyItem", slot, target }
+                ),
+            sell: (index) => this.act({ type: "sellUpgrade", index }),
+            restock: () => this.act({ type: "restockShop" }),
+            close: () => this.act({ type: "closeShop" })
+        })
         this.debugPanel = import.meta.env.DEV
             ? new DebugPanel(this.crops, (change) => this.applyDebug(change))
             : null
@@ -160,10 +172,10 @@ export class Game extends Scene {
     }
 
     // Fixed-tick loop: step() once per MS_PER_TICK of real time. Paused, or while an
-    // upgrade offer is open, the counter stops.
+    // upgrade offer or a pausing shop is open, the counter stops.
     update(_time: number, delta: number) {
         if (this.paused || this.state.status === "ended") return
-        if (this.state.upgradeOffer !== null) {
+        if (this.state.upgradeOffer !== null || isShopPaused(this.state)) {
             this.elapsed = 0
             return
         }
@@ -173,7 +185,11 @@ export class Game extends Scene {
             this.state = step(this.state, this.crops)
             this.elapsed -= MS_PER_TICK
         }
-        if (this.state.status === "ended" || this.state.upgradeOffer !== null) {
+        if (
+            this.state.status === "ended" ||
+            this.state.upgradeOffer !== null ||
+            isShopPaused(this.state)
+        ) {
             this.closePicker()
             this.choosingSlot = null
             this.fertilizing = false
@@ -209,7 +225,8 @@ export class Game extends Scene {
             !this.paused &&
             this.pickerPlot === null &&
             this.state.status === "running" &&
-            this.state.upgradeOffer === null
+            this.state.upgradeOffer === null &&
+            this.state.shop === null
         this.barn.update(this.state, barnFree, this.fertilizing)
         this.powerUpBar.update(this.state, this.choosingSlot)
         this.miracle.update(this.state, this.miracling)
@@ -218,6 +235,7 @@ export class Game extends Scene {
         this.pause.update(this.paused)
         this.buyLife.update(this.state)
         this.upgradePick.update(this.state)
+        this.shop.update(this.state)
         this.gameOver.update(this.state)
         this.debug.setText(debugText(this.state, this.seed, this.paused, this.debugged))
         this.debugPanel?.update(this.state)
@@ -333,7 +351,14 @@ export class Game extends Scene {
     // Growing plot: nothing.
     // While a power-up's target is being chosen, a click picks (or cancels) instead.
     private onPlotClick(plot: number): void {
-        if (this.paused || this.state.status === "ended" || this.state.upgradeOffer !== null) return
+        if (
+            this.paused ||
+            this.state.status === "ended" ||
+            this.state.upgradeOffer !== null ||
+            isShopPaused(this.state)
+        ) {
+            return
+        }
         if (this.choosingSlot !== null) {
             const slot = this.choosingSlot
             const aimsAtPlot = this.choosingDef()?.target === "plot"

@@ -60,6 +60,7 @@ Advances the generator once.
 - [x] Add an `events` stream (salt 4) with events.
 - [x] Add `lives` (salt 5, Second chance) and `shrink` (salt 6, Small order) streams.
 - [x] Add the `rush` stream (salt 7, Timed rush waves).
+- [x] Add the `shop` stream (salt 8, shop stock and restocks; see [shop.md](shop.md)).
 
 - [x] Rename the float generator to `nextValue` and add `randomInt(state, min, max)` on top of it.
 - [x] Add `pick(state, list)` for choosing a random item, such as a crop for an order.

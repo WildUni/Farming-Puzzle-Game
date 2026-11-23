@@ -1,0 +1,10 @@
+{
+    "survival": { "open": { "kind": "orders", "every": 10, "offset": 8 }, "pauses": true },
+    "timed": { "open": { "kind": "seconds", "at": [115, 200] }, "pauses": true },
+    "stock": { "upgrades": 3, "powerUps": 1, "life": true },
+    "tierPrice": { "common": 10, "uncommon": 18, "rare": 30, "epic": 50, "legendary": 80 },
+    "priceRise": { "perCopyPct": 25, "perVisitPct": 10 },
+    "restock": { "base": 5, "growth": 1.5 },
+    "sellRefundPct": 50,
+    "interestMaxCoins": 15
+}

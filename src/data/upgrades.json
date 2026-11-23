@@ -234,28 +234,53 @@
             "base": 60,
             "min": 20,
             "max": 60
+        },
+        "quickSoilSeconds": {
+            "base": 0,
+            "min": 0,
+            "max": 10
+        },
+        "autoHarvest": {
+            "base": 0,
+            "min": 0,
+            "max": 1
+        },
+        "interestPct": {
+            "base": 0,
+            "min": 0,
+            "max": 25
+        },
+        "shopPricePct": {
+            "base": 100,
+            "min": 50,
+            "max": 100
+        },
+        "freeRestocks": {
+            "base": 0,
+            "min": 0,
+            "max": 1
+        },
+        "tierLuck": {
+            "base": 0,
+            "min": 0,
+            "max": 60
         }
     },
     "tiers": {
         "common": {
-            "weight": 40,
-            "sellPrice": 5
+            "weight": 40
         },
         "uncommon": {
-            "weight": 30,
-            "sellPrice": 10
+            "weight": 30
         },
         "rare": {
-            "weight": 15,
-            "sellPrice": 20
+            "weight": 15
         },
         "epic": {
-            "weight": 10,
-            "sellPrice": 35
+            "weight": 10
         },
         "legendary": {
-            "weight": 5,
-            "sellPrice": 60
+            "weight": 5
         }
     },
     "upgrades": [
@@ -944,6 +969,123 @@
                     "perTier": [-5, -10, -15, -20, -30]
                 }
             ]
+        },
+        {
+            "id": "richSoil",
+            "name": "Rich soil",
+            "text": "+{0} crop per harvest on one plot",
+            "pools": ["shop"],
+            "tier": "rare",
+            "maxCopies": 3,
+            "sellable": false,
+            "target": "plot",
+            "targetRule": "oncePerTarget",
+            "effects": [
+                {
+                    "stat": "yieldBonus",
+                    "amount": 1
+                }
+            ]
+        },
+        {
+            "id": "quickSoil",
+            "name": "Quick soil",
+            "text": "Crops on one plot grow {0}s faster",
+            "pools": ["shop"],
+            "tier": "rare",
+            "maxCopies": 3,
+            "sellable": false,
+            "target": "plot",
+            "targetRule": "oncePerTarget",
+            "effects": [
+                {
+                    "stat": "quickSoilSeconds",
+                    "amount": 5
+                }
+            ]
+        },
+        {
+            "id": "autoHarvester",
+            "name": "Auto-harvester",
+            "text": "One plot harvests itself when ready",
+            "pools": ["shop"],
+            "tier": "epic",
+            "maxCopies": 2,
+            "sellable": false,
+            "target": "plot",
+            "targetRule": "oncePerTarget",
+            "effects": [
+                {
+                    "stat": "autoHarvest",
+                    "amount": 1
+                }
+            ]
+        },
+        {
+            "id": "interest",
+            "name": "Interest",
+            "text": "Coins grow {0}% each shop visit",
+            "pools": ["shop"],
+            "maxCopies": 3,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "interestPct",
+                    "perTier": [2, 3, 5, 8, 12]
+                }
+            ]
+        },
+        {
+            "id": "discountCard",
+            "name": "Discount card",
+            "text": "Shop prices {0}% lower",
+            "pools": ["shop"],
+            "maxCopies": 3,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "shopPricePct",
+                    "perTier": [-3, -5, -8, -12, -20]
+                }
+            ]
+        },
+        {
+            "id": "freeRestock",
+            "name": "Free restock",
+            "text": "One free restock per shop visit",
+            "pools": ["shop"],
+            "tier": "rare",
+            "maxCopies": 1,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "freeRestocks",
+                    "amount": 1
+                }
+            ]
+        },
+        {
+            "id": "luckyStars",
+            "name": "Lucky stars",
+            "text": "Free picks roll higher tiers more often (+{0})",
+            "pools": ["shop"],
+            "maxCopies": 3,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "tierLuck",
+                    "perTier": [5, 10, 15, 20, 30]
+                }
+            ]
+        },
+        {
+            "id": "promotion",
+            "name": "Promotion",
+            "text": "Raise one owned upgrade by one tier",
+            "kind": "instant",
+            "instant": "promote",
+            "pools": ["shop"],
+            "tier": "epic"
         }
     ]
 }

@@ -18,7 +18,7 @@ import type {
     UpgradeEffect,
     UpgradeTarget
 } from "./types"
-import { TIERS, UPGRADE_CHOICES } from "./game_constants"
+import { TICKS_PER_SECOND, TIERS, UPGRADE_CHOICES } from "./game_constants"
 import { pick, randomInt } from "./mulberry"
 import { ECONOMY, fertilizerLocked } from "./economy_config"
 import type { EconomyConfig } from "./economy_config"
@@ -72,7 +72,13 @@ const MODIFIER_STATS: readonly ModifierStat[] = [
     "doubleDeliveryPct",
     "sellPricePct",
     "miracleGrow",
-    "miracleRechargeSeconds"
+    "miracleRechargeSeconds",
+    "quickSoilSeconds",
+    "autoHarvest",
+    "interestPct",
+    "shopPricePct",
+    "freeRestocks",
+    "tierLuck"
 ]
 
 // Stats read per plot and crop (by plant and harvest), so targeted upgrades may use them.
@@ -80,7 +86,9 @@ const CONTEXT_STATS: readonly ModifierStat[] = [
     "growthPct",
     "yieldBonus",
     "bumperChance",
-    "shielded"
+    "shielded",
+    "quickSoilSeconds",
+    "autoHarvest"
 ]
 
 const POOLS: readonly Pool[] = ["survival", "timed", "shop"]
@@ -147,11 +155,10 @@ function validateTiers(raw: unknown): Record<Tier, TierDef> {
         const at = `tiers.${tier}`
         const entry = raw[tier]
         if (!isObject(entry)) fail(at, "an object")
+        exactKeys(entry, ["weight"], at)
         const weight = wholeNumber(entry.weight, `${at}.weight`, "a whole number >= 0")
-        const sellPrice = wholeNumber(entry.sellPrice, `${at}.sellPrice`, "a whole number >= 0")
         if (weight < 0) fail(`${at}.weight`, "a whole number >= 0")
-        if (sellPrice < 0) fail(`${at}.sellPrice`, "a whole number >= 0")
-        tiers[tier] = { weight, sellPrice }
+        tiers[tier] = { weight }
     }
     if (TIERS.every((t) => tiers[t].weight === 0)) fail("tiers", "given at least one weight > 0")
     return tiers
@@ -189,11 +196,65 @@ function validateEffect(raw: unknown, tiered: boolean, at: string): UpgradeEffec
     return { stat: stat as ModifierStat, amounts: [amount] }
 }
 
+function validatePools(entry: Record<string, unknown>, at: string): Pool[] {
+    const pools = entry.pools
+    if (!Array.isArray(pools) || pools.length === 0) fail(`${at}.pools`, "a non-empty list")
+    for (const p of pools) {
+        if (!(POOLS as unknown[]).includes(p)) fail(`${at}.pools`, `made of ${POOLS.join(", ")}`)
+    }
+    if (new Set(pools).size !== pools.length) fail(`${at}.pools`, "free of repeats")
+    return [...(pools as Pool[])]
+}
+
+// Instant upgrades (Promotion): an `instant` action and a fixed tier, and none of the fields a
+// stored copy would need.
+const INSTANT_ACTIONS: readonly string[] = ["promote"]
+const NOT_ON_INSTANT = ["maxCopies", "sellable", "effects", "target", "targetRule", "requires"]
+
+function validateInstant(
+    entry: Record<string, unknown>,
+    at: string,
+    base: { id: string; name: string; text: string }
+): UpgradeDef {
+    if (typeof entry.instant !== "string" || !INSTANT_ACTIONS.includes(entry.instant)) {
+        fail(`${at}.instant`, `one of ${INSTANT_ACTIONS.join(", ")} on an instant upgrade`)
+    }
+    if (!(TIERS as unknown[]).includes(entry.tier)) {
+        fail(`${at}.tier`, `one of ${TIERS.join(", ")} on an instant upgrade`)
+    }
+    for (const k of NOT_ON_INSTANT) {
+        if (has(entry, k)) fail(`${at}.${k}`, "left out on an instant upgrade")
+    }
+    let category: string | null = null
+    if (has(entry, "category")) category = nonEmptyString(entry, "category", at)
+    return {
+        ...base,
+        kind: "instant",
+        instant: entry.instant as "promote",
+        pools: validatePools(entry, at),
+        tier: entry.tier as Tier,
+        maxCopies: 0,
+        sellable: false,
+        effects: [],
+        target: null,
+        targetRule: null,
+        requires: [],
+        category,
+        needs: []
+    }
+}
+
 function validateUpgrade(entry: unknown, at: string): UpgradeDef {
     if (!isObject(entry)) fail(at, "an object")
     const id = nonEmptyString(entry, "id", at)
     const name = nonEmptyString(entry, "name", at)
     const text = nonEmptyString(entry, "text", at)
+
+    if (has(entry, "kind") && entry.kind !== "lasting" && entry.kind !== "instant") {
+        fail(`${at}.kind`, `"lasting" or "instant"`)
+    }
+    if (entry.kind === "instant") return validateInstant(entry, at, { id, name, text })
+    if (has(entry, "instant")) fail(`${at}.instant`, "left out on a lasting upgrade")
 
     const pools = entry.pools
     if (!Array.isArray(pools) || pools.length === 0) fail(`${at}.pools`, "a non-empty list")
@@ -271,6 +332,8 @@ function validateUpgrade(entry: unknown, at: string): UpgradeDef {
         id,
         name,
         text,
+        kind: "lasting",
+        instant: null,
         pools: [...(pools as Pool[])],
         tier,
         maxCopies,
@@ -399,6 +462,11 @@ function plantGrowthPct(state: GameState, plot: number, cropId: string): number 
     return scalePct(growthPct, modifiersFor(state.upgrades).lastStandGrowthPct)
 }
 
+// Ticks Quick soil takes off a crop planted now on `plot`. Used wherever plantGrowthPct is.
+function plantCutTicks(state: GameState, plot: number, cropId: string): number {
+    return modifiersAt(state.upgrades, { plot, cropId }).quickSoilSeconds * TICKS_PER_SECOND
+}
+
 // ---------------------------------------------------------------------------------------------
 // Eligibility
 
@@ -446,6 +514,40 @@ function validTargets(
         )
 }
 
+// The totals where an owned copy applies: run-wide, or at its plot or crop.
+function modifiersWhere(
+    copy: OwnedUpgrade,
+    def: UpgradeDef,
+    upgrades: readonly OwnedUpgrade[],
+    config: UpgradeConfig
+): Readonly<Modifiers> {
+    if (copy.target === null) return modifiersFor(upgrades, config)
+    if (def.target === "plot") {
+        return modifiersAt(upgrades, { plot: copy.target as number, cropId: null }, config)
+    }
+    return modifiersAt(upgrades, { plot: null, cropId: copy.target as string }, config)
+}
+
+// Indexes of the owned copies Promotion could raise one tier, ascending: tiered, below
+// legendary, with an effect that grows at the next tier and can still change its stat there.
+function promotionTargets(
+    upgrades: readonly OwnedUpgrade[],
+    config: UpgradeConfig = UPGRADES
+): number[] {
+    return upgrades.flatMap((copy, index) => {
+        const def = defFor(copy.id, config)
+        const i = TIERS.indexOf(copy.tier)
+        if (def.kind !== "lasting" || def.tier !== null || i >= TIERS.length - 1) return []
+        const m = modifiersWhere(copy, def, upgrades, config)
+        const grows = def.effects.some((e) => {
+            if (Math.abs(e.amounts[i + 1]) <= Math.abs(e.amounts[i])) return false
+            const { min, max } = config.stats[e.stat]
+            return e.amounts[0] < 0 ? m[e.stat] > min : m[e.stat] < max
+        })
+        return grows ? [index] : []
+    })
+}
+
 // True when every system `def` needs is on in this run.
 function systemsOn(def: UpgradeDef, state: GameState): boolean {
     return def.needs.every((n) => (n === "powerUps" ? state.allowPowerUps : state.allowEvents))
@@ -457,23 +559,44 @@ function unlocksNothing(def: UpgradeDef, economy: EconomyConfig = ECONOMY): bool
     return !fertilizerLocked(economy) && def.effects.every((e) => e.stat === "fertilizerUnlocked")
 }
 
-// Ids that can be offered from `pool`, sorted so the list doesn't depend on the JSON's order.
+// True when an instant upgrade would do something now.
+function instantUsable(def: UpgradeDef, state: GameState, config: UpgradeConfig): boolean {
+    return def.instant === "promote" && promotionTargets(state.upgrades, config).length > 0
+}
+
+// True when a lasting upgrade can take one more copy now.
+function lastingEligible(
+    def: UpgradeDef,
+    state: GameState,
+    crops: CropTable,
+    config: UpgradeConfig
+): boolean {
+    const { upgrades } = state
+    return (
+        copyCount(upgrades, def.id) < def.maxCopies &&
+        def.requires.every((r) => copyCount(upgrades, r) > 0) &&
+        systemsOn(def, state) &&
+        !unlocksNothing(def) &&
+        validTargets(upgrades, def.id, state.plots.length, crops, config).length > 0
+    )
+}
+
+// Ids that can be offered from `pool` (or from any of several pools, as the shop draws), sorted
+// so the list doesn't depend on the JSON's order.
 function eligibleUpgrades(
     state: GameState,
-    pool: Pool,
+    pool: Pool | readonly Pool[],
     crops: CropTable,
     config: UpgradeConfig = UPGRADES
 ): string[] {
-    const { upgrades } = state
+    const pools: readonly Pool[] = typeof pool === "string" ? [pool] : pool
     return Object.values(config.upgrades)
         .filter(
             (def) =>
-                def.pools.includes(pool) &&
-                copyCount(upgrades, def.id) < def.maxCopies &&
-                def.requires.every((r) => copyCount(upgrades, r) > 0) &&
-                systemsOn(def, state) &&
-                !unlocksNothing(def) &&
-                validTargets(upgrades, def.id, state.plots.length, crops, config).length > 0
+                def.pools.some((p) => pools.includes(p)) &&
+                (def.kind === "instant"
+                    ? instantUsable(def, state, config)
+                    : lastingEligible(def, state, crops, config))
         )
         .map((def) => def.id)
         .sort()
@@ -482,33 +605,48 @@ function eligibleUpgrades(
 // ---------------------------------------------------------------------------------------------
 // Offers
 
-// Up to UPGRADE_CHOICES cards from state.rng.upgrades: for each, roll a tier among the tiers
-// that still have candidates, then pick an upgrade at that tier. Two draws per card.
-function rollOffer(
-    state: GameState,
-    pool: Pool,
-    crops: CropTable,
+// Lucky stars: each tier's weight with tierLuck applied. Common is unchanged and each tier above
+// it gains tierLuck% more per step: floor(weight × (100 + tierLuck × index) / 100).
+function luckyWeights(tierLuck: number, config: UpgradeConfig = UPGRADES): Record<Tier, number> {
+    const w = {} as Record<Tier, number>
+    TIERS.forEach((t, i) => {
+        w[t] = Math.floor((config.tiers[t].weight * (100 + tierLuck * i)) / 100)
+    })
+    return w
+}
+
+// The plain tier weights from the config.
+function plainWeights(config: UpgradeConfig = UPGRADES): Record<Tier, number> {
+    return luckyWeights(0, config)
+}
+
+// Up to `count` cards from `eligible`, drawn from `rng`: for each, roll a tier among the tiers
+// that still have candidates, then pick an upgrade at that tier. Two draws per card. Offers and
+// the shop's stock both draw this way.
+function rollCards(
+    eligible: readonly string[],
+    rng: RNGState,
+    count: number,
+    weights: Record<Tier, number>,
     config: UpgradeConfig = UPGRADES
 ): [OfferCard[], RNGState] {
-    const eligible = eligibleUpgrades(state, pool, crops, config)
-    let rng = state.rng.upgrades
     const cards: OfferCard[] = []
-    for (let n = 0; n < UPGRADE_CHOICES; n++) {
+    for (let n = 0; n < count; n++) {
         const offered = new Set(cards.map((c) => c.id))
         const candidates = (tier: Tier) =>
             eligible.filter((id) => {
                 const t = config.upgrades[id].tier
                 return !offered.has(id) && (t === null || t === tier)
             })
-        const usable = TIERS.filter((t) => config.tiers[t].weight > 0 && candidates(t).length > 0)
+        const usable = TIERS.filter((t) => weights[t] > 0 && candidates(t).length > 0)
         if (usable.length === 0) break
 
-        const total = usable.reduce((sum, t) => sum + config.tiers[t].weight, 0)
+        const total = usable.reduce((sum, t) => sum + weights[t], 0)
         const [roll, afterTier] = randomInt(rng, 0, total - 1)
         let r = roll
         let tier = usable[usable.length - 1]
         for (const t of usable) {
-            const w = config.tiers[t].weight
+            const w = weights[t]
             if (r < w) {
                 tier = t
                 break
@@ -523,6 +661,18 @@ function rollOffer(
     return [cards, rng]
 }
 
+// Up to UPGRADE_CHOICES cards from state.rng.upgrades, with Lucky stars' weights.
+function rollOffer(
+    state: GameState,
+    pool: Pool,
+    crops: CropTable,
+    config: UpgradeConfig = UPGRADES
+): [OfferCard[], RNGState] {
+    const eligible = eligibleUpgrades(state, pool, crops, config)
+    const weights = luckyWeights(modifiersFor(state.upgrades, config).tierLuck, config)
+    return rollCards(eligible, state.rng.upgrades, UPGRADE_CHOICES, weights, config)
+}
+
 export {
     validateUpgrades,
     UPGRADES,
@@ -533,9 +683,14 @@ export {
     modifiersAt,
     scalePct,
     plantGrowthPct,
+    plantCutTicks,
     copyCount,
+    promotionTargets,
     validTargets,
     eligibleUpgrades,
     unlocksNothing,
+    luckyWeights,
+    plainWeights,
+    rollCards,
     rollOffer
 }

@@ -18,7 +18,14 @@ import type {
 } from "./types"
 import { TICKS_PER_SECOND } from "./game_constants"
 import { pick, randomInt } from "./mulberry"
-import { MODIFIER_STATS, modifiersAt, modifiersFor, plantGrowthPct, scalePct } from "./upgrades"
+import {
+    MODIFIER_STATS,
+    modifiersAt,
+    modifiersFor,
+    plantCutTicks,
+    plantGrowthPct,
+    scalePct
+} from "./upgrades"
 import { eventGapTicks, runLevel } from "./difficulty"
 import { POWER_UPS } from "./powerups"
 import { cutGrowth, startEffect, stealCrop } from "./effects"
@@ -375,7 +382,8 @@ function harvestAll(state: GameState, crops: CropTable): GameState {
         const empty: Plot = { state: "empty" }
         if (!replant) return empty
         const pct = plantGrowthPct(state, plot, cropId)
-        return plant(empty, cropId, state.tick, crops, pct) ?? empty
+        const cut = plantCutTicks(state, plot, cropId)
+        return plant(empty, cropId, state.tick, crops, pct, cut) ?? empty
     })
     return changed ? { ...state, plots, inventory } : state
 }
@@ -397,7 +405,8 @@ function seedPlots(state: GameState, count: number, crops: CropTable): GameState
         rng = afterCrop
         free = free.filter((i) => i !== plot)
         const pct = plantGrowthPct(state, plot, cropId)
-        const seeded = plant(plots[plot], cropId, state.tick, crops, pct)!
+        const cut = plantCutTicks(state, plot, cropId)
+        const seeded = plant(plots[plot], cropId, state.tick, crops, pct, cut)!
         plots = plots.map((p, i) => (i === plot ? seeded : p))
     }
     return { ...state, plots, rng: { ...state.rng, events: rng } }

@@ -176,4 +176,4 @@ No action here reads the clock or moves the tick, so replays work as before: a r
 - [ ] Should a reroll avoid repeating the cards it replaces? Should rerolls roll better tiers (see [upgrades.md](upgrades.md))?
 - [ ] Timed orders pay the same coins as Survival for now (base pay, Big tips, Early bird). Open question: should Timed have its own, lower rate (for example `timed.coinsPerOrder` in `modes.json`) once the shop exists? See the design doc.
 - [x] Bigger barn and Premium produce (Day 7) set `storageBonus` and `sellPricePct` (see [upgrades.md](upgrades.md)).
-- [ ] Shop restock price resets each time the shop opens (Day 8, `shop.md`).
+- [x] Shop restock price resets each time the shop opens (Day 8, [shop.md](shop.md)).

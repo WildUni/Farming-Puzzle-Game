@@ -321,26 +321,26 @@ Add the second upgrade system, where players spend coins on the exact upgrades, 
 
 ### Shop rules (about 3 hours)
 
-- [ ] When it opens, as a config switch, because the design hasn't decided
-  - [ ] Survival: every few filled orders, with the clock paused
-  - [ ] Timed: a short break between rush waves, or open while the clock keeps running
-- [ ] Stock of 3–4 items from the mode's pool plus shop-only upgrades, power-ups and (Survival only) lives
-- [ ] Prices: the tier sets the base price; the rise rule (run progress, per copy, or both) is config
-- [ ] `buyItem`, `sellUpgrade` (refund share in config) and `restock` (each restock costs more)
-- [ ] Test: shop stock and prices replay exactly
+- [x] When it opens, as a config switch, because the design hasn't decided
+  - [x] Survival: every few filled orders, with the clock paused
+  - [x] Timed: a short break between rush waves, or open while the clock keeps running
+- [x] Stock of 3–4 items from the mode's pool plus shop-only upgrades, power-ups and (Survival only) lives
+- [x] Prices: the tier sets the base price; the rise rule (run progress, per copy, or both) is config
+- [x] `buyItem`, `sellUpgrade` (refund share in config) and `restock` (each restock costs more)
+- [x] Test: shop stock and prices replay exactly
 
 ### Shop screen (about 2 hours)
 
-- [ ] Item cards with tier, price, and a buy button that is disabled when coins are short
-- [ ] Owned upgrades with sell buttons and their refund
-- [ ] Restock button with its price, and a close button
+- [x] Item cards with tier, price, and a buy button that is disabled when coins are short
+- [x] Owned upgrades with sell buttons and their refund
+- [x] Restock button with its price, and a close button
 
 ### Shop-only upgrades (about 3 hours)
 
-- [ ] Plot upgrades with a plot picker: Extra plot, Rich soil, Quick soil, Auto-harvester
-- [ ] Coin upgrades: Interest, Discount card, Free restock
-- [ ] Tier upgrades: Lucky stars, Promotion
-- [ ] Test: Promotion raises an owned upgrade one tier and respects the stat cap
+- [x] Plot upgrades with a plot picker: Extra plot, Rich soil, Quick soil, Auto-harvester
+- [x] Coin upgrades: Interest, Discount card, Free restock
+- [x] Tier upgrades: Lucky stars, Promotion
+- [x] Test: Promotion raises an owned upgrade one tier and respects the stat cap
 
 **Gate:** the shop opens on schedule in both modes, buying and selling change coins and upgrades correctly, and the run replays exactly.
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { debugEvent, debugUpgrade, debugPowerUp, upgradeTiers } from "./debug"
+import { debugEvent, debugUpgrade, debugPowerUp, debugOpenShop, upgradeTiers } from "./debug"
 import { EVENTS, buildEvent } from "./events"
 import { createGame, step } from "./main"
 import { buildCropTable } from "./plot"
@@ -119,5 +119,21 @@ describe("debugPowerUp", () => {
         expect(debugPowerUp(game({}, none), "readyOne")).toBeNull()
         expect(debugPowerUp(game(), "jetpack")).toBeNull()
         expect(debugPowerUp(game({ status: "ended" }), "readyOne")).toBeNull()
+    })
+})
+
+describe("debugOpenShop", () => {
+    it("opens a visit now, and refuses with a shop or an offer open, or after the end", () => {
+        const opened = debugOpenShop(game(), crops)!
+        expect(opened.shop).not.toBeNull()
+        expect(opened.shopVisits).toBe(1)
+        expect(debugOpenShop(opened, crops)).toBeNull()
+        const offer = game({ upgradeOffer: [{ id: "bigTips", tier: "common" }] })
+        expect(debugOpenShop(offer, crops)).toBeNull()
+        expect(debugOpenShop(game({ status: "ended" }), crops)).toBeNull()
+    })
+
+    it("never adds an instant upgrade as a copy", () => {
+        expect(debugUpgrade(game(), "promotion", "epic", null, crops)).toBeNull()
     })
 })

@@ -17,11 +17,12 @@ import {
     START_PLOTS,
     DEFAULT_ORDER_RULES,
     ORDERS_PER_UPGRADE,
-    TICKS_PER_SECOND
+    TICKS_PER_SECOND,
+    TIERS
 } from "./game_constants"
 import { plant, harvest, updateGrowth } from "./plot"
 import { createOrder, fulfill, isExpired, timeLeft } from "./orders"
-import { DIFFICULTY, runLevel, orderRulesFor, lifePrice } from "./difficulty"
+import { DIFFICULTY, runLevel, orderRulesFor, lifePriceFor, maxLivesFor } from "./difficulty"
 import { MODES, rushWaveAt } from "./modes"
 import { isPairFill, orderPoints } from "./scoring"
 import {
@@ -29,6 +30,7 @@ import {
     modifiersFor,
     modifiersAt,
     plantGrowthPct,
+    plantCutTicks,
     scalePct,
     rollOffer,
     validTargets
@@ -54,6 +56,18 @@ import {
     fertilizedReadyAt,
     rerollPrice
 } from "./economy"
+import {
+    isShopDue,
+    isShopPaused,
+    openShop,
+    rollStock,
+    itemPrice,
+    restockPrice,
+    sellRefund,
+    canBuy,
+    canSell,
+    canRestock
+} from "./shop"
 
 // Salts for the separate streams. The orders stream uses the seed itself (see specs/mulberry.md).
 const UPGRADE_STREAM_SALT = 1
@@ -63,6 +77,7 @@ const EVENTS_STREAM_SALT = 4
 const LIVES_STREAM_SALT = 5
 const SHRINK_STREAM_SALT = 6
 const RUSH_STREAM_SALT = 7
+const SHOP_STREAM_SALT = 8
 
 function createGame(seed: RNGSeed, config: GameConfig): GameState {
     return {
@@ -77,7 +92,8 @@ function createGame(seed: RNGSeed, config: GameConfig): GameState {
             events: seedStream(seed, EVENTS_STREAM_SALT),
             lives: seedStream(seed, LIVES_STREAM_SALT),
             shrink: seedStream(seed, SHRINK_STREAM_SALT),
-            rush: seedStream(seed, RUSH_STREAM_SALT)
+            rush: seedStream(seed, RUSH_STREAM_SALT),
+            shop: seedStream(seed, SHOP_STREAM_SALT)
         },
         plots: Array.from({ length: START_PLOTS }, (): Plot => ({ state: "empty" })),
         inventory: {},
@@ -106,7 +122,9 @@ function createGame(seed: RNGSeed, config: GameConfig): GameState {
         bestCombo: 0,
         fertilizer: 0,
         rerollsThisOffer: 0,
-        miracleReadyAt: 0
+        miracleReadyAt: 0,
+        shop: null,
+        shopVisits: 0
     }
 }
 
@@ -123,22 +141,13 @@ function orderRules(state: GameState): OrderRules {
     return { ...rules, orderTicks: scalePct(rules.orderTicks, orderTimePct) }
 }
 
-// Price of the next life, with the lifePricePct upgrade modifier applied.
-function lifePriceFor(state: GameState): number {
-    return scalePct(lifePrice(state.livesBought), modifiersFor(state.upgrades).lifePricePct)
-}
-
-// Most lives a Survival run can hold: MODES.survival.maxLives plus Extra heart's extraLives.
-function maxLivesFor(state: GameState): number {
-    return MODES.survival.maxLives + modifiersFor(state.upgrades).extraLives
-}
-
 // True when a buyLife action would succeed. The buy button uses this.
 function canBuyLife(state: GameState): boolean {
     return (
         state.mode === "survival" &&
         state.status === "running" &&
         state.upgradeOffer === null &&
+        !isShopPaused(state) &&
         state.lives < maxLivesFor(state) &&
         state.coins >= lifePriceFor(state)
     )
@@ -183,6 +192,7 @@ function canUseMiracleGrow(state: GameState): boolean {
     return (
         state.status === "running" &&
         state.upgradeOffer === null &&
+        !isShopPaused(state) &&
         modifiersFor(state.upgrades).miracleGrow > 0 &&
         state.tick >= state.miracleReadyAt
     )
@@ -209,6 +219,71 @@ function canReroll(state: GameState): boolean {
     )
 }
 
+// Actions that work inside the shop. A pausing shop allows only these.
+const SHOP_ACTIONS: readonly Action["type"][] = [
+    "buyItem",
+    "sellUpgrade",
+    "restockShop",
+    "closeShop"
+]
+
+// Harvests a ready plot as the harvest action does: yield, upgrades, the Bumper roll from
+// rng.harvest, Worms, what fits in storage, then the power-up drop from rng.drops. null when the
+// plot isn't ready, Crows block it, or storage is full. Auto-harvester uses it too.
+function harvestPlot(state: GameState, index: number, crops: CropTable): GameState | null {
+    // Crows: no harvesting on this plot while they're here.
+    if (harvestBlocked(state.activeEffects, index, state.tick)) return null
+    // Full storage: refused, and the plot stays ready.
+    const free = storageFree(state)
+    if (free === 0) return null
+    const result = harvest(state.plots[index])
+    if (result === null) return null
+    const { plot, cropId } = result
+    const { yieldBonus, bumperChance, bumperExtra } = modifiersAt(state.upgrades, {
+        plot: index,
+        cropId
+    })
+    // Bumper harvest: one roll from rng.harvest, only when there is a chance at all.
+    // Bigger bumper raises how many crops a hit adds.
+    let bumper = 0
+    let rng = state.rng
+    if (bumperChance > 0) {
+        const [roll, next] = randomInt(state.rng.harvest, 0, 99)
+        if (roll < bumperChance) bumper = bumperExtra
+        rng = { ...state.rng, harvest: next }
+    }
+    // Worms add their crops while they work.
+    const worms = harvestBonusAt(state.activeEffects, index, state.tick)
+    // Only what fits is stored; the rest is lost.
+    const amount = Math.min(free, crops[cropId].yield + yieldBonus + bumper + worms)
+    // Power-up drop: rolled from rng.drops whether or not a slot is free.
+    const [drop, dropsRng] = rollDrop(state)
+    rng = { ...rng, drops: dropsRng }
+    const keep = drop !== null && state.powerUps.length < modifiersFor(state.upgrades).powerUpSlots
+    return {
+        ...state,
+        rng,
+        plots: replacePlot(state.plots, index, plot),
+        inventory: {
+            ...state.inventory,
+            [cropId]: (state.inventory[cropId] ?? 0) + amount
+        },
+        powerUps: keep ? [...state.powerUps, drop] : state.powerUps
+    }
+}
+
+// Auto-harvester: every ready plot with autoHarvest at it harvests itself, in plot order.
+// Plots that can't be harvested (Crows, full storage) stay ready.
+function autoHarvest(state: GameState, crops: CropTable): GameState {
+    let s = state
+    for (let i = 0; i < s.plots.length; i++) {
+        if (s.plots[i].state !== "ready") continue
+        if (modifiersAt(s.upgrades, { plot: i, cropId: null }).autoHarvest <= 0) continue
+        s = harvestPlot(s, i, crops) ?? s
+    }
+    return s
+}
+
 // Applies one player move. Returns a new state, or null if the move isn't allowed.
 // Never changes `state` or `tick`; only harvest (rng.harvest and rng.drops) and rerollOffer
 // (rng.upgrades) draw. See specs/main.md.
@@ -222,6 +297,8 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
     ) {
         return null
     }
+    // A pausing shop stops the clock too; only shop actions are allowed while it is open.
+    if (isShopPaused(state) && !SHOP_ACTIONS.includes(action.type)) return null
 
     switch (action.type) {
         case "plant": {
@@ -232,7 +309,8 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
                 action.cropId,
                 state.tick,
                 crops,
-                growthPct
+                growthPct,
+                plantCutTicks(state, action.plot, action.cropId)
             )
             if (planted === null) return null
             return { ...state, plots: replacePlot(state.plots, action.plot, planted) }
@@ -240,46 +318,7 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
 
         case "harvest": {
             if (!isPlotIndex(state, action.plot)) return null
-            // Crows: no harvesting on this plot while they're here.
-            if (harvestBlocked(state.activeEffects, action.plot, state.tick)) return null
-            // Full storage: refused, and the plot stays ready.
-            const free = storageFree(state)
-            if (free === 0) return null
-            const result = harvest(state.plots[action.plot])
-            if (result === null) return null
-            const { plot, cropId } = result
-            const { yieldBonus, bumperChance, bumperExtra } = modifiersAt(state.upgrades, {
-                plot: action.plot,
-                cropId
-            })
-            // Bumper harvest: one roll from rng.harvest, only when there is a chance at all.
-            // Bigger bumper raises how many crops a hit adds.
-            let bumper = 0
-            let rng = state.rng
-            if (bumperChance > 0) {
-                const [roll, next] = randomInt(state.rng.harvest, 0, 99)
-                if (roll < bumperChance) bumper = bumperExtra
-                rng = { ...state.rng, harvest: next }
-            }
-            // Worms add their crops while they work.
-            const worms = harvestBonusAt(state.activeEffects, action.plot, state.tick)
-            // Only what fits is stored; the rest is lost.
-            const amount = Math.min(free, crops[cropId].yield + yieldBonus + bumper + worms)
-            // Power-up drop: rolled from rng.drops whether or not a slot is free.
-            const [drop, dropsRng] = rollDrop(state)
-            rng = { ...rng, drops: dropsRng }
-            const keep =
-                drop !== null && state.powerUps.length < modifiersFor(state.upgrades).powerUpSlots
-            return {
-                ...state,
-                rng,
-                plots: replacePlot(state.plots, action.plot, plot),
-                inventory: {
-                    ...state.inventory,
-                    [cropId]: (state.inventory[cropId] ?? 0) + amount
-                },
-                powerUps: keep ? [...state.powerUps, drop] : state.powerUps
-            }
+            return harvestPlot(state, action.plot, crops)
         }
 
         case "scareCrows": {
@@ -367,6 +406,70 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
                 lives: state.lives + 1,
                 livesBought: state.livesBought + 1
             }
+        }
+
+        case "buyItem": {
+            const target = action.target ?? null
+            if (!canBuy(state, action.slot, target, crops)) return null
+            const shop = state.shop!
+            const item = shop.stock[action.slot]
+            const paid: GameState = {
+                ...state,
+                coins: state.coins - itemPrice(state, action.slot)!,
+                shop: {
+                    ...shop,
+                    stock: shop.stock.map((it, i) =>
+                        i === action.slot ? { ...it, sold: true } : it
+                    )
+                }
+            }
+            switch (item.kind) {
+                case "upgrade": {
+                    const def = UPGRADES.upgrades[item.id]
+                    if (def.instant === "promote") {
+                        const index = target as number
+                        const copy = state.upgrades[index]
+                        const tier = TIERS[TIERS.indexOf(copy.tier) + 1]
+                        const upgrades = state.upgrades.map((u, i) =>
+                            i === index ? { ...u, tier } : u
+                        )
+                        return { ...paid, upgrades }
+                    }
+                    return withUpgrade(paid, { id: item.id, tier: item.tier, target })
+                }
+                case "powerUp":
+                    return { ...paid, powerUps: [...state.powerUps, item.id] }
+                case "life":
+                    return { ...paid, lives: state.lives + 1, livesBought: state.livesBought + 1 }
+            }
+            return null
+        }
+
+        case "sellUpgrade": {
+            if (!canSell(state, action.index)) return null
+            const copy = state.upgrades[action.index]
+            return {
+                ...state,
+                upgrades: state.upgrades.filter((_, i) => i !== action.index),
+                coins: state.coins + sellRefund(copy)
+            }
+        }
+
+        case "restockShop": {
+            if (!canRestock(state)) return null
+            const shop = state.shop!
+            const paid: GameState = { ...state, coins: state.coins - restockPrice(state) }
+            const [stock, shopRng] = rollStock(paid, crops)
+            return {
+                ...paid,
+                rng: { ...paid.rng, shop: shopRng },
+                shop: { ...shop, stock, restocks: shop.restocks + 1 }
+            }
+        }
+
+        case "closeShop": {
+            if (state.shop === null || state.upgradeOffer !== null) return null
+            return { ...state, shop: null }
         }
 
         case "chooseUpgrade": {
@@ -583,13 +686,16 @@ function isOfferDue(state: GameState): boolean {
 // Moves the game forward one tick. Returns a new state, or `state` itself once ended
 // or while an upgrade offer is open. See specs/main.md for the order of the steps.
 function step(state: GameState, crops: CropTable): GameState {
-    if (state.status === "ended" || state.upgradeOffer !== null) return state
+    if (state.status === "ended" || state.upgradeOffer !== null || isShopPaused(state)) {
+        return state
+    }
 
-    // 1. Tick
+    // 1. Tick, and a running shop closes on its closing tick
     const tick = state.tick + 1
+    const closes = state.shop !== null && tick >= state.shop.closesAt!
 
     // 2. Events: the announced one starts on its startsAt tick, and is cleared once it ends
-    const ticked: GameState = { ...state, tick }
+    const ticked: GameState = { ...state, tick, shop: closes ? null : state.shop }
     let ev = startEvent(ticked, crops, orderRules(ticked))
     if (ev.event !== null && tick >= ev.event.endsAt) {
         ev = { ...ev, event: null, nextEventAt: tick + gapTicks(ev) }
@@ -598,8 +704,15 @@ function step(state: GameState, crops: CropTable): GameState {
     // 3. Effects move crops' and orders' deadlines before growth and failures are checked
     const moved = tickEffects(ev.activeEffects, ev.plots, ev.orders, tick)
 
-    // 4. Growth
-    const plots = moved.plots.map((p) => updateGrowth(p, tick))
+    // 4. Growth, then Auto-harvester picks up what just turned ready
+    const grown: GameState = {
+        ...ev,
+        tick,
+        plots: moved.plots.map((p) => updateGrowth(p, tick)),
+        activeEffects: moved.active
+    }
+    const harvested = autoHarvest(grown, crops)
+    const plots = harvested.plots
 
     // 5. Failed orders
     const open = moved.orders.filter((o) => !isExpired(o, tick))
@@ -637,7 +750,7 @@ function step(state: GameState, crops: CropTable): GameState {
     if (comboBroken) comboMisses = 0
 
     const next: GameState = {
-        ...ev,
+        ...harvested,
         tick,
         plots,
         orders: open,
@@ -647,12 +760,12 @@ function step(state: GameState, crops: CropTable): GameState {
         combo: comboBroken ? 0 : ev.combo,
         comboEndsAt: comboBroken ? 0 : ev.comboEndsAt,
         comboMisses,
-        rng: { ...ev.rng, lives: livesRng },
+        rng: { ...harvested.rng, lives: livesRng },
         activeEffects: moved.active
     }
 
-    // 6. End of run
-    if (isRunOver(next)) return { ...next, status: "ended" }
+    // 6. End of run (a running shop closes with it)
+    if (isRunOver(next)) return { ...next, status: "ended", shop: null }
 
     // 7. New orders, using the rules for the current difficulty
     const rules = orderRules(next)
@@ -714,13 +827,25 @@ function step(state: GameState, crops: CropTable): GameState {
 
     // 9. Upgrade offer, drawn from its own stream after the orders
     const pool = offerPool(announced)
-    if (pool === null || !isOfferDue(announced)) return announced
-    const [offer, upgradesRng] = rollOffer(announced, pool, crops)
+    const offered =
+        pool === null || !isOfferDue(announced) ? announced : makeOffer(announced, pool, crops)
+
+    // 10. Shop, from its own stream, once no offer is waiting
+    if (offered.upgradeOffer !== null || offered.shop !== null || !isShopDue(offered)) {
+        return offered
+    }
+    return openShop(offered, crops)
+}
+
+// Draws an upgrade offer from rng.upgrades. With nothing eligible the count still goes up and
+// no offer is set, so the run carries on.
+function makeOffer(state: GameState, pool: Pool, crops: CropTable): GameState {
+    const [offer, upgradesRng] = rollOffer(state, pool, crops)
     return {
-        ...announced,
-        rng: { ...announced.rng, upgrades: upgradesRng },
+        ...state,
+        rng: { ...state.rng, upgrades: upgradesRng },
         upgradeOffer: offer.length > 0 ? offer : null,
-        offersMade: announced.offersMade + 1,
+        offersMade: state.offersMade + 1,
         rerollsThisOffer: 0
     }
 }

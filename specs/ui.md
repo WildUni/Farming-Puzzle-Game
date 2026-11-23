@@ -154,6 +154,23 @@ With Sneak peek, a dimmed card under the open orders shows `nextOrderPreview(sta
 
 The overlay rules come from `plotOverlays(state)` in `format.ts`, which returns one list of overlay names per plot, so they can be unit tested without Phaser.
 
+## Shop (ShopView)
+
+Shown while `state.shop` is not `null` (see [shop.md](shop.md)).
+
+- **Pausing shop:** a shade covers the board and swallows clicks, as for the upgrade pick. The plant picker and any plot choosing (fertilizer, Miracle grow, a power-up) close when it opens. The game loop does not step; pause still works on top of it.
+- **Running shop:** the same panel without the shade, so the board stays playable behind it, with the time left (`shopTimerText`: `Shop closes in 0:12`). It hides while an upgrade offer is open and comes back after the pick.
+- Title `Shop`, and the coins held.
+- **Stock cards**, one per slot, side by side (`shopItemText`):
+    - Upgrade: name, tier, the line with the tier's values filled in, and the copy count after buying, as on a pick card, with the frame coloured by tier.
+    - Power-up: name and its button text (`powerUpButtonText`).
+    - Life: `Life` and the hearts after buying (`heartsText`).
+    - Under each, a **Buy** button with the price (`shopPriceText`: `Buy 18`). Disabled when `canBuy` is false (too few coins, slots or lives full, nothing left to gain). A sold card shows `SOLD` and no button.
+    - A targeted upgrade, or Promotion, moves to a second step as on the pick: `Choose a plot`, `Choose a crop` or `Choose an upgrade to promote`, with one button per valid target and **Back**. Plot targets reuse `targetText`; Promotion targets show the copy's name and its tier now and after (`promotionTargetText`: `Fast growth  Rare → Epic`).
+- **Owned upgrades:** a list of every owned copy (name, tier, and the plot or crop for a targeted one), each with **Sell** and its refund (`sellRefundText`: `Sell +15`). Disabled when `canSell` is false, with the reason from `sellBlock` as the label: `Can't sell`, `Needed by Bigger bumper`, `Barn too full`.
+- **Restock** with its price (`restockText`: `Restock 8`, or `Restock free`), disabled when `canRestock` is false; and **Close**, which sends `closeShop`.
+- Every button sends its action through `act()`, so it is logged.
+
 ## End of run (GameOverView)
 
 Shown over the board as soon as `status` is `'ended'`.
@@ -216,6 +233,7 @@ Three sections, top to bottom:
 - The Level row and the game-over level follow `runLevel` (Steady pace).
 - Storage, selling, fertilizer and reroll text: see the "Screen text" tests in [economy.md](economy.md). `sellButtonText` shows Premium produce's boosted price.
 - `miracleGrowText` reads `ready` with no recharge left (and on `miracleReadyAt` itself), and the time left otherwise.
+- Shop: `shopItemText` for an upgrade, a power-up and a life slot; `shopPriceText` follows `itemPrice` (with Discount card); `sellRefundText` follows `sellRefund` and gives each refusal's label; `restockText` shows the price and `free` with Free restock; `promotionTargetText` shows the tier now and after; `shopTimerText` rounds seconds up.
 
 ## Open items
 

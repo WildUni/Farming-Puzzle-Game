@@ -92,6 +92,7 @@ function validatePowerUp(entry: unknown, at: string): PowerUpDef {
     if (new Set(modes).size !== modes.length) fail(`${at}.modes`, "free of repeats")
 
     const weight = wholeAtLeast(entry.weight, 1, `${at}.weight`)
+    const shopPrice = wholeAtLeast(entry.shopPrice, 1, `${at}.shopPrice`)
     const effect = validateEffect(entry.effect, `${at}.effect`)
     const lasting = LASTING_KINDS.includes(effect.kind)
 
@@ -137,6 +138,7 @@ function validatePowerUp(entry: unknown, at: string): PowerUpDef {
         text,
         modes: [...(modes as GameMode[])],
         weight,
+        shopPrice,
         durationTicks,
         effect,
         target,
@@ -232,6 +234,8 @@ function canUsePowerUp(
     if (state.status === "ended" || state.upgradeOffer !== null || !state.allowPowerUps) {
         return false
     }
+    // A pausing shop stops time, like an offer.
+    if (state.shop !== null && state.shop.closesAt === null) return false
     const def = heldDef(state, slot, config)
     if (def === null || !systemsOn(def, state)) return false
     // Good omen calls an event now, so it waits while another event is announced or running.

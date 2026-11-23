@@ -1,4 +1,4 @@
-// Cheats for the debug menu: start any event, add any upgrade, give any power-up.
+// Cheats for the debug menu: start any event, add any upgrade, give any power-up, open the shop.
 // Not actions: never logged, so a run that uses them can't be replayed. See specs/debug.md.
 import type { CropTable, GameState, Tier, UpgradeTarget } from "./types"
 import { EVENTS, buildEvent, eventTargets } from "./events"
@@ -6,6 +6,7 @@ import { UPGRADES, modifiersFor, validTargets } from "./upgrades"
 import { POWER_UPS } from "./powerups"
 import { withUpgrade } from "./main"
 import { TIERS } from "./game_constants"
+import { openShop } from "./shop"
 
 type DebugEventOptions = { plot: number | null; skipWarning: boolean }
 
@@ -51,6 +52,8 @@ function debugUpgrade(
     if (state.status === "ended" || !has(UPGRADES.upgrades, id)) return null
     if (!upgradeTiers(id).includes(tier)) return null
     const def = UPGRADES.upgrades[id]
+    // Instant upgrades (Promotion) are never stored, so there is no copy to add.
+    if (def.kind === "instant") return null
     if (def.target === null) {
         if (target !== null) return null
     } else if (
@@ -71,5 +74,13 @@ function debugPowerUp(state: GameState, id: string): GameState | null {
     return { ...state, powerUps: [...state.powerUps, id] }
 }
 
-export { debugEvent, debugUpgrade, debugPowerUp, upgradeTiers }
+// Opens a shop visit now, as if it were due. null once the run ended, in Puzzle, while a shop or
+// an upgrade offer is already open.
+function debugOpenShop(state: GameState, crops: CropTable): GameState | null {
+    if (state.status === "ended" || state.mode === "puzzle") return null
+    if (state.shop !== null || state.upgradeOffer !== null) return null
+    return openShop(state, crops)
+}
+
+export { debugEvent, debugUpgrade, debugPowerUp, debugOpenShop, upgradeTiers }
 export type { DebugEventOptions }

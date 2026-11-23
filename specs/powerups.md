@@ -31,17 +31,18 @@ This spec covers ten power-ups, harvest drops and held slots. Buying them in the
 }
 ```
 
-| Field     | Required     | Meaning                                                                                                                                                           |
-| --------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`      | yes          | Unique id, stored in `GameState.powerUps`                                                                                                                         |
-| `name`    | yes          | Button title                                                                                                                                                      |
-| `text`    | yes          | Second line on the slot button. `{seconds}` is replaced by the length after `powerUpDurationPct`                                                                  |
-| `modes`   | yes          | Non-empty list of `survival`, `timed`, no repeats. It only drops in these modes                                                                                   |
-| `weight`  | yes          | Relative chance of this power-up when a drop happens. Whole number `>= 1`                                                                                         |
-| `seconds` | lasting only | How long its effect lasts, in seconds. Whole number `>= 1`. Turned into ticks with `TICKS_PER_SECOND`                                                             |
-| `effect`  | yes          | One `Effect` from [effects.md](effects.md)                                                                                                                        |
-| `target`  | no           | `"plot"` when the player chooses a plot on use (required exactly for `finishGrowth`), `"order"` when they choose an open order (required exactly for `fillOrder`) |
-| `needs`   | no           | Game systems the run must have on for it to drop or be used: `"powerUps"`, `"events"`. Required to include `"events"` for `goodEvent`                             |
+| Field       | Required     | Meaning                                                                                                                                                           |
+| ----------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`        | yes          | Unique id, stored in `GameState.powerUps`                                                                                                                         |
+| `name`      | yes          | Button title                                                                                                                                                      |
+| `text`      | yes          | Second line on the slot button. `{seconds}` is replaced by the length after `powerUpDurationPct`                                                                  |
+| `modes`     | yes          | Non-empty list of `survival`, `timed`, no repeats. It only drops in these modes                                                                                   |
+| `shopPrice` | yes          | Base price in the shop (see [shop.md](shop.md)). Whole number `>= 1`                                                                                              |
+| `weight`    | yes          | Relative chance of this power-up when a drop happens. Whole number `>= 1`                                                                                         |
+| `seconds`   | lasting only | How long its effect lasts, in seconds. Whole number `>= 1`. Turned into ticks with `TICKS_PER_SECOND`                                                             |
+| `effect`    | yes          | One `Effect` from [effects.md](effects.md)                                                                                                                        |
+| `target`    | no           | `"plot"` when the player chooses a plot on use (required exactly for `finishGrowth`), `"order"` when they choose an open order (required exactly for `fillOrder`) |
+| `needs`     | no           | Game systems the run must have on for it to drop or be used: `"powerUps"`, `"events"`. Required to include `"events"` for `goodEvent`                             |
 
 ### Shipped power-ups
 
@@ -254,6 +255,6 @@ All three are marked `"needs": ["powerUps"]`, so they are never offered in a run
 - [ ] Still to come: Combo freeze (Timed combos), Merchant call (the shop), Giant order (needs a "no new orders until this one is done" rule and its mode penalties).
 - [ ] Gold rush: keep "+5 coins per order for 15 s", or double coins for 15 s instead? (Also in the design doc's open questions.)
 - [ ] Finish all: is "no score, coins and filled count still given, rarest drop" the right way to keep it from skipping the puzzle? (Also in the design doc's open questions.)
-- [ ] Buying power-ups in the shop, and pre-run power-ups paid with meta currency.
+- [ ] Buying power-ups in the shop (specified in [shop.md](shop.md): a `shopPrice` per power-up), and pre-run power-ups paid with meta currency.
 - [ ] Should a drop with full slots replace the oldest held power-up, or offer a swap, instead of being lost?
 - [ ] Should a used Growth boost with nothing growing be refused instead of spent?

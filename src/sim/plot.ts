@@ -15,21 +15,24 @@ function buildCropTable(crops: Crop[]): CropTable {
 
 // Returns null if the plot is busy or the crop id is unknown,
 // so an unknown id never gets into a plot. The ready tick is fixed here, with the
-// run's growthPct modifier applied (100 = normal speed).
+// run's growthPct modifier applied (100 = normal speed), then `cutTicks` (Quick soil) taken
+// off, never leaving less than 1 tick of growth.
 function plant(
     plot: Plot,
     cropId: string,
     now: number,
     crops: CropTable,
-    growthPct: number = 100
+    growthPct: number = 100,
+    cutTicks: number = 0
 ): Plot | null {
     if (plot.state !== "empty") return null
     if (!Object.prototype.hasOwnProperty.call(crops, cropId)) return null
+    const grow = Math.max(1, scalePct(crops[cropId].growTicks, growthPct) - cutTicks)
     return {
         state: "growing",
         cropId,
         plantedAt: now,
-        readyAt: now + scalePct(crops[cropId].growTicks, growthPct)
+        readyAt: now + grow
     }
 }
 

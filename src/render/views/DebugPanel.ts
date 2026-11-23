@@ -4,7 +4,13 @@ import type { CropTable, GameState, Tier, UpgradeTarget } from "../../sim/types"
 import { EVENTS, eventTargets } from "../../sim/events"
 import { UPGRADES, validTargets } from "../../sim/upgrades"
 import { POWER_UPS } from "../../sim/powerups"
-import { debugEvent, debugPowerUp, debugUpgrade, upgradeTiers } from "../../sim/debug"
+import {
+    debugEvent,
+    debugPowerUp,
+    debugOpenShop,
+    debugUpgrade,
+    upgradeTiers
+} from "../../sim/debug"
 import { targetText, tierName } from "../format"
 
 // Applies a debug change to the run. Returns false when the change was refused.
@@ -134,6 +140,17 @@ export class DebugPanel {
         this.powerUpButton = el("button", "Add", ROW_STYLE)
         this.powerUpButton.addEventListener("click", () => this.addPowerUp())
         this.section("Power-ups", this.powerUpSelect, this.powerUpButton)
+
+        // Shop
+        const shopButton = el("button", "Open shop", ROW_STYLE)
+        shopButton.addEventListener("click", () => {
+            const label = "Opened the shop"
+            this.report(
+                this.apply((state) => debugOpenShop(state, this.crops), label),
+                label
+            )
+        })
+        this.section("Shop", shopButton)
 
         this.status = el("div", "", "margin-top: 12px; min-height: 2em; color: #cfe8b0;")
         this.panel.append(this.status)
