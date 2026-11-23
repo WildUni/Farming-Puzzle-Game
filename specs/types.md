@@ -166,17 +166,9 @@ type GameConfig = { mode: GameMode; allowPowerUps: boolean; allowEvents: boolean
 
 Settings chosen before a run. Fixed for the whole run.
 
-### `RunData`
-
-```ts
-type RunData = { time_left: number; orders_completed: number; points: number }
-```
-
-Input to `calcScore` (see [scoring.md](scoring.md)).
-
 ## Open items
 
-- [ ] `RunData` repeats information already in `GameState` (`ordersCompleted`, `tick`, `score`) and uses snake_case while the rest uses camelCase. Decide whether scoring should read `GameState` directly.
+- [x] `RunData` is removed: scoring reads `GameState` directly (see [scoring.md](scoring.md)).
 - [x] Add Survival fields (`lives`, `coins`, `livesBought`). The life price is derived from `livesBought` instead of stored.
 - [x] Store the ready tick on growing plots (`readyAt`).
 - [ ] Add plot modifiers (fertilizer, weeds, blocked) as a `modifiers` list when needed.

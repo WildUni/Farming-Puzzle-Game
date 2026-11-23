@@ -28,6 +28,6 @@ Tuning numbers that are the same for every run. Changing one should never requir
 
 ## Open items
 
-- [ ] Base points per filled order and the bonus for time left (see [scoring.md](scoring.md)).
+- [x] Scoring numbers (level, speed, best combo, failed orders, coins) live in `src/data/scoring.json` (see [scoring.md](scoring.md)), not here.
 - [x] Mode rules (Survival's starting lives and lives cap, Timed's run length and open orders) live in `src/data/modes.json` (see [modes.md](modes.md)). The Timed length was `TIMED_MODE_TICKS` here.
 - [x] Survival numbers: starting lives, coins, life prices and the difficulty curve live in `src/data/difficulty.json` (see [difficulty.md](difficulty.md)), not here.

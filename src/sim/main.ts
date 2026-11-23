@@ -16,7 +16,8 @@ import { START_PLOTS, DEFAULT_ORDER_RULES, ORDERS_PER_UPGRADE } from "./game_con
 import { plant, harvest, updateGrowth } from "./plot"
 import { createOrder, fulfill, isExpired, timeLeft } from "./orders"
 import { DIFFICULTY, runLevel, orderRulesFor, lifePrice } from "./difficulty"
-import { MODES, comboPct, rushWaveAt } from "./modes"
+import { MODES, rushWaveAt } from "./modes"
+import { orderPoints } from "./scoring"
 import {
     UPGRADES,
     modifiersFor,
@@ -298,13 +299,14 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
     }
 }
 
-// Fills `order`: removes it, adds 1 to ordersCompleted, adds its value to score when `scored`,
-// and in Survival pays coins: the base pay, Big tips, Generous customer / Gold rush, and Early
-// bird when at least half the order's time is left. deliver and the Finish power-ups use it.
-// In Timed a scored fill is multiplied by the combo, then extends the streak (see withCombo).
+// Fills `order`: removes it, adds 1 to ordersCompleted, adds orderPoints to score when `scored`
+// (level, combo and speed bonuses, from the state before the fill), and in Survival pays coins:
+// the base pay, Big tips, Generous customer / Gold rush, and Early bird when at least half the
+// order's time is left. deliver and the Finish power-ups use it. In Timed a scored fill then
+// extends the streak (see withCombo).
 function completeOrder(state: GameState, order: Order, scored: boolean): GameState {
     const combo = state.mode === "timed" && scored
-    const points = combo ? Math.floor((order.value * comboPct(state.combo)) / 100) : order.value
+    const points = scored ? orderPoints(state, order) : 0
     const m = modifiersFor(state.upgrades)
     const early = timeLeft(order, state.tick) * 2 >= order.timeLimit ? m.earlyBirdCoins : 0
     const pay =

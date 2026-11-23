@@ -138,8 +138,10 @@ Shown over the board as soon as `status` is `'ended'`.
 
 - Title (`gameOverTitle`): `Game over` in Survival (lives ran out), `Time's up` in Timed.
 - Summary (`gameOverText`), one item per line:
-    - Survival: `Score`, `Orders filled`, `Orders failed`, `Time survived`, `Level reached`.
-    - Timed: `Score`, `Orders filled`, `Orders failed`, `Best combo` (the longest streak).
+    - The score, from `scoreBreakdown` (see [scoring.md](scoring.md)): `Order points 340`, then one line per end-of-run line whose points aren't 0 (`Best combo bonus +140`, `Failed orders -15`, `Coins left +6`), then `Final score 465`.
+    - Survival: `Orders filled`, `Orders failed`, `Time survived`, `Level reached`.
+    - Timed: `Orders filled`, `Orders failed`, `Best combo` (the longest streak).
+- The HUD's `Score` row shows `GameState.score` (the order points) during the run; the end-of-run lines only appear on the summary.
 - Two buttons:
     - **Restart:** a new run of the same mode on a new random seed.
     - **Menu:** back to the mode select, with the mode just played selected.

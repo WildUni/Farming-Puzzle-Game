@@ -23,6 +23,8 @@ import { copyCount, effectAmount } from "../sim/upgrades"
 import { POWER_UPS, durationFor } from "../sim/powerups"
 import { EVENTS, shieldedPlots } from "../sim/events"
 import { appliesTo, fogged } from "../sim/effects"
+import { scoreBreakdown } from "../sim/scoring"
+import type { ScoreLineKind } from "../sim/scoring"
 
 const MAX_HEARTS = 5 // a cap above this shows lives as a count
 
@@ -79,9 +81,29 @@ function targetText(target: UpgradeTarget): string {
 // Summary on the game-over panel. Levels are shown counted from 1.
 // Both modes list filled and failed orders; Survival also lists how long the run lasted
 // (Timed always lasts the same time) and the level reached.
+// Label of each end-of-run score line on the summary.
+const SCORE_LINE_LABELS: Record<ScoreLineKind, string> = {
+    bestCombo: "Best combo bonus",
+    failedOrders: "Failed orders",
+    coins: "Coins left"
+}
+
+// The score part of the summary: order points, each end-of-run line that changed the score
+// ("Best combo bonus +140", "Failed orders -15"), then the final score.
+function scoreLines(state: GameState): string[] {
+    const { orderPoints, lines, total } = scoreBreakdown(state)
+    const extra = lines
+        .filter((line) => line.points !== 0)
+        .map((line) => {
+            const sign = line.points > 0 ? "+" : "-"
+            return `${SCORE_LINE_LABELS[line.kind]} ${sign}${Math.abs(line.points)}`
+        })
+    return [`Order points ${orderPoints}`, ...extra, `Final score ${total}`]
+}
+
 function gameOverText(state: GameState): string {
     const lines = [
-        `Score ${state.score}`,
+        ...scoreLines(state),
         `Orders filled ${state.ordersCompleted}`,
         `Orders failed ${state.ordersFailed}`
     ]

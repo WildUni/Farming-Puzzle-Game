@@ -83,8 +83,8 @@ Returns a **new** state, or `null` if the move is not allowed. A `null` result m
 - Finds the open order with that `id`. Returns `null` if there is none (unknown, already filled, or already failed).
 - Returns `null` if the order `isExpired` at `state.tick` (`tick > expiresAt`). Delivering on tick `expiresAt` itself is allowed. With the tick order above this can't normally happen, but it keeps `applyAction` safe to call on any state.
 - Calls `fulfill(order, inventory)`. Returns `null` if the inventory is short.
-- Removes the order from `orders` (other orders keep their order), stores the new inventory, adds `order.value` to `score`, and adds 1 to `ordersCompleted`.
-- **Timed combo:** the score added is `floor(order.value × comboPct(combo) / 100)` instead, using the streak built **before** this fill (so the first order in a streak scores ×1). Then `combo` goes up by 1, `comboEndsAt = tick + MODES.timed.combo.windowTicks`, and `bestCombo = max(bestCombo, combo)`. Finish one does the same; Finish all scores nothing and leaves the streak alone (see [modes.md](modes.md)).
+- Removes the order from `orders` (other orders keep their order), stores the new inventory, adds `orderPoints(state, order)` to `score` (see [scoring.md](scoring.md)), and adds 1 to `ordersCompleted`. `orderPoints` reads the state **before** the fill: the Survival level, the Timed combo (so the first order in a streak scores ×1) and the time left for the speed bonus.
+- **Timed combo:** after the fill `combo` goes up by 1, `comboEndsAt = tick + MODES.timed.combo.windowTicks`, and `bestCombo = max(bestCombo, combo)`. Finish one does the same; Finish all scores nothing and leaves the streak alone (see [modes.md](modes.md)).
 - **Survival:** also adds `DIFFICULTY.coinsPerOrder + coinsPerOrder` (the modifier) `+ deliverBonusAt(activeEffects, tick)` (Generous customer, Gold rush) `+ earlyBirdCoins` when `2 × timeLeft(order, tick) >= timeLimit` (Early bird) to `coins`. Other modes don't earn coins.
 - Everything after the crops are taken is shared with the Finish one and Finish all power-ups (`completeOrder`), which fill orders without crops.
 - Does not create a new order. That is `step`'s job. Filling an order can raise the level (see [difficulty.md](difficulty.md)); orders `step` creates from then on use the new level's rules, while orders already open keep their time limit and amount.
@@ -319,7 +319,7 @@ Returns a **new** state. The steps run in this order, each one using the result 
 ## Open items
 
 - [ ] Consider renaming to `game.ts` as it grows.
-- [ ] Add the time bonus to `deliver`'s score once the scoring rule reads `GameState` (see [scoring.md](scoring.md)).
+- [x] Score fills through `orderPoints` in `scoring.ts`, with the level, combo and speed bonuses (see [scoring.md](scoring.md)).
 - [ ] Planting costs (seeds or coins), if the economy needs a coin sink besides lives.
 - [x] Survival end condition: the run ends when lives reach 0, and a failed order costs a life.
 - [ ] Puzzle end condition (the level's order filled or failed) once puzzle levels exist.

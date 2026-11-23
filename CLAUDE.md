@@ -20,7 +20,7 @@ The code is split into a pure simulation and a Phaser renderer:
 
 - **`src/sim/`** — all game rules, plain TypeScript. **Must not import Phaser or browser APIs** (enforced by ESLint `no-restricted-imports`) so tests and a future server-side replay run in plain Node.
 - **`src/render/`** — everything Phaser. `scenes/` are Phaser scenes; `views/` each draw one part of the screen from a `GameState` (`update(state)`), and report clicks via callbacks. `render/format.ts` is also kept Phaser-free (lint-enforced) so it can be unit tested.
-- **`src/data/`** — JSON tuning. `crops.json` is loaded in `Boot` and stored in the Phaser registry as a `CropTable` (`buildCropTable`); `difficulty.json` and `modes.json` are imported directly by `sim/difficulty.ts` and `sim/modes.ts`.
+- **`src/data/`** — JSON tuning. `crops.json` is loaded in `Boot` and stored in the Phaser registry as a `CropTable` (`buildCropTable`); `difficulty.json`, `modes.json` and `scoring.json` are imported directly by `sim/difficulty.ts`, `sim/modes.ts` and `sim/scoring.ts`.
 
 ### Sim contract (see `specs/README.md`)
 

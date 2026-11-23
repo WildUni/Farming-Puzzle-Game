@@ -6,7 +6,7 @@ import { gameOverText, gameOverTitle } from "../format"
 import { COLORS, TEXT } from "../theme"
 
 const PANEL_W = 480
-const PANEL_H = 420
+const PANEL_H = 520 // room for the score breakdown plus the run's stats (up to 8 lines)
 const BUTTON_W = 190
 const BUTTON_H = 72
 const BUTTON_GAP = 24

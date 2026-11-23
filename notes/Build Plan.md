@@ -234,7 +234,7 @@ Add the second mode on the same simulation, then finish scoring and local saves.
 
 ### Scoring and summary (about 2 hours)
 
-- [ ] Final score formula for each mode, kept in one file
+- [x] Final score formula for each mode, kept in one file
 - [ ] Run summary screen
   - [x] Score
   - [x] Orders filled and failed

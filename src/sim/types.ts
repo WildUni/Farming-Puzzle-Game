@@ -14,11 +14,6 @@ type RNGSeed = number
 type GameMode = "survival" | "timed" | "puzzle"
 type GameStatus = "running" | "ended"
 
-type RunData = {
-    time_left: number
-    orders_completed: number
-    points: number
-}
 type Crop = {
     id: string
     growTicks: number
@@ -266,7 +261,6 @@ type GameConfig = {
 }
 
 export type {
-    RunData,
     GameMode,
     GameState,
     GameStatus,

@@ -1,0 +1,16 @@
+{
+    "survival": {
+        "levelBonusPct": 10,
+        "speedBonusPct": 0,
+        "bestComboPoints": 0,
+        "failedOrderPoints": 0,
+        "coinsPerPoint": 2
+    },
+    "timed": {
+        "levelBonusPct": 0,
+        "speedBonusPct": 50,
+        "bestComboPoints": 20,
+        "failedOrderPoints": 5,
+        "coinsPerPoint": 4
+    }
+}

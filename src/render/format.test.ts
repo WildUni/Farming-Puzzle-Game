@@ -40,6 +40,7 @@ import { buildCropTable } from "../sim/plot"
 import { lifePrice, levelFor, DIFFICULTY } from "../sim/difficulty"
 import { ORDER_TICKS, TICKS_PER_SECOND } from "../sim/game_constants"
 import { MODES, comboPct } from "../sim/modes"
+import { SCORING } from "../sim/scoring"
 import { UPGRADES, effectAmount, scalePct } from "../sim/upgrades"
 import { POWER_UPS } from "../sim/powerups"
 import { EVENTS } from "../sim/events"
@@ -275,31 +276,59 @@ describe("gameOverTitle", () => {
 })
 
 describe("gameOverText", () => {
-    it("shows score and order counts in Timed", () => {
+    it("shows the score breakdown, order counts and best combo in Timed", () => {
         const state = {
             ...game("timed"),
             tick: MODES.timed.runTicks,
             score: 340,
             ordersCompleted: 12,
-            ordersFailed: 3
+            ordersFailed: 3,
+            bestCombo: 7
         }
-        expect(gameOverText({ ...state, bestCombo: 7 })).toBe(
-            "Score 340\nOrders filled 12\nOrders failed 3\nBest combo 7"
+        const combo = 7 * SCORING.timed.bestComboPoints
+        const failed = 3 * SCORING.timed.failedOrderPoints
+        expect(gameOverText(state)).toBe(
+            [
+                "Order points 340",
+                `Best combo bonus +${combo}`,
+                `Failed orders -${failed}`,
+                `Final score ${340 + combo - failed}`,
+                "Orders filled 12",
+                "Orders failed 3",
+                "Best combo 7"
+            ].join("\n")
         )
     })
 
-    it("shows score, order counts, time survived and level reached in Survival", () => {
+    it("shows the score breakdown, time survived and level reached in Survival", () => {
         const state = {
             ...game("survival"),
             tick: 3050,
             score: 120,
             ordersCompleted: 7,
-            ordersFailed: 3
+            ordersFailed: 3,
+            coins: 13
         }
+        const coins = Math.floor(13 / SCORING.survival.coinsPerPoint)
         expect(gameOverText(state)).toBe(
-            "Score 120\nOrders filled 7\nOrders failed 3\nTime survived 5:05\n" +
+            [
+                "Order points 120",
+                `Coins left +${coins}`,
+                `Final score ${120 + coins}`,
+                "Orders filled 7",
+                "Orders failed 3",
+                "Time survived 5:05",
                 `Level reached ${levelFor(7) + 1}`
+            ].join("\n")
         )
+    })
+
+    it("leaves out end-of-run lines that add nothing", () => {
+        const state = { ...game("timed"), score: 50, ordersCompleted: 2 }
+        expect(gameOverText(state).split("\n").slice(0, 2)).toEqual([
+            "Order points 50",
+            "Final score 50"
+        ])
     })
 })
 

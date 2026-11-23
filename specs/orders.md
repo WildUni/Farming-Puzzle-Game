@@ -58,7 +58,7 @@ Rules:
 - Crops whose amount drops to 0 are **removed** from the inventory, so it matches the "missing means 0" rule and two equal inventories always compare equal.
 - Crops the order doesn't ask for are left as they are.
 - Returns `null` if `canFulfill` is `false`. The inventory passed in is never changed.
-- Does not add score. `main.ts` adds `order.value` (and later the time bonus from `scoring.ts`).
+- Does not add score. `main.ts` adds `orderPoints` from `scoring.ts`.
 
 ### `isExpired(order, now): boolean`
 
@@ -68,7 +68,7 @@ Rules:
 
 - Ticks left after the current one: `order.expiresAt − now`, never below 0.
 - It is 0 on tick `expiresAt`, the last tick the order can still be filled. Use `isExpired`, not `timeLeft === 0`, to check whether an order has failed.
-- Used by the order card's countdown bar and by the time bonus in scoring.
+- Used by the order card's countdown bar and by the speed bonus in scoring.
 
 ## Tests (`orders.test.ts`)
 

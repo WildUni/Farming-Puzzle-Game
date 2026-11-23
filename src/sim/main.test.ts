@@ -23,6 +23,7 @@ import {
 } from "./game_constants"
 import { DIFFICULTY, lifePrice, levelFor, orderRulesFor, runLevel } from "./difficulty"
 import { MODES, comboPct, rushWaveAt } from "./modes"
+import { SCORING, orderPoints } from "./scoring"
 import {
     UPGRADES,
     effectAmount,
@@ -1495,9 +1496,11 @@ describe("Timed combo", () => {
     const COMBO = MODES.timed.combo
     const deliver = (orderId: number): Action => ({ type: "deliver", orderId })
 
-    // A Timed game at `tick` with the given orders and enough carrots for all of them.
+    // A Timed game on tick 100 with the given orders and enough carrots for all of them. The
+    // orders are due on tick 100, so the speed bonus is 0 and only the combo counts.
     function ready(orders: Order[], overrides: Partial<GameState> = {}): GameState {
-        return makeTimed({ tick: 100, orders, inventory: { carrot: 99 }, ...overrides })
+        const due = orders.map((o) => ({ ...o, expiresAt: 100 }))
+        return makeTimed({ tick: 100, orders: due, inventory: { carrot: 99 }, ...overrides })
     }
 
     it("createGame starts with no streak", () => {
@@ -1569,7 +1572,8 @@ describe("Timed combo", () => {
 
     it("Finish one extends the streak; Finish all neither scores nor builds it", () => {
         const on: GameConfig = { mode: "timed", allowPowerUps: true, allowEvents: false }
-        const orders = [makeOrder({ id: 1, value: 10 }), makeOrder({ id: 2, value: 10 })]
+        // Due this tick, so no speed bonus.
+        const orders = [1, 2].map((id) => makeOrder({ id, value: 10, expiresAt: 100 }))
         const base = { ...createGame(1, on), tick: 100, orders, combo: 1, comboEndsAt: 120 }
 
         const one = apply(
@@ -1593,6 +1597,32 @@ describe("Timed combo", () => {
         const next = apply(s, deliver(0))
         expect(next.score).toBe(24)
         expect([next.combo, next.comboEndsAt, next.bestCombo]).toEqual([0, 0, 0])
+    })
+})
+
+describe("scoring filled orders", () => {
+    const deliver = (orderId: number): Action => ({ type: "deliver", orderId })
+
+    it("adds orderPoints from the state before the fill, speed bonus included", () => {
+        // 500 of 600 ticks left, with a streak of 2.
+        const order = makeOrder({ id: 0, value: 40, expiresAt: 600, timeLimit: 600 })
+        const s = makeTimed({ tick: 100, orders: [order], inventory: { carrot: 3 }, combo: 2 })
+        const speed = Math.floor((40 * SCORING.timed.speedBonusPct * 500) / (100 * 600))
+        expect(speed).toBeGreaterThan(0)
+        const expected = Math.floor((40 * comboPct(2)) / 100) + speed
+        expect(orderPoints(s, order)).toBe(expected)
+        expect(apply(s, deliver(0)).score).toBe(expected)
+    })
+
+    it("Survival pays the level bonus past level 1", () => {
+        const order = makeOrder({ id: 0, value: 40 })
+        const at = (ordersCompleted: number) =>
+            makeState({ tick: 100, orders: [order], inventory: { carrot: 3 }, ordersCompleted })
+        expect(apply(at(0), deliver(0)).score).toBe(40)
+        const level2 = at(DIFFICULTY.ordersPerLevel)
+        expect(runLevel(level2)).toBe(1)
+        const pct = 100 + SCORING.survival.levelBonusPct
+        expect(apply(level2, deliver(0)).score - level2.score).toBe(Math.floor((40 * pct) / 100))
     })
 })
 
