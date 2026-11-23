@@ -41,6 +41,7 @@ const AMOUNT_KINDS: readonly string[] = [
     "deliverBonus",
     "harvestBonus",
     "seedPlots",
+    "blockHarvest",
     "addOrder",
     "rotStorage"
 ]
@@ -94,7 +95,7 @@ function validateEffect(raw: unknown, at: string): Effect {
         case "cutGrowth":
             return { kind: "cutGrowth", ticks: wholeAtLeast(raw.ticks, 1, `${at}.ticks`) }
         case "blockHarvest":
-            return { kind: "blockHarvest" }
+            return { kind: "blockHarvest", plots: wholeAtLeast(raw.plots, 1, `${at}.plots`) }
         case "deliverBonus":
             return { kind: "deliverBonus", coins: wholeAtLeast(raw.coins, 1, `${at}.coins`) }
         case "stealCrop":
@@ -234,6 +235,7 @@ function baseAmount(effect: Effect): number | null {
         case "harvestBonus":
             return effect.crops
         case "seedPlots":
+        case "blockHarvest":
             return effect.plots
         case "addOrder":
             return effect.timePct
@@ -393,6 +395,44 @@ function seedPlots(state: GameState, count: number, crops: CropTable): GameState
     return { ...state, plots, rng: { ...state.rng, events: rng } }
 }
 
+// Crows: they land on up to `count` plots holding a crop and not in `exclude`, one pick each
+// from rng.events, and block harvesting there until scared off or the effect ends. With no crop
+// on the field nothing happens and nothing is drawn.
+function landCrows(
+    state: GameState,
+    id: string,
+    count: number,
+    length: number,
+    exclude: number[]
+): GameState {
+    let free = state.plots.flatMap((p, i) =>
+        p.state !== "empty" && !exclude.includes(i) ? [i] : []
+    )
+    if (free.length === 0) return state
+    let rng = state.rng.events
+    const chosen: number[] = []
+    for (let n = 0; n < count && free.length > 0; n++) {
+        const [plot, next] = pick(rng, free)
+        rng = next
+        chosen.push(plot)
+        free = free.filter((i) => i !== plot)
+    }
+    chosen.sort((a, b) => a - b)
+    return {
+        ...state,
+        rng: { ...state.rng, events: rng },
+        activeEffects: startEffect(
+            state.activeEffects,
+            id,
+            { kind: "blockHarvest", plots: count },
+            state.tick,
+            length,
+            exclude,
+            chosen
+        )
+    }
+}
+
 // Emergency order: one extra order with `timePct`% of the usual time, from rng.events (two
 // draws, as createOrder). It is added past maxOpenOrders.
 function addOrder(
@@ -444,6 +484,14 @@ function startEvent(
     if (def.effect.kind === "stealCrop" && stealCrop(state.plots[event.plot!]) === null) {
         return state
     }
+    const exclude = def.kind === "bad" ? shieldedPlots(state) : []
+    // Crows find nothing on a field with no crop to sit on: no roll, no effect.
+    if (
+        def.effect.kind === "blockHarvest" &&
+        !state.plots.some((p, i) => p.state !== "empty" && !exclude.includes(i))
+    ) {
+        return state
+    }
 
     let next = state
     const chance = def.blockStat === null ? 0 : modifiersFor(state.upgrades)[def.blockStat]
@@ -453,7 +501,6 @@ function startEvent(
         if (roll < chance) return next
     }
 
-    const exclude = def.kind === "bad" ? shieldedPlots(state) : []
     const length = event.endsAt - event.startsAt
     const effect = def.effect
     switch (effect.kind) {
@@ -496,9 +543,10 @@ function startEvent(
                     exclude
                 )
             }
+        case "blockHarvest":
+            return landCrows(next, def.id, event.amount!, length, exclude)
         case "growthRate":
         case "orderRate":
-        case "blockHarvest":
         case "fog":
             return {
                 ...next,

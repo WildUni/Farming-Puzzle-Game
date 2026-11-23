@@ -8,7 +8,9 @@ import {
     cutGrowth,
     finishGrowth,
     stealCrop,
+    appliesTo,
     harvestBlocked,
+    scareCrows,
     deliverBonusAt,
     harvestBonusAt,
     fogged,
@@ -33,7 +35,7 @@ function effect(
     startedAt = 0,
     endsAt = 100
 ): ActiveEffect {
-    return { source: kind, effect: { kind, pct }, startedAt, endsAt, exclude: [] }
+    return { source: kind, effect: { kind, pct }, startedAt, endsAt, exclude: [], only: null }
 }
 
 // Shifts on ticks startedAt+1 ... startedAt+n.
@@ -189,7 +191,14 @@ describe("startEffect", () => {
 
     it("appends a new source with endsAt = now + durationTicks", () => {
         expect(startEffect([], "orderFreeze", freeze, 10, 100)).toEqual([
-            { source: "orderFreeze", effect: freeze, startedAt: 10, endsAt: 110, exclude: [] }
+            {
+                source: "orderFreeze",
+                effect: freeze,
+                startedAt: 10,
+                endsAt: 110,
+                exclude: [],
+                only: null
+            }
         ])
     })
 
@@ -197,7 +206,14 @@ describe("startEffect", () => {
         const once = startEffect([], "orderFreeze", freeze, 10, 100)
         const twice = startEffect(once, "orderFreeze", freeze, 50, 100)
         expect(twice).toEqual([
-            { source: "orderFreeze", effect: freeze, startedAt: 10, endsAt: 210, exclude: [] }
+            {
+                source: "orderFreeze",
+                effect: freeze,
+                startedAt: 10,
+                endsAt: 210,
+                exclude: [],
+                only: null
+            }
         ])
         expect(once[0].endsAt).toBe(110)
     })
@@ -249,7 +265,7 @@ describe("plot exclusion and action effects", () => {
         endsAt: number,
         exclude: number[] = []
     ): ActiveEffect {
-        return { source: effect.kind, effect, startedAt, endsAt, exclude }
+        return { source: effect.kind, effect, startedAt, endsAt, exclude, only: null }
     }
 
     it("a growthRate 0 effect with exclude [1] holds plot 0 and leaves plot 1 growing", () => {
@@ -260,6 +276,32 @@ describe("plot exclusion and action effects", () => {
         expect(out.plots[1]).toBe(plots[1])
     })
 
+    it("a growthRate 0 effect with only [0] holds plot 0 and leaves plot 1 growing", () => {
+        const frost = { ...effect("growthRate", 0), only: [0] }
+        const plots = [growing(0, 100), growing(0, 100)]
+        const out = tickEffects([frost], plots, [], 1)
+        expect(out.plots[0]).toEqual(growing(1, 101))
+        expect(out.plots[1]).toBe(plots[1])
+    })
+
+    it("startEffect stores only (null by default) and unions it when time is added", () => {
+        const crows = { kind: "blockHarvest", plots: 2 } as const
+        expect(startEffect([], "x", crows, 0, 10)[0].only).toBeNull()
+        const once = startEffect([], "crows", crows, 0, 10, [], [3, 1])
+        expect(once[0].only).toEqual([3, 1])
+        expect(startEffect(once, "crows", crows, 5, 10, [], [2, 3])[0].only).toEqual([1, 2, 3])
+        expect(startEffect(once, "crows", crows, 5, 10)[0].only).toBeNull()
+    })
+
+    it("appliesTo reads only and exclude", () => {
+        const every = effect("growthRate", 0)
+        expect(appliesTo(every, 0)).toBe(true)
+        expect(appliesTo({ ...every, exclude: [0] }, 0)).toBe(false)
+        expect(appliesTo({ ...every, only: [1, 2] }, 1)).toBe(true)
+        expect(appliesTo({ ...every, only: [1, 2] }, 0)).toBe(false)
+        expect(appliesTo({ ...every, only: [1, 2], exclude: [1] }, 1)).toBe(false)
+    })
+
     it("startEffect stores exclude and keeps it when time is added", () => {
         const frost = { kind: "growthRate", pct: 0 } as const
         const once = startEffect([], "frost", frost, 0, 10, [2])
@@ -268,7 +310,7 @@ describe("plot exclusion and action effects", () => {
     })
 
     it("action effects move nothing and are dropped on endsAt + 1", () => {
-        const crows = action({ kind: "blockHarvest" }, 0, 5)
+        const crows = action({ kind: "blockHarvest", plots: 2 }, 0, 5)
         const plots = [growing(0, 100)]
         const orders = [order(50)]
         const during = tickEffects([crows], plots, orders, 3)
@@ -285,13 +327,45 @@ describe("plot exclusion and action effects", () => {
     })
 
     it("harvestBlocked works from startedAt to endsAt - 1, and never on an excluded plot", () => {
-        const crows = [action({ kind: "blockHarvest" }, 10, 16, [2])]
+        const crows = [action({ kind: "blockHarvest", plots: 2 }, 10, 16, [2])]
         expect(harvestBlocked(crows, 0, 9)).toBe(false)
         expect(harvestBlocked(crows, 0, 10)).toBe(true)
         expect(harvestBlocked(crows, 0, 15)).toBe(true)
         expect(harvestBlocked(crows, 0, 16)).toBe(false)
         expect(harvestBlocked(crows, 2, 12)).toBe(false)
         expect(harvestBlocked([], 0, 12)).toBe(false)
+    })
+
+    it("harvestBlocked is false on a plot missing from only", () => {
+        const crows = [{ ...action({ kind: "blockHarvest", plots: 2 }, 10, 16), only: [1, 3] }]
+        expect(harvestBlocked(crows, 1, 12)).toBe(true)
+        expect(harvestBlocked(crows, 0, 12)).toBe(false)
+    })
+
+    describe("scareCrows", () => {
+        const crows = { ...action({ kind: "blockHarvest", plots: 2 }, 10, 16), only: [1, 3] }
+        const frost = action({ kind: "growthRate", pct: 0 }, 10, 16)
+
+        it("removes the plot and keeps the effect while plots are left", () => {
+            const input = [frost, crows]
+            const out = scareCrows(input, 1, 12)!
+            expect(out).toEqual([frost, { ...crows, only: [3] }])
+            expect(out[0]).toBe(frost)
+            expect(input[1].only).toEqual([1, 3])
+        })
+
+        it("removes the effect when its last plot is scared", () => {
+            const out = scareCrows(scareCrows([crows], 1, 12)!, 3, 12)
+            expect(out).toEqual([])
+        })
+
+        it("returns null with no crows on the plot, outside working ticks, or for only: null", () => {
+            expect(scareCrows([crows], 0, 12)).toBeNull()
+            expect(scareCrows([crows], 1, 9)).toBeNull()
+            expect(scareCrows([crows], 1, 16)).toBeNull()
+            expect(scareCrows([{ ...crows, only: null }], 1, 12)).toBeNull()
+            expect(scareCrows([], 1, 12)).toBeNull()
+        })
     })
 
     it("deliverBonusAt sums working bonuses and is 0 on endsAt or with none", () => {
@@ -326,7 +400,8 @@ describe("finishAll / clearField / harvestBonusAt / fogged", () => {
         effect: { kind: "harvestBonus", crops: 2 },
         startedAt,
         endsAt,
-        exclude
+        exclude,
+        only: null
     })
 
     it("harvestBonusAt sums working bonuses, skipping excluded plots", () => {
@@ -344,7 +419,8 @@ describe("finishAll / clearField / harvestBonusAt / fogged", () => {
             effect: { kind: "fog" },
             startedAt: 5,
             endsAt: 8,
-            exclude: []
+            exclude: [],
+            only: null
         }
         expect(fogged([fog], 5)).toBe(true)
         expect(fogged([fog], 8)).toBe(false)

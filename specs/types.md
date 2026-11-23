@@ -128,6 +128,7 @@ type Action =
     | { type: "buyLife" }
     | { type: "chooseUpgrade"; upgradeId: string; target?: number | string }
     | { type: "usePowerUp"; slot: number; target?: number }
+    | { type: "scareCrows"; plot: number }
 ```
 
 One player move, passed to `applyAction` (see [main.md](main.md)).

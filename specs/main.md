@@ -105,6 +105,12 @@ Returns a **new** state, or `null` if the move is not allowed. A `null` result m
 - If `modifiersFor(upgrades).extraPlots` went up, adds that many empty plots to the end of `plots`, so `plots.length` is always `START_PLOTS + extraPlots`.
 - Nothing else changes. See [upgrades.md](upgrades.md) for the whole offer flow.
 
+**`scareCrows`** `{ type: 'scareCrows', plot }`
+
+- `plot` must be a valid index, as for `plant`.
+- Calls `scareCrows(activeEffects, plot, tick)` and stores the result. Returns `null` if that does (no crows on that plot right now).
+- Draws nothing and changes nothing else. The plot can be harvested by the next action on the same tick (see [events.md](events.md)).
+
 **`usePowerUp`** `{ type: 'usePowerUp', slot, target? }`
 
 - Returns `null` when power-ups are off, `slot` is not an index into `powerUps`, or the target is wrong for the power-up (`target` must be in `powerUpTargets(state, slot)` for a plot power-up, and left out for the rest).
@@ -285,6 +291,7 @@ Returns a **new** state. The steps run in this order, each one using the result 
 - `createGame` copies `allowPowerUps` from the config and starts with no power-ups or effects.
 - Harvest drops: kept when a slot is free, lost when not, never with power-ups off; `rng.drops` moves by the draws `rollDrop` used.
 - `usePowerUp` fires each shipped power-up's effect and removes its slot; it is refused in every case listed above.
+- `scareCrows` clears one crow plot and draws nothing; it is refused on a bad index, a plot with no crows, and while an upgrade offer is open.
 - `step` runs effects before growth and failed orders: an Order freeze started on the order's `expiresAt` tick keeps it from failing on the next step, and a crop pulled to the current tick is ready on that same step.
 
 **Timed combo**

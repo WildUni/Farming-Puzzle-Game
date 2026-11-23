@@ -168,12 +168,13 @@ type Action =
     | { type: "buyLife" }
     | { type: "chooseUpgrade"; upgradeId: string; target?: number | string }
     | { type: "usePowerUp"; slot: number; target?: number } // plot index, or order id
+    | { type: "scareCrows"; plot: number }
 
 // Effects move crops' and orders' clocks. See specs/effects.md.
 type LastingEffect =
     | { kind: "growthRate"; pct: number } // growing crops' clocks run at pct% of normal
     | { kind: "orderRate"; pct: number } // open orders' timers run at pct% of normal
-    | { kind: "blockHarvest" } // harvest is refused
+    | { kind: "blockHarvest"; plots: number } // harvest is refused on `only` (Crows land on up to `plots`)
     | { kind: "deliverBonus"; coins: number } // each delivery pays this many more coins (Survival)
     | { kind: "harvestBonus"; crops: number } // each harvest adds this many more crops
     | { kind: "fog" } // growth and order timers are hidden on screen; no rule changes
@@ -201,6 +202,7 @@ type ActiveEffect = {
     startedAt: number // tick it started on
     endsAt: number // startedAt + length
     exclude: number[] // plots it leaves out, ascending
+    only: number[] | null // the plots it works on, ascending; null for every plot
 }
 
 // Power-ups. See specs/powerups.md.

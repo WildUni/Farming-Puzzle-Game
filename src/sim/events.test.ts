@@ -10,6 +10,8 @@ import {
     rotStorage
 } from "./events"
 import { debugEvent } from "./debug"
+import { replay } from "./verification"
+import { harvestBlocked } from "./effects"
 import { createGame, applyAction, step, orderRules } from "./main"
 import { buildCropTable } from "./plot"
 import { nextValue } from "./mulberry"
@@ -22,6 +24,7 @@ import type {
     GameConfig,
     GameState,
     OwnedUpgrade,
+    LogEntry,
     Plot,
     RunEvent,
     Tier
@@ -74,7 +77,9 @@ function startsNext(state: GameState, id: string, extra: Partial<RunEvent> = {})
                 ? def.effect.ticks
                 : def.effect.kind === "deliverBonus"
                   ? def.effect.coins
-                  : null,
+                  : def.effect.kind === "blockHarvest"
+                    ? def.effect.plots
+                    : null,
         ...extra
     }
     return { ...state, event, nextEventAt: Number.MAX_SAFE_INTEGER }
@@ -388,21 +393,108 @@ describe("events in step", () => {
         expect(end.plots[0]).toMatchObject({ readyAt: 5000 - Math.trunc(length / 2) })
     })
 
-    it("Crows refuse harvest while they're here, but not on a Greenhouse plot", () => {
+    it("Crows land on up to 2 crop plots, never an empty or Greenhouse one", () => {
         const length = EVENTS.events.crows.durationTicks!
         let s = startsNext(
-            game({ plots: [ready, ready], upgrades: [own("greenhouse", "epic", 1)] }),
+            game({
+                plots: [ready, growing(5000), empty, ready],
+                upgrades: [own("greenhouse", "epic", 3)]
+            }),
             "crows"
         )
+        const rngBefore = s.rng.events
         s = step(s, crops)
         const startsAt = s.tick
+        const crows = s.activeEffects.find((a) => a.source === "crows")!
+        expect(crows.only).toEqual([0, 1])
+        expect(s.rng.events).toBe(advance(rngBefore, 2))
         expect(applyAction(s, { type: "harvest", plot: 0 }, crops)).toBeNull()
-        expect(applyAction(s, { type: "harvest", plot: 1 }, crops)).not.toBeNull()
+        expect(applyAction(s, { type: "harvest", plot: 3 }, crops)).not.toBeNull()
         s = stepN(s, length - 1)
         expect(s.tick).toBe(startsAt + length - 1)
         expect(applyAction(s, { type: "harvest", plot: 0 }, crops)).toBeNull()
         s = step(s, crops)
         expect(applyAction(s, { type: "harvest", plot: 0 }, crops)).not.toBeNull()
+    })
+
+    it("Crows pick 2 of many crop plots from rng.events, the same way every time", () => {
+        const s = startsNext(game({ plots: [ready, ready, ready, ready] }), "crows")
+        const a = step(s, crops)
+        const only = a.activeEffects.find((e) => e.source === "crows")!.only!
+        expect(only).toHaveLength(2)
+        expect([...only].sort()).toEqual(only)
+        for (let plot = 0; plot < 4; plot++) {
+            expect(harvestBlocked(a.activeEffects, plot, a.tick)).toBe(only.includes(plot))
+        }
+        expect(step(s, crops)).toEqual(a)
+    })
+
+    it("Crows do nothing and draw nothing on a field with no crop", () => {
+        const s = startsNext(
+            game({ plots: [empty, empty, empty, ready], upgrades: [own("greenhouse", "epic", 3)] }),
+            "crows"
+        )
+        const after = step(s, crops)
+        expect(after.activeEffects).toEqual([])
+        expect(after.rng.events).toBe(s.rng.events)
+    })
+
+    it("scareCrows clears one plot at a time, and the last one ends the effect", () => {
+        const before = startsNext(game({ plots: [ready, ready, empty, empty] }), "crows")
+        expect(applyAction(before, { type: "scareCrows", plot: 0 }, crops)).toBeNull()
+        const s = step(before, crops)
+        expect(applyAction(s, { type: "scareCrows", plot: 2 }, crops)).toBeNull()
+        expect(applyAction(s, { type: "scareCrows", plot: 9 }, crops)).toBeNull()
+
+        const one = applyAction(s, { type: "scareCrows", plot: 0 }, crops)!
+        expect(one.rng).toEqual(s.rng)
+        expect(one.activeEffects.find((a) => a.source === "crows")!.only).toEqual([1])
+        expect(applyAction(one, { type: "harvest", plot: 0 }, crops)).not.toBeNull()
+        expect(applyAction(one, { type: "harvest", plot: 1 }, crops)).toBeNull()
+        expect(applyAction(one, { type: "scareCrows", plot: 0 }, crops)).toBeNull()
+
+        const both = applyAction(one, { type: "scareCrows", plot: 1 }, crops)!
+        expect(both.activeEffects).toEqual([])
+        expect(applyAction(both, { type: "harvest", plot: 1 }, crops)).not.toBeNull()
+    })
+
+    it("a run that scares crows replays equal", () => {
+        // A scripted player: scare crows, harvest, plant garlic, deliver whatever it can.
+        let found = false
+        for (let seed = 1; seed <= 40 && !found; seed++) {
+            let s = createGame(seed, on)
+            const log: LogEntry[] = []
+            const act = (action: LogEntry["action"]) => {
+                const next = applyAction(s, action, crops)
+                if (next !== null) {
+                    s = next
+                    log.push({ tick: s.tick, action })
+                }
+                return next !== null
+            }
+            let scared = false
+            while (s.tick < 3000 && s.status === "running") {
+                if (s.upgradeOffer !== null) {
+                    act({ type: "chooseUpgrade", upgradeId: s.upgradeOffer[0].id })
+                }
+                for (let plot = 0; plot < s.plots.length; plot++) {
+                    if (act({ type: "scareCrows", plot })) scared = true
+                    if (s.plots[plot].state === "ready") act({ type: "harvest", plot })
+                    if (s.plots[plot].state === "empty") {
+                        act({ type: "plant", plot, cropId: "garlic" })
+                    }
+                }
+                for (const o of [...s.orders]) act({ type: "deliver", orderId: o.id })
+                if (scared || s.status !== "running" || s.upgradeOffer !== null) break
+                s = step(s, crops)
+            }
+            if (!scared) continue
+            found = true
+            const result = replay(seed, on, log, s.tick, crops)
+            expect(result.ok).toBe(true)
+            if (result.ok) expect(result.state).toEqual(s)
+        }
+        expect(found).toBe(true)
     })
 
     it("Generous customer adds its bonus to deliveries while it lasts", () => {
@@ -484,7 +576,7 @@ describe("validateEvents: new effect kinds and banStat", () => {
             { effect: { kind: "seedPlots", plots: 2 }, amountStat: "birdPlotsPct" },
             { effect: { kind: "addOrder", timePct: 50 }, amountStat: "emergencyTimePct" },
             { effect: { kind: "rotStorage", pct: 30 }, amountStat: "rotPct" },
-            { effect: { kind: "blockHarvest" }, seconds: 2, banStat: "crowBan" }
+            { effect: { kind: "blockHarvest", plots: 2 }, seconds: 2, banStat: "crowBan" }
         ]
         for (const k of kinds) expect(() => validateEvents(withEvent(k))).not.toThrow()
     })
@@ -492,6 +584,7 @@ describe("validateEvents: new effect kinds and banStat", () => {
     const bad: [string, Record<string, unknown>][] = [
         ["harvestBonus of 0 crops", { effect: { kind: "harvestBonus", crops: 0 }, seconds: 3 }],
         ["seedPlots of 0 plots", { effect: { kind: "seedPlots", plots: 0 } }],
+        ["blockHarvest of 0 plots", { effect: { kind: "blockHarvest", plots: 0 }, seconds: 2 }],
         ["addOrder over 100%", { effect: { kind: "addOrder", timePct: 101 } }],
         ["rotStorage of 0%", { effect: { kind: "rotStorage", pct: 0 } }],
         ["rotStorage over 100%", { effect: { kind: "rotStorage", pct: 101 } }],

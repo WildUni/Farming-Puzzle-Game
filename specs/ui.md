@@ -98,14 +98,14 @@ A banner across the top of the board, above the plots, shown while `state.event`
 
 Drawn by `PlotsView` from the state, on top of the plot's own colour:
 
-| When                                     | Overlay                                       |
-| ---------------------------------------- | --------------------------------------------- |
-| Moles announced, on its target plot      | Red dashed outline and a mole marker          |
-| Crows running, on each plot not excluded | A crow marker; clicking the plot does nothing |
-| Frost running, on each plot not excluded | A pale blue tint                              |
-| Sunny spell running                      | A warm tint on every plot                     |
-| Worms running, on each plot not excluded | A `WORMS` marker                              |
-| Greenhouse plot (`shieldedPlots`)        | A small shield marker, always                 |
+| When                                       | Overlay                                                                                               |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Moles announced, on its target plot        | Red dashed outline and a mole marker                                                                  |
+| Crows running, on each plot they landed on | A `CROWS` marker; clicking the plot sends `scareCrows { plot }` through `act()` instead of harvesting |
+| Frost running, on each plot not excluded   | A pale blue tint                                                                                      |
+| Sunny spell running                        | A warm tint on every plot                                                                             |
+| Worms running, on each plot not excluded   | A `WORMS` marker                                                                                      |
+| Greenhouse plot (`shieldedPlots`)          | A small shield marker, always                                                                         |
 
 ### Fog
 

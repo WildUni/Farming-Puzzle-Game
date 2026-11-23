@@ -171,6 +171,22 @@ describe("applyAction: every action", () => {
         ],
         ["buyLife", makeState({ coins: 1000, lives: 1 }), { type: "buyLife" }],
         [
+            "scareCrows",
+            makeState({
+                activeEffects: [
+                    {
+                        source: "crows",
+                        effect: { kind: "blockHarvest", plots: 2 },
+                        startedAt: 0,
+                        endsAt: 10,
+                        exclude: [],
+                        only: [0]
+                    }
+                ]
+            }),
+            { type: "scareCrows", plot: 0 }
+        ],
+        [
             "chooseUpgrade",
             makeState({ upgradeOffer: OFFER }),
             { type: "chooseUpgrade", upgradeId: "bigTips" }
@@ -1446,7 +1462,8 @@ describe("power-ups: second batch", () => {
                 effect: def.effect,
                 startedAt: 0,
                 endsAt: def.durationTicks,
-                exclude: []
+                exclude: [],
+                only: null
             }
         ])
         const stocked = { ...s, orders: [makeOrder()], inventory: { carrot: 3 } }

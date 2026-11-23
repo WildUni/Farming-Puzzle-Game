@@ -76,7 +76,7 @@ All numbers are placeholders until playtesting.
 | `sunnySpell`       | Sunny spell       | good | survival, timed | 20     | 3 s  | `growthRate` 150%      | 15 s  | –      | `durationStat: sunnyDurationPct` |
 | `generousCustomer` | Generous customer | good | survival        | 15     | 5 s  | `deliverBonus` 3 coins | 20 s  | –      | `amountStat: deliverBonusPct`    |
 | `frost`            | Frost             | bad  | survival, timed | 30     | 5 s  | `growthRate` 0%        | 8 s   | –      | `durationStat: frostDurationPct` |
-| `crows`            | Crows             | bad  | survival, timed | 30     | 5 s  | `blockHarvest`         | 6 s   | –      | `durationStat: crowDurationPct`  |
+| `crows`            | Crows             | bad  | survival, timed | 30     | 5 s  | `blockHarvest` 2 plots | 6 s   | –      | `durationStat: crowDurationPct`  |
 | `moles`            | Moles             | bad  | survival, timed | 25     | 5 s  | `stealCrop`            | –     | plot   | `blockStat: moleBlockChance`     |
 | `slowDay`          | Slow day          | good | survival, timed | 15     | 3 s  | `orderRate` 50%        | 15 s  | –      | –                                |
 | `worms`            | Worms             | good | survival, timed | 15     | 3 s  | `harvestBonus` 1 crop  | 20 s  | –      | `amountStat: wormBonusPct`       |
@@ -86,7 +86,7 @@ All numbers are placeholders until playtesting.
 | `rot`              | Rot               | bad  | survival, timed | 15     | 5 s  | `rotStorage` 30%       | –     | –      | `amountStat: rotPct`             |
 | `fog`              | Fog               | bad  | survival, timed | 15     | 3 s  | `fog`                  | 10 s  | –      | `durationStat: fogDurationPct`   |
 
-Crows also have `banStat: crowBan` (Pest control).
+Crows also have `banStat: crowBan` (Pest control). They land on up to 2 plots that hold a crop when they start, and stop each one being harvested until the player taps it to scare them off (`scareCrows`) or they leave on `endsAt`. They can't be scared during the warning, which is the player's chance to harvest first.
 
 Generous customer is Survival only because Timed earns no coins.
 
@@ -228,19 +228,20 @@ An instant event starts and ends on the same tick.
 1. **Block roll.** If the event has a `blockStat` whose value is above 0, draw `roll = randomInt(rng.events, 0, 99)` and store the stream. If `roll < value`, the event does nothing more. With no `blockStat` or a value of 0, nothing is drawn.
 2. **Fire the effect**, with `amount` in place of the definition's amount:
 
-| Effect       | What happens                                                                                                                                                                                                                                                                |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cutGrowth`  | `plots = cutGrowth(plots, amount, tick)`                                                                                                                                                                                                                                    |
-| `stealCrop`  | If `plots[event.plot]` is `growing` or `ready`, it becomes `empty`. If the player emptied it during the warning, nothing happens and the block roll is skipped                                                                                                              |
-| `harvestAll` | Every `ready` plot is harvested into `inventory` (`yield + yieldBonus` from `modifiersAt`; no bumper roll and no drop, so no draws) and becomes `empty`. With `neighborReplant` above 0 it is replanted with the same crop on this tick (growth from `plantGrowthPct`)      |
-| `seedPlots`  | Up to `amount` of the `empty`, unshielded plots get a crop planted on this tick (growth from `plantGrowthPct`). For each: `pick` a plot from those still free, then `pick` a crop id from the sorted crop table, both from `rng.events`. With no free plot nothing is drawn |
-| `addOrder`   | `createOrder(nextOrderId, tick, rng.events, crops, rules)` with `orderTicks = scalePct(rules.orderTicks, amount)`, appended to `orders` even past `maxOpenOrders`; `nextOrderId` goes up by 1. Two draws                                                                    |
-| `rotStorage` | Each stored crop loses `floor(amount_held × amount / 100)`; crops that reach 0 are removed (`rotStorage(inventory, pct)`)                                                                                                                                                   |
-| lasting      | `activeEffects = startEffect(activeEffects, id, effect, tick, endsAt − startsAt, exclude)`; `deliverBonus` and `harvestBonus` use `amount` as their coins or crops                                                                                                          |
+| Effect         | What happens                                                                                                                                                                                                                                                                           |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cutGrowth`    | `plots = cutGrowth(plots, amount, tick)`                                                                                                                                                                                                                                               |
+| `stealCrop`    | If `plots[event.plot]` is `growing` or `ready`, it becomes `empty`. If the player emptied it during the warning, nothing happens and the block roll is skipped                                                                                                                         |
+| `harvestAll`   | Every `ready` plot is harvested into `inventory` (`yield + yieldBonus` from `modifiersAt`; no bumper roll and no drop, so no draws) and becomes `empty`. With `neighborReplant` above 0 it is replanted with the same crop on this tick (growth from `plantGrowthPct`)                 |
+| `seedPlots`    | Up to `amount` of the `empty`, unshielded plots get a crop planted on this tick (growth from `plantGrowthPct`). For each: `pick` a plot from those still free, then `pick` a crop id from the sorted crop table, both from `rng.events`. With no free plot nothing is drawn            |
+| `addOrder`     | `createOrder(nextOrderId, tick, rng.events, crops, rules)` with `orderTicks = scalePct(rules.orderTicks, amount)`, appended to `orders` even past `maxOpenOrders`; `nextOrderId` goes up by 1. Two draws                                                                               |
+| `blockHarvest` | Crows land: from the `growing` or `ready` plots not in `exclude`, `pick` up to `amount` plots one at a time from those still free, all from `rng.events`, then `startEffect(…, exclude, only)` with the chosen plots ascending. With no such plot nothing happens and nothing is drawn |
+| `rotStorage`   | Each stored crop loses `floor(amount_held × amount / 100)`; crops that reach 0 are removed (`rotStorage(inventory, pct)`)                                                                                                                                                              |
+| other lasting  | `activeEffects = startEffect(activeEffects, id, effect, tick, endsAt − startsAt, exclude)`; `deliverBonus` and `harvestBonus` use `amount` as their coins or crops                                                                                                                     |
 
 For a lasting **bad** event, `exclude` is `shieldedPlots(state)` at the start; for a good one, `[]`. A plot shielded later is not added to a running effect.
 
-`stealCrop`'s empty-plot check comes before the block roll, so a fizzled Moles draws nothing.
+`stealCrop`'s empty-plot check, and Crows' check for a plot with a crop, come before the block roll, so a fizzled Moles or Crows draws nothing.
 
 ### Announcing (step 8 of `step`)
 
@@ -249,6 +250,7 @@ After new orders, and only if the run didn't end on this step: if `allowEvents`,
 ### Reading active effects in actions
 
 - **`harvest`** returns `null` while `harvestBlocked(activeEffects, plot, tick)` (see [effects.md](effects.md)).
+- **`scareCrows`** clears the crows from one plot (see [main.md](main.md)).
 - **`deliver`** in Survival adds `deliverBonusAt(activeEffects, tick)` to the coins paid.
 
 ## Upgrades this unlocks (in [upgrades.md](upgrades.md))
@@ -328,7 +330,8 @@ New stats:
 - **Rain shower** brings every growing crop `amount` ticks closer on its start tick, and crops brought to that tick are ready on it.
 - **Sunny spell** and **Frost** move crops by the rate rule for exactly their length; Frost skips a shielded plot.
 - **Generous customer** adds its bonus to deliveries from `startsAt` to `endsAt − 1`, and not after.
-- **Crows** refuse `harvest` from `startsAt` to `endsAt − 1` (but not on a shielded plot) and allow it on `endsAt`.
+- **Crows** land on up to 2 plots holding a crop (never a shielded or empty one), drawing one `pick` per plot from `rng.events`; with no crop on the field they do nothing and draw nothing. They refuse `harvest` on those plots from `startsAt` to `endsAt − 1`, never on the others, and allow it on `endsAt`.
+- **Scaring Crows:** `scareCrows` on a crow plot lets it be harvested on the same tick while the other crow plot stays blocked; scaring the last one removes the effect; it is refused on a plot without crows and during the warning. A run that scares crows replays equal.
 - **Moles** empties its plot on `startsAt`; does nothing (and draws nothing) if the plot was harvested during the warning; does nothing when the Mole traps roll hits.
 - Two runs on the same seed and the same actions, one with events on and one off, create the same orders (same `rng.orders`).
 

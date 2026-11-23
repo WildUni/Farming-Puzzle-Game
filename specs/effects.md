@@ -14,6 +14,7 @@ Like the other rule modules, `effects.ts` never reads or returns a whole `GameSt
 - **Rate.** A lasting effect's `pct`: how fast its clock runs while it is active, as a % of normal. `0` stops the clock, `50` is half speed, `150` is one and a half times as fast.
 - **Working ticks.** A lasting effect started on tick `s` with length `d` has `endsAt = s + d`. Rate effects move clocks on ticks `s + 1 … endsAt` (in `step`). Action effects (`blockHarvest`, `deliverBonus`) apply to actions on ticks `s … endsAt − 1`. Both cover exactly `d` ticks.
 - **Excluded plots.** A lasting effect can leave some plots out (`exclude`). Bad events leave out Greenhouse plots; everything else excludes nothing.
+- **Only plots.** A lasting effect can instead work on a chosen list of plots (`only`). `null` means every plot. Crows use it: they land on a few plots, and each one is cleared when the player scares the crows off it. A plot is under an effect when `only` is `null` or lists it, and `exclude` doesn't list it (`appliesTo`).
 
 ## Types (in [types.md](types.md))
 
@@ -21,7 +22,7 @@ Like the other rule modules, `effects.ts` never reads or returns a whole `GameSt
 type LastingEffect =
     | { kind: "growthRate"; pct: number } // growing crops' clocks
     | { kind: "orderRate"; pct: number } // open orders' timers
-    | { kind: "blockHarvest" } // harvest is refused
+    | { kind: "blockHarvest"; plots: number } // harvest is refused on the plots in `only` (Crows land on up to `plots` plots)
     | { kind: "deliverBonus"; coins: number } // each delivery pays this many more coins (Survival)
     | { kind: "harvestBonus"; crops: number } // each harvest adds this many more crops (Worms)
     | { kind: "fog" } // the screen hides growth and order timers; no rule changes
@@ -49,10 +50,11 @@ type ActiveEffect = {
     startedAt: number // tick it started on
     endsAt: number // startedAt + length
     exclude: number[] // plots it leaves out, ascending
+    only: number[] | null // the plots it works on, ascending; null for every plot
 }
 ```
 
-`pct`, `ticks`, `amount`, `coins`, `crops`, `plots` and `timePct` are whole numbers. A rate's `pct >= 0` and `pct !== 100`; `ticks`, `amount`, `coins`, `crops` and `plots` are `>= 1`; `addOrder`'s `timePct` and `rotStorage`'s `pct` are from 1 to 100. The files that use effects (`powerups.json`, `events.json`) check this when they load, and each says which kinds it allows.
+`pct`, `ticks`, `amount`, `coins`, `crops`, `plots` and `timePct` are whole numbers. A rate's `pct >= 0` and `pct !== 100`; `ticks`, `amount`, `coins`, `crops` and `plots` (both `seedPlots`' and `blockHarvest`'s) are `>= 1`; `addOrder`'s `timePct` and `rotStorage`'s `pct` are from 1 to 100. The files that use effects (`powerups.json`, `events.json`) check this when they load, and each says which kinds it allows.
 
 `growthRate` and `orderRate` are **rate effects**; `blockHarvest`, `deliverBonus`, `harvestBonus` and `fog` are **action effects**. The instant kinds that need the whole game state (`fillOrder`, `fillAllOrders`, `goodEvent`, `harvestAll`, `seedPlots`, `addOrder`, `rotStorage`) are carried out in `main.ts` or `events.ts`; `effects.ts` has helpers only for the ones that work on plots or effect lists alone.
 
@@ -128,12 +130,12 @@ Rules:
 - With `active` empty, returns all three inputs as they are.
 - Keeps the order of `active`, `plots` and `orders`.
 
-### `startEffect(active, source, effect, now, durationTicks, exclude = []): ActiveEffect[]`
+### `startEffect(active, source, effect, now, durationTicks, exclude = [], only = null): ActiveEffect[]`
 
 Starts a lasting effect, or adds time to one already running.
 
-- No active effect has `source`: appends `{ source, effect, startedAt: now, endsAt: now + durationTicks, exclude }`.
-- One does: replaces it with the same entry, but `endsAt` raised by `durationTicks`. `startedAt` and `exclude` stay, so its shifts carry on without a jump.
+- No active effect has `source`: appends `{ source, effect, startedAt: now, endsAt: now + durationTicks, exclude, only }`.
+- One does: replaces it with the same entry, but `endsAt` raised by `durationTicks`. `startedAt` and `exclude` stay, so its shifts carry on without a jump. `only` becomes the union of the old and new lists, ascending (`null` if either is `null`), so a second Crows landing adds its plots.
 - `durationTicks` is a whole number `>= 1`.
 - Never changes `active`; returns a new array.
 
@@ -151,9 +153,17 @@ Makes a growing crop ready now: `{ state: "ready", cropId }`. Returns `null` for
 
 A growing or ready plot becomes `{ state: "empty" }`. Returns `null` for an empty plot, so the caller can tell the event found nothing.
 
+### `appliesTo(a: ActiveEffect, plot: number): boolean`
+
+`true` when `a.only` is `null` or lists `plot`, and `a.exclude` doesn't list it. Every per-plot rule uses it (`tickEffects` for `growthRate`, `harvestBlocked`, `harvestBonusAt`), and so do the screen's plot markers.
+
 ### `harvestBlocked(active: ActiveEffect[], plot: number, now: number): boolean`
 
-`true` when some `blockHarvest` effect with `startedAt <= now < endsAt` doesn't list `plot` in `exclude`. `harvest` uses it.
+`true` when some `blockHarvest` effect with `startedAt <= now < endsAt` `appliesTo` `plot`. `harvest` uses it.
+
+### `scareCrows(active: ActiveEffect[], plot: number, now: number): ActiveEffect[] | null`
+
+The player taps a plot with crows on it. Every working `blockHarvest` effect whose `only` lists `plot` drops it from `only`; an effect left with an empty `only` is removed. Returns `null` when no working `blockHarvest` effect lists `plot` (no crows there, or an effect with `only: null`, which can't be scared). Never changes `active`.
 
 ### `deliverBonusAt(active: ActiveEffect[], now: number): number`
 
@@ -211,6 +221,7 @@ Every plot becomes `{ state: "empty" }`. Returns the same array when every plot 
 - The effect is dropped on tick `endsAt + 1` and moves nothing on that tick.
 - Two effects on the same clock add their shifts.
 - A `growthRate 0` effect with `exclude: [1]` holds plot 0 and leaves plot 1 growing.
+- A `growthRate 0` effect with `only: [0]` holds plot 0 and leaves plot 1 growing.
 - Action effects move nothing, and are dropped on `endsAt + 1` like the rest.
 - A crop effect never moves orders and an order effect never moves plots.
 - With nothing active, returns the inputs as they are (same arrays).
@@ -218,7 +229,8 @@ Every plot becomes `{ state: "empty" }`. Returns the same array when every plot 
 
 **`startEffect`**
 
-- A new source is appended with `endsAt = now + durationTicks` and the given `exclude` (`[]` by default).
+- A new source is appended with `endsAt = now + durationTicks` and the given `exclude` (`[]` by default) and `only` (`null` by default).
+- The same source again unions `only` (ascending, without repeats); `null` on either side gives `null`.
 - The same source again adds `durationTicks` to `endsAt` and keeps `startedAt`; the list still has one entry for it.
 - A 100-tick effect moves clocks on exactly 100 steps.
 
@@ -236,12 +248,19 @@ Every plot becomes `{ state: "empty" }`. Returns the same array when every plot 
 **`stealCrop` / `harvestBlocked` / `deliverBonusAt`**
 
 - `stealCrop` empties growing and ready plots and returns `null` for an empty one.
-- `harvestBlocked` is `true` from `startedAt` to `endsAt − 1`, `false` on `endsAt`, and `false` on an excluded plot.
+- `harvestBlocked` is `true` from `startedAt` to `endsAt − 1`, `false` on `endsAt`, `false` on an excluded plot, and `false` on a plot missing from `only`.
+- `appliesTo` is `true` with `only: null` and no `exclude`, `false` on an excluded plot, and with an `only` list `true` only on the plots it lists.
+
+**`scareCrows`**
+
+- Removes the plot from `only` and keeps the effect while other plots are left; removes the effect when its last plot is scared.
+- Returns `null` for a plot with no crows, before `startedAt`, on `endsAt`, and for an effect with `only: null`.
+- Leaves other effects untouched and never changes its input.
 - `deliverBonusAt` sums working bonuses, is `0` on `endsAt`, and `0` with none.
 
 ## Open items
 
 - [x] Leaving plots out of an effect (`exclude`), for Greenhouse plots under bad events.
-- [ ] Effects that hit only one chosen plot (Frost on one plot, Lucky clover), if events need them: an `only` list next to `exclude`.
+- [x] Effects that hit only chosen plots: an `only` list next to `exclude`. Crows are the first; Frost on one plot and Lucky clover could use it too.
 - [x] Effect kinds for the first events: `blockHarvest` (Crows), `stealCrop` (Moles), `deliverBonus` (Generous customer).
 - [ ] Should a lasting effect started again reset to its full length instead of adding time? Adding time is simpler to explain on a button ("+10 s").

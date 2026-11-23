@@ -22,7 +22,7 @@ import { lifePriceFor, maxLivesFor } from "../sim/main"
 import { copyCount, effectAmount } from "../sim/upgrades"
 import { POWER_UPS, durationFor } from "../sim/powerups"
 import { EVENTS, shieldedPlots } from "../sim/events"
-import { fogged } from "../sim/effects"
+import { appliesTo, fogged } from "../sim/effects"
 
 const MAX_HEARTS = 5 // a cap above this shows lives as a count
 
@@ -329,7 +329,7 @@ function plotOverlays(state: GameState): PlotOverlay[][] {
     return state.plots.map((_, i) => {
         const marks: PlotOverlay[] = []
         if (event !== null && event.plot === i && tick < event.startsAt) marks.push("target")
-        const here = working.filter((a) => !a.exclude.includes(i))
+        const here = working.filter((a) => appliesTo(a, i))
         if (here.some((a) => a.effect.kind === "blockHarvest")) marks.push("blocked")
         if (here.some((a) => a.effect.kind === "growthRate" && a.effect.pct < 100)) {
             marks.push("frozen")

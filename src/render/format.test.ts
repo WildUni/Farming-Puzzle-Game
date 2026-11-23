@@ -380,7 +380,8 @@ describe("power-up text", () => {
         effect: { kind: "orderRate", pct: 0 },
         startedAt: 0,
         endsAt,
-        exclude: []
+        exclude: [],
+        only: null
     })
 
     it("powerUpButtonText gives the name and fills {seconds} from durationFor", () => {
@@ -409,7 +410,8 @@ describe("power-up text", () => {
             effect: { kind: "growthRate", pct: 0 },
             startedAt: 0,
             endsAt: 60,
-            exclude: []
+            exclude: [],
+            only: null
         }
         const s = { ...game("survival"), tick: 10, activeEffects: [frost, effect(60)] }
         expect(shownEffects(s)).toEqual([effect(60)])
@@ -457,7 +459,8 @@ describe("event text", () => {
             effect,
             startedAt: 10,
             endsAt: 20,
-            exclude
+            exclude,
+            only: null
         })
         const s = {
             ...base,
@@ -465,7 +468,7 @@ describe("event text", () => {
             event: run({ id: "moles", startsAt: 30, endsAt: 30, plot: 0 }),
             upgrades: [{ id: "greenhouse", tier: "epic" as const, target: 3 }],
             activeEffects: [
-                working({ kind: "blockHarvest" }, [3]),
+                working({ kind: "blockHarvest", plots: 2 }, [3]),
                 working({ kind: "growthRate", pct: 0 }, [3]),
                 working({ kind: "growthRate", pct: 150 })
             ]
@@ -478,6 +481,19 @@ describe("event text", () => {
         ])
         expect(plotOverlays({ ...s, tick: 20, event: null })).toEqual([[], [], [], ["shield"]])
     })
+
+    it("plotOverlays marks crows only on the plots they landed on", () => {
+        const crows: ActiveEffect = {
+            source: "crows",
+            effect: { kind: "blockHarvest", plots: 2 },
+            startedAt: 10,
+            endsAt: 20,
+            exclude: [],
+            only: [1, 2]
+        }
+        const s = { ...game("survival"), tick: 12, activeEffects: [crows] }
+        expect(plotOverlays(s)).toEqual([[], ["blocked"], ["blocked"], []])
+    })
 })
 
 describe("second batch text: fog, worms, sneak peek, steady pace", () => {
@@ -486,7 +502,8 @@ describe("second batch text: fog, worms, sneak peek, steady pace", () => {
         effect: { kind: "fog" },
         startedAt: 10,
         endsAt: 20,
-        exclude: []
+        exclude: [],
+        only: null
     }
     const fogged = (tick: number): GameState => ({
         ...game("survival"),
@@ -550,7 +567,8 @@ describe("second batch text: fog, worms, sneak peek, steady pace", () => {
             effect: { kind: "harvestBonus", crops: 1 },
             startedAt: 10,
             endsAt: 20,
-            exclude: []
+            exclude: [],
+            only: null
         }
         const s = { ...game("survival"), tick: 12, activeEffects: [worms] }
         expect(plotOverlays(s)).toEqual([["worms"], ["worms"], ["worms"], ["worms"]])

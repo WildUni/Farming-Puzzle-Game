@@ -34,6 +34,7 @@ import {
     finishAll,
     clearField,
     harvestBlocked,
+    scareCrows,
     harvestBonusAt,
     deliverBonusAt
 } from "./effects"
@@ -192,6 +193,13 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
                 },
                 powerUps: keep ? [...state.powerUps, drop] : state.powerUps
             }
+        }
+
+        case "scareCrows": {
+            if (!isPlotIndex(state, action.plot)) return null
+            const activeEffects = scareCrows(state.activeEffects, action.plot, state.tick)
+            if (activeEffects === null) return null
+            return { ...state, activeEffects }
         }
 
         case "deliver": {

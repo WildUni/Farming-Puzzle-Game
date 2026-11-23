@@ -53,7 +53,7 @@
             "weight": 30,
             "warnSeconds": 5,
             "seconds": 6,
-            "effect": { "kind": "blockHarvest" },
+            "effect": { "kind": "blockHarvest", "plots": 2 },
             "durationStat": "crowDurationPct",
             "banStat": "crowBan"
         },

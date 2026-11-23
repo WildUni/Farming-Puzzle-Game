@@ -44,7 +44,7 @@ function mapSame<T>(list: T[], f: (item: T, i: number) => T): T[] {
 }
 
 // What lasting effects do on one tick: drop the ones that ended, then move each growing crop by
-// the growthRate shifts that don't exclude its plot, and every open order by the orderRate shifts.
+// the growthRate shifts that apply to its plot, and every open order by the orderRate shifts.
 // Action effects (blockHarvest, deliverBonus, harvestBonus, fog) move nothing.
 function tickEffects(
     active: ActiveEffect[],
@@ -56,19 +56,19 @@ function tickEffects(
     const running = active.filter((a) => a.endsAt >= now)
     const kept = running.length === active.length ? active : running
 
-    const growth: { shift: number; exclude: number[] }[] = []
+    const growth: { shift: number; effect: ActiveEffect }[] = []
     let order = 0
     for (const a of kept) {
         const { effect } = a
         if (effect.kind !== "growthRate" && effect.kind !== "orderRate") continue
         const shift = rateShift(effect.pct, a.startedAt, now)
         if (shift === 0) continue
-        if (effect.kind === "growthRate") growth.push({ shift, exclude: a.exclude })
+        if (effect.kind === "growthRate") growth.push({ shift, effect: a })
         else order += shift
     }
 
     const plotShift = (i: number) =>
-        growth.reduce((sum, g) => (g.exclude.includes(i) ? sum : sum + g.shift), 0)
+        growth.reduce((sum, g) => (appliesTo(g.effect, i) ? sum + g.shift : sum), 0)
 
     return {
         active: kept,
@@ -83,24 +83,46 @@ function tickEffects(
     }
 }
 
+// True when `a` works on `plot`: `only` is null or lists it, and `exclude` doesn't.
+function appliesTo(a: ActiveEffect, plot: number): boolean {
+    return (a.only === null || a.only.includes(plot)) && !a.exclude.includes(plot)
+}
+
+// Both `only` lists merged, ascending and without repeats; null (every plot) wins.
+function unionOnly(a: number[] | null, b: number[] | null): number[] | null {
+    if (a === null || b === null) return null
+    return [...new Set([...a, ...b])].sort((x, y) => x - y)
+}
+
 // Starts a lasting effect from `source`, or adds `durationTicks` to the one already running.
-// `exclude` lists plots the effect leaves out (Greenhouse plots under a bad event).
+// `exclude` lists plots the effect leaves out (Greenhouse plots under a bad event); `only`, when
+// given, the plots it works on (the plots Crows landed on).
 function startEffect(
     active: ActiveEffect[],
     source: string,
     effect: LastingEffect,
     now: number,
     durationTicks: number,
-    exclude: number[] = []
+    exclude: number[] = [],
+    only: number[] | null = null
 ): ActiveEffect[] {
     const i = active.findIndex((a) => a.source === source)
     if (i === -1) {
         return [
             ...active,
-            { source, effect, startedAt: now, endsAt: now + durationTicks, exclude: [...exclude] }
+            {
+                source,
+                effect,
+                startedAt: now,
+                endsAt: now + durationTicks,
+                exclude: [...exclude],
+                only: only === null ? null : [...only]
+            }
         ]
     }
-    return active.map((a, j) => (j === i ? { ...a, endsAt: a.endsAt + durationTicks } : a))
+    return active.map((a, j) =>
+        j === i ? { ...a, endsAt: a.endsAt + durationTicks, only: unionOnly(a.only, only) } : a
+    )
 }
 
 // Every growing crop gets `ticks` closer to ready; crops brought to `now` turn ready at once.
@@ -138,11 +160,27 @@ function working(a: ActiveEffect, now: number): boolean {
     return a.startedAt <= now && now < a.endsAt
 }
 
-// True when a working blockHarvest effect doesn't leave `plot` out.
+// True when a working blockHarvest effect applies to `plot`.
 function harvestBlocked(active: ActiveEffect[], plot: number, now: number): boolean {
     return active.some(
-        (a) => a.effect.kind === "blockHarvest" && working(a, now) && !a.exclude.includes(plot)
+        (a) => a.effect.kind === "blockHarvest" && working(a, now) && appliesTo(a, plot)
     )
+}
+
+// The player scares the crows off `plot`: every working blockHarvest effect whose `only` lists
+// it drops it, and one left with no plots ends. null when no crows are on `plot` right now.
+function scareCrows(active: ActiveEffect[], plot: number, now: number): ActiveEffect[] | null {
+    const onPlot = (a: ActiveEffect) =>
+        a.effect.kind === "blockHarvest" &&
+        working(a, now) &&
+        a.only !== null &&
+        a.only.includes(plot)
+    if (!active.some(onPlot)) return null
+    return active.flatMap((a) => {
+        if (!onPlot(a)) return [a]
+        const only = a.only!.filter((i) => i !== plot)
+        return only.length === 0 ? [] : [{ ...a, only }]
+    })
 }
 
 // Extra coins a delivery on tick `now` earns from working deliverBonus effects.
@@ -158,7 +196,7 @@ function deliverBonusAt(active: ActiveEffect[], now: number): number {
 function harvestBonusAt(active: ActiveEffect[], plot: number, now: number): number {
     return active.reduce(
         (sum, a) =>
-            a.effect.kind === "harvestBonus" && working(a, now) && !a.exclude.includes(plot)
+            a.effect.kind === "harvestBonus" && working(a, now) && appliesTo(a, plot)
                 ? sum + a.effect.crops
                 : sum,
         0
@@ -179,7 +217,9 @@ export {
     cutGrowth,
     finishGrowth,
     stealCrop,
+    appliesTo,
     harvestBlocked,
+    scareCrows,
     deliverBonusAt,
     harvestBonusAt,
     fogged,

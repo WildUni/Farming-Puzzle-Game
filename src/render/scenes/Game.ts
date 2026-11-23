@@ -253,7 +253,8 @@ export class Game extends Scene {
         this.render()
     }
 
-    // Empty plot: open the plant picker. Ready plot: harvest it. Growing plot: nothing.
+    // Plot with crows: scare them off. Empty plot: open the plant picker. Ready plot: harvest it.
+    // Growing plot: nothing.
     // While a power-up's target is being chosen, a click picks (or cancels) instead.
     private onPlotClick(plot: number): void {
         if (this.paused || this.state.status === "ended" || this.state.upgradeOffer !== null) return
@@ -267,6 +268,8 @@ export class Game extends Scene {
             this.render()
             return
         }
+        // Crows on this plot: the click scares them off instead of harvesting.
+        if (this.act({ type: "scareCrows", plot })) return
         switch (this.state.plots[plot].state) {
             case "empty":
                 this.pickerPlot = plot

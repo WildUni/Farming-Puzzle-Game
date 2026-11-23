@@ -50,4 +50,7 @@
 * Decided that the number of the same type of upgrade is capped.
 * plot-targted upgrades of the same type cannot be stacked on the same plot
 * Decided that some upgrades could be sold in the shop to allow players to cycle upgrades
-* 
+* Added combo system
+* Added combo count to stats panel for timed model
+* Added a debug panel for triggering events, adding updates, and giving power ups
+* Added a cap for max life
