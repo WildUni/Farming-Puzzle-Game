@@ -21,13 +21,13 @@ The game has three modes built on the same loop, plus shared systems for events,
 
 ### Systems
 
-- **Upgrades:** available in both Survival and Timed. Every few orders the player picks 1 of 3 for free. Paying in-run coins rerolls the 3 choices once, and each reroll costs more than the last.
+- **Upgrades:** available in both Survival and Timed. Every few orders the player picks 1 of 3 for free. Paying in-run coins rerolls the 3 choices, as many times as the player can afford. Each reroll of the same pick costs more than the last, and the price goes back to its base on the next pick.
 - **Shop:** a second upgrade system where players spend in-run coins on the specific upgrades they want, so they can build toward a plan instead of relying on the free picks. It shows 3–4 items at a time and also sells power-ups and, in Survival, lives. Players can also sell an owned upgrade back for coins. When it opens and how prices rise are open questions.
 - **Buying lives:** the price rises each time, or scales with elapsed time, depending on mode.
 - **Power-ups:** available in both Survival and Timed. Dropped randomly from harvests or bought with coins. Possibly pre-loaded before a run using currency earned from finished runs (TBD).
 - **Currencies:** in-run coins have three uses during a run: the shop, rerolling the free upgrade pick, and lives (Survival only). They reset when the run ends. Meta currency (earned from finished runs) and paid coins (bought with real money) carry over between runs.
 - **Plots:** limited, so players must choose what to plant.
-- **Storage:** a limit on how many harvested crops the player can hold. Storage upgrades raise it. When storage is full, the player can't harvest until they free up space: sell crops for coins, turn some crops into fertilizer, or raise their storage. Fertilizer speeds up growth for one crop on one plot. Making fertilizer may be an upgrade rather than a basic action (TBD).
+- **Storage:** a limit on how many harvested crops the player can hold. Storage upgrades raise it. When storage is full, the player can't harvest until they free up space: sell crops for coins, turn some crops into fertilizer, or raise their storage. Fertilizer speeds up growth for one crop on one plot. Each crop has its own fertilizer rate: how many of that crop make one fertilizer, so a pumpkin is worth more fertilizer than a garlic. Making fertilizer may be an upgrade rather than a basic action (TBD). Each mode has its own storage limit.
 - **Events:** bad events (hindrances such as weeds, crows, picky customers and blocked plots) and good events. Every event gives a warning before it hits; some are announced by a news broadcast or newspaper. See Events (draft) below. Events with tradeoffs are planned (TBD).
 - **Crops:** players earn points to unlock new crops with different tradeoffs. Before a run, players pick which crops to bring, and orders only ask for those crops.
 - **Daily Challenge:** fixed modifiers (starting upgrades, boosts, selected crops), no power-ups, and a shared random seed so every player gets the same run. Has its own leaderboard.
@@ -241,3 +241,8 @@ Paid coins, bought with real money, carry over between runs and are separate fro
 - [ ] Fake merchant: how long do fake upgrades last? (Keen eye can reveal it.)
 - [ ] Finish all: for now it gives no score, still counts the orders as filled and pays their coins, and is the rarest power-up. Is that the right way to stop it skipping the puzzle?
 - [ ] Gold rush: for now every order pays +5 coins for 15 s (the same effect as Generous customer). Should it double coins for 15 s instead?
+- [ ] Storage overflow: for now a harvest that doesn't fit adds what fits and the rest is lost. Should it be refused instead? (Helpful neighbor does nothing when its harvest would overflow.)
+- [ ] Sell price: for now every crop sells for 25% of its order value. Should each crop have its own sell price?
+- [ ] Fertilizer: for now it cuts a share of the crop's remaining growth time, works once per plot per planting, has no holding limit and doesn't count toward storage. Which of these should change?
+- [ ] Life price that scales with elapsed time instead of (or as well as) per life bought. Likely to be dropped.
+- [ ] Should Timed orders pay coins? For now they don't, so selling crops is Timed's only coin source until the shop.

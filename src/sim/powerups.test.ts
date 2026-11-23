@@ -16,7 +16,9 @@ import { UPGRADES, scalePct } from "./upgrades"
 import rawPowerUps from "../data/powerups.json"
 import type { GameState, OwnedUpgrade, Plot, PowerUpConfig } from "./types"
 
-const crops = buildCropTable([{ id: "garlic", growTicks: 80, yield: 2, value: 2 }])
+const crops = buildCropTable([
+    { id: "garlic", growTicks: 80, yield: 2, value: 2, fertilizerCost: 4 }
+])
 
 // A small config of our own, so these tests don't depend on the shipped numbers.
 function rawConfig(): Record<string, unknown> {

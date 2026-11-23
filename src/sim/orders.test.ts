@@ -11,9 +11,9 @@ import {
 import type { Crop, Order, OrderRules } from "./types"
 
 const cropList: Crop[] = [
-    { id: "garlic", growTicks: 80, yield: 2, value: 2 },
-    { id: "carrot", growTicks: 150, yield: 2, value: 8 },
-    { id: "pumpkin", growTicks: 250, yield: 5, value: 12 }
+    { id: "garlic", growTicks: 80, yield: 2, value: 2, fertilizerCost: 4 },
+    { id: "carrot", growTicks: 150, yield: 2, value: 8, fertilizerCost: 2 },
+    { id: "pumpkin", growTicks: 250, yield: 5, value: 12, fertilizerCost: 1 }
 ]
 const crops = buildCropTable(cropList)
 

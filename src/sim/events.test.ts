@@ -17,6 +17,7 @@ import { buildCropTable } from "./plot"
 import { nextValue } from "./mulberry"
 import { TICKS_PER_SECOND } from "./game_constants"
 import { DIFFICULTY } from "./difficulty"
+import { MODES } from "./modes"
 import { UPGRADES, scalePct } from "./upgrades"
 import rawEvents from "../data/events.json"
 import type {
@@ -31,8 +32,8 @@ import type {
 } from "./types"
 
 const crops = buildCropTable([
-    { id: "garlic", growTicks: 80, yield: 2, value: 2 },
-    { id: "pumpkin", growTicks: 250, yield: 5, value: 12 }
+    { id: "garlic", growTicks: 80, yield: 2, value: 2, fertilizerCost: 4 },
+    { id: "pumpkin", growTicks: 250, yield: 5, value: 12, fertilizerCost: 1 }
 ])
 
 const on: GameConfig = { mode: "survival", allowPowerUps: false, allowEvents: true }
@@ -681,6 +682,26 @@ describe("new events in step", () => {
             plantedAt: good.tick,
             readyAt: good.tick + crops.garlic.growTicks
         })
+    })
+
+    it("Helpful neighbor does nothing when its harvest would overflow storage", () => {
+        const cap = MODES.survival.storageCap
+        const plots = [ready, ready]
+        const needed = 2 * crops.garlic.yield
+        // One crop short of fitting: nothing is harvested.
+        const short = builtNext(
+            game({ plots, inventory: { garlic: cap - needed + 1 } }),
+            "helpfulNeighbor"
+        )
+        const after = step(short, crops)
+        expect(after.inventory).toEqual(short.inventory)
+        expect(after.plots.map((p) => p.state)).toEqual(["ready", "ready"])
+        // Exactly fits: everything is harvested.
+        const exact = builtNext(
+            game({ plots, inventory: { garlic: cap - needed } }),
+            "helpfulNeighbor"
+        )
+        expect(step(exact, crops).inventory.garlic).toBe(cap)
     })
 
     it("Birds seed empty, unshielded plots, two draws each", () => {

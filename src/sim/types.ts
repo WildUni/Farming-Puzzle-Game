@@ -19,6 +19,7 @@ type Crop = {
     growTicks: number
     yield: number
     value: number
+    fertilizerCost: number // crops of this kind used up to make one fertilizer
 }
 
 type CropTable = Record<string, Crop> // cropId -> Crop
@@ -27,7 +28,15 @@ type Inventory = Record<string, number> // cropId -> amount held, missing means 
 
 type Plot =
     | { state: "empty" }
-    | { state: "growing"; cropId: string; plantedAt: number; readyAt: number } // readyAt fixed at planting
+    // readyAt fixed at planting (fertilizer and effects move it); fertilized is set once
+    // fertilizer is used on this planting, and absent before
+    | {
+          state: "growing"
+          cropId: string
+          plantedAt: number
+          readyAt: number
+          fertilized?: true
+      }
     | { state: "ready"; cropId: string }
 
 type Order = {
@@ -76,6 +85,8 @@ type GameState = {
     combo: number // Timed: orders filled in a row; sets the score multiplier (comboPct)
     comboEndsAt: number // Timed: last tick the streak survives without another fill (0 with no streak)
     bestCombo: number // Timed: longest streak this run
+    fertilizer: number // fertilizer held; doesn't count toward storage
+    rerollsThisOffer: number // paid rerolls of the open offer; sets the next reroll's price
 }
 
 // What the run's upgrades add up to. Worked out from GameState.upgrades, never stored.
@@ -116,6 +127,8 @@ type Modifiers = {
     rotPct: number // % of Rot's share of storage
     fogDurationPct: number // % of Fog's length
     emergencyTimePct: number // % of an Emergency order's time share
+    storageBonus: number // crops storage holds on top of the mode's cap (Bigger barn)
+    fertilizerUnlocked: number // 1: fertilizer can be made and used when economy.json locks it
 }
 
 type ModifierStat = keyof Modifiers
@@ -166,6 +179,10 @@ type Action =
     | { type: "chooseUpgrade"; upgradeId: string; target?: number | string }
     | { type: "usePowerUp"; slot: number; target?: number } // plot index, or order id
     | { type: "scareCrows"; plot: number }
+    | { type: "sellCrop"; cropId: string; amount: number }
+    | { type: "makeFertilizer"; cropId: string }
+    | { type: "useFertilizer"; plot: number }
+    | { type: "rerollOffer" }
 
 // Effects move crops' and orders' clocks. See specs/effects.md.
 type LastingEffect =

@@ -16,7 +16,9 @@ import { PowerUpBar } from "../views/PowerUpBar"
 import { EventBanner } from "../views/EventBanner"
 import { RushBanner } from "../views/RushBanner"
 import { DebugPanel } from "../views/DebugPanel"
+import { BarnView } from "../views/BarnView"
 import { POWER_UPS, powerUpTargets } from "../../sim/powerups"
+import { fertilizerTargets } from "../../sim/economy"
 
 const MS_PER_TICK = 1000 / TICKS_PER_SECOND
 const MAX_CATCH_UP_TICKS = 5 // a background tab doesn't jump ahead when it comes back
@@ -36,6 +38,7 @@ export class Game extends Scene {
     private paused: boolean
     private pickerPlot: number | null // plot the plant picker is open for
     private choosingSlot: number | null // power-up slot whose plot or order target is being picked
+    private fertilizing: boolean // the plot to fertilize is being picked
 
     private orders: OrdersView
     private stats: StatsView
@@ -48,6 +51,7 @@ export class Game extends Scene {
     private powerUpBar: PowerUpBar
     private eventBanner: EventBanner
     private rushBanner: RushBanner
+    private barn: BarnView
     private debugPanel: DebugPanel | null // dev builds only
     private debugged: boolean // the debug menu changed this run, so its log won't replay
     private debug: GameObjects.Text
@@ -76,6 +80,7 @@ export class Game extends Scene {
         this.paused = false
         this.pickerPlot = null
         this.choosingSlot = null
+        this.fertilizing = false
         this.debugged = false
 
         this.orders = new OrdersView(this, (id) => this.onOrderClick(id))
@@ -97,16 +102,25 @@ export class Game extends Scene {
             this.pause.bottom + GAP,
             () => this.act({ type: "buyLife" })
         )
-        this.upgradePick = new UpgradePickView(this, this.crops, (upgradeId, target) =>
-            this.act(
-                target === null
-                    ? { type: "chooseUpgrade", upgradeId }
-                    : { type: "chooseUpgrade", upgradeId, target }
-            )
+        this.upgradePick = new UpgradePickView(
+            this,
+            this.crops,
+            (upgradeId, target) =>
+                this.act(
+                    target === null
+                        ? { type: "chooseUpgrade", upgradeId }
+                        : { type: "chooseUpgrade", upgradeId, target }
+                ),
+            () => this.act({ type: "rerollOffer" })
         )
         this.powerUpBar = new PowerUpBar(this, (slot) => this.onPowerUpClick(slot))
         this.eventBanner = new EventBanner(this)
         this.rushBanner = new RushBanner(this)
+        this.barn = new BarnView(this, this.crops, {
+            sell: (cropId, amount) => this.act({ type: "sellCrop", cropId, amount }),
+            makeFertilizer: (cropId) => this.act({ type: "makeFertilizer", cropId }),
+            fertilize: () => this.toggleFertilizing()
+        })
         this.debugPanel = import.meta.env.DEV
             ? new DebugPanel(this.crops, (change) => this.applyDebug(change))
             : null
@@ -124,7 +138,7 @@ export class Game extends Scene {
         const keys = this.input.keyboard!
         keys.on("keydown-P", () => this.togglePause())
         keys.on("keydown-ESC", () => {
-            if (this.choosingSlot !== null) this.stopChoosing()
+            if (this.choosingSlot !== null || this.fertilizing) this.stopChoosing()
             else this.togglePause()
         })
         keys.on("keydown-R", () => this.scene.restart({ seed: this.seed, mode: this.mode }))
@@ -151,6 +165,7 @@ export class Game extends Scene {
         if (this.state.status === "ended" || this.state.upgradeOffer !== null) {
             this.closePicker()
             this.choosingSlot = null
+            this.fertilizing = false
         }
         this.render()
     }
@@ -158,14 +173,29 @@ export class Game extends Scene {
     private render(): void {
         // Drop target mode once nothing can be targeted (the last growing crop turned ready).
         if (this.choosingSlot !== null && this.targets() === null) this.choosingSlot = null
+        if (this.fertilizing && fertilizerTargets(this.state).length === 0) this.fertilizing = false
         const aiming = this.choosingSlot === null ? null : this.choosingDef()?.target
+        const plotTargets =
+            aiming === "plot"
+                ? this.targets()
+                : this.fertilizing
+                  ? fertilizerTargets(this.state)
+                  : null
         this.orders.update(
             this.state,
             nextOrderPreview(this.state, this.crops),
             aiming === "order" ? this.targets() : null
         )
         this.stats.update(this.state)
-        this.plots.update(this.state, this.pickerPlot, aiming === "plot" ? this.targets() : null)
+        this.plots.update(this.state, this.pickerPlot, plotTargets)
+        // The barn is off while something covers it (its amount box is HTML, so it would show
+        // through the plant picker, the pick screen and the pause shade).
+        const barnFree =
+            !this.paused &&
+            this.pickerPlot === null &&
+            this.state.status === "running" &&
+            this.state.upgradeOffer === null
+        this.barn.update(this.state, barnFree, this.fertilizing)
         this.powerUpBar.update(this.state, this.choosingSlot)
         this.eventBanner.update(this.state)
         this.rushBanner.update(this.state)
@@ -189,6 +219,7 @@ export class Game extends Scene {
         if (this.paused) {
             this.closePicker()
             this.choosingSlot = null
+            this.fertilizing = false
         }
         this.render()
     }
@@ -248,12 +279,23 @@ export class Game extends Scene {
             return
         }
         this.closePicker()
+        this.fertilizing = false
         this.choosingSlot = this.choosingSlot === slot ? null : slot
         this.render()
     }
 
     private stopChoosing(): void {
         this.choosingSlot = null
+        this.fertilizing = false
+        this.render()
+    }
+
+    // The barn's Fertilize button: start (or cancel) choosing the plot to fertilize.
+    private toggleFertilizing(): void {
+        if (this.paused) return
+        this.closePicker()
+        this.choosingSlot = null
+        this.fertilizing = !this.fertilizing
         this.render()
     }
 
@@ -268,6 +310,14 @@ export class Game extends Scene {
             this.choosingSlot = null
             if (aimsAtPlot && powerUpTargets(this.state, slot).includes(plot)) {
                 this.act({ type: "usePowerUp", slot, target: plot })
+            }
+            this.render()
+            return
+        }
+        if (this.fertilizing) {
+            this.fertilizing = false
+            if (fertilizerTargets(this.state).includes(plot)) {
+                this.act({ type: "useFertilizer", plot })
             }
             this.render()
             return
@@ -291,6 +341,7 @@ export class Game extends Scene {
     // applyAction refuses the delivery if the inventory is short, so no check is needed here.
     // While an order power-up is being aimed, a click fills that order (or cancels) instead.
     private onOrderClick(orderId: number): void {
+        this.fertilizing = false
         if (this.choosingSlot !== null) {
             const slot = this.choosingSlot
             const aimsAtOrder = this.choosingDef()?.target === "order"

@@ -17,13 +17,14 @@ Shared types for the simulation. Contains only types, so it is exported with `ex
 ### `Crop` and `CropTable`
 
 ```ts
-type Crop = { id: string; growTicks: number; yield: number; value: number }
+type Crop = { id: string; growTicks: number; yield: number; value: number; fertilizerCost: number }
 type CropTable = Record<string, Crop> // cropId -> Crop
 ```
 
 - `growTicks`: ticks from planting until the crop is ready.
 - `yield`: how many crops one harvest adds to the inventory.
-- `value`: worth of one crop, used when pricing orders.
+- `value`: worth of one crop, used when pricing orders and selling (see [economy.md](economy.md)).
+- `fertilizerCost`: crops of this kind used up to make one fertilizer. Whole number `>= 1`.
 - The list in `src/data/crops.json` is turned into a `CropTable` with `buildCropTable` (see [plot.md](plot.md)).
 - Crop stats are fixed data and are **not** stored in `GameState`. The state refers to crops only by id.
 
@@ -32,9 +33,11 @@ type CropTable = Record<string, Crop> // cropId -> Crop
 ```ts
 type Plot =
     | { state: "empty" }
-    | { state: "growing"; cropId: string; plantedAt: number; readyAt: number }
+    | { state: "growing"; cropId: string; plantedAt: number; readyAt: number; fertilized?: true }
     | { state: "ready"; cropId: string }
 ```
+
+- `fertilized` is set to `true` when fertilizer is used on this planting, and is absent before (so plots made before Day 6 compare equal). Fertilizer works once per planting.
 
 - `plantedAt` is the tick the crop was planted on, moved by the same amount as `readyAt` whenever an effect moves the crop's clock (see [effects.md](effects.md)). It is only used to draw progress.
 - `readyAt` is the tick the crop becomes ready on. `plant` sets it to `plantedAt + growTicks`, and it is stored rather than worked out so later changes to growth speed don't affect crops already in the ground.
@@ -92,7 +95,7 @@ Everything that changes during a run. If `step` or `replay` would give a differe
 | `score`                           | Points so far                                                                       |
 | `ordersCompleted`, `ordersFailed` | Run counters                                                                        |
 | `lives`                           | Lives left (Survival). The run ends at 0. Always 0 in other modes                   |
-| `coins`                           | In-run coins, earned by filling orders in Survival. Reset every run                 |
+| `coins`                           | In-run coins, from filled Survival orders and selling crops. Reset every run        |
 | `livesBought`                     | Lives bought this run. Sets the next life's price                                   |
 | `upgrades`                        | `OwnedUpgrade` copies picked this run (id, tier, target), in pick order             |
 | `upgradeOffer`                    | `OfferCard`s (id, tier) while the player chooses, else `null`. Time stops while set |
@@ -107,6 +110,8 @@ Everything that changes during a run. If `step` or `replay` would give a differe
 | `combo`                           | Timed: orders filled in a row; sets the score multiplier (`comboPct`)               |
 | `comboEndsAt`                     | Timed: last tick the streak survives without another fill; `0` with no streak       |
 | `bestCombo`                       | Timed: longest streak this run, for the summary                                     |
+| `fertilizer`                      | Fertilizer held. Doesn't count toward storage (see [economy.md](economy.md))        |
+| `rerollsThisOffer`                | Paid rerolls of the open offer; sets the next reroll's price. 0 on each new offer   |
 
 The Survival level and the next life's price are worked out from `ordersCompleted` and `livesBought` (see [difficulty.md](difficulty.md)), so they are not stored. The same goes for the upgrade `Modifiers`, which are added up from `upgrades` (see [upgrades.md](upgrades.md)).
 
@@ -131,6 +136,10 @@ type Action =
     | { type: "chooseUpgrade"; upgradeId: string; target?: number | string }
     | { type: "usePowerUp"; slot: number; target?: number }
     | { type: "scareCrows"; plot: number }
+    | { type: "sellCrop"; cropId: string; amount: number }
+    | { type: "makeFertilizer"; cropId: string }
+    | { type: "useFertilizer"; plot: number }
+    | { type: "rerollOffer" }
 ```
 
 One player move, passed to `applyAction` (see [main.md](main.md)).

@@ -53,10 +53,10 @@ Returns a **new** state, or `null` if the move is not allowed. A `null` result m
 **Rules for every action**
 
 1. Returns `null` when `state.status` is `'ended'`.
-1. While `upgradeOffer` is not `null`, returns `null` for every action except `chooseUpgrade` (the clock is stopped; see [upgrades.md](upgrades.md)).
+1. While `upgradeOffer` is not `null`, returns `null` for every action except `chooseUpgrade` and `rerollOffer` (the clock is stopped; see [upgrades.md](upgrades.md) and [economy.md](economy.md)).
 1. Never changes `state` or anything inside it. Plots and orders the action doesn't touch may be shared with the old state, since nothing changes them in place.
 1. Does not change `tick`. Time only moves in `step`.
-1. Does not change `rng.orders` or `rng.upgrades`. Only two actions draw random numbers: `harvest` (the bumper roll from `rng.harvest` and the drop roll from `rng.drops`, see below) and `usePowerUp` with Good omen (an event announcement from `rng.events`).
+1. Does not change `rng.orders`. Only three actions draw random numbers: `harvest` (the bumper roll from `rng.harvest` and the drop roll from `rng.drops`, see below), `usePowerUp` with Good omen (an event announcement from `rng.events`) and `rerollOffer` (a new offer from `rng.upgrades`).
 1. Deterministic: the same arguments always give an equal result.
 
 **Order within a tick.** On each tick, `step` runs first, then the actions logged for that tick are applied in log order. So a crop whose growth finishes on tick _t_ can be harvested on tick _t_, and an order with `expiresAt` _t_ can still be delivered by actions on tick _t_. `step` on tick _t + 1_ fails it before that tick's actions run. `replay` must use the same order.
@@ -73,7 +73,8 @@ Returns a **new** state, or `null` if the move is not allowed. A `null` result m
 - `plot` must be a valid index, as for `plant`.
 - Calls `harvest(plots[plot])`. Returns `null` if the plot is not `'ready'` (empty or still growing).
 - Returns `null` while `harvestBlocked(activeEffects, plot, tick)`: Crows are there and the plot isn't shielded (see [events.md](events.md)).
-- Empties that plot and adds `crops[cropId].yield + yieldBonus` to `inventory[cropId]` (starting from 0 if missing), with `yieldBonus` from `modifiersAt(upgrades, { plot, cropId })`.
+- Returns `null` when storage is full (`storageFree(state)` is 0); the plot stays ready (see [economy.md](economy.md)).
+- Empties that plot and adds `crops[cropId].yield + yieldBonus` (plus Bumper and Worms below) to `inventory[cropId]` (starting from 0 if missing), with `yieldBonus` from `modifiersAt(upgrades, { plot, cropId })`. Only `storageFree` crops are added; the rest are lost.
 - **Bumper harvest:** if `bumperChance` from the same `modifiersAt` is above 0, draws `roll = randomInt(rng.harvest, 0, 99)`, stores the new state in `rng.harvest`, and adds `bumperExtra` more crops (1 without Bigger bumper) when `roll < bumperChance`. With `bumperChance` 0 it draws nothing (see [upgrades.md](upgrades.md)).
 - **Worms:** adds `harvestBonusAt(activeEffects, plot, tick)` more crops (see [events.md](events.md)).
 - **Power-up drop:** then calls `rollDrop(state)`, stores the new `rng.drops`, and appends the dropped id to `powerUps` if there is one and `powerUps.length < powerUpSlots`. A drop with every slot full is lost. With power-ups off or `dropChance` 0 it draws nothing (see [powerups.md](powerups.md)).
@@ -110,6 +111,8 @@ Returns a **new** state, or `null` if the move is not allowed. A `null` result m
 - `plot` must be a valid index, as for `plant`.
 - Calls `scareCrows(activeEffects, plot, tick)` and stores the result. Returns `null` if that does (no crows on that plot right now).
 - Draws nothing and changes nothing else. The plot can be harvested by the next action on the same tick (see [events.md](events.md)).
+
+**`sellCrop`, `makeFertilizer`, `useFertilizer`, `rerollOffer`** — the in-run economy, specified in [economy.md](economy.md). `canReroll(state)` and `rerollPriceFor(state)` are exported for the reroll button.
 
 **`usePowerUp`** `{ type: 'usePowerUp', slot, target? }`
 

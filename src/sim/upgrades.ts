@@ -59,7 +59,9 @@ const MODIFIER_STATS: readonly ModifierStat[] = [
     "birdPlotsPct",
     "rotPct",
     "fogDurationPct",
-    "emergencyTimePct"
+    "emergencyTimePct",
+    "storageBonus",
+    "fertilizerUnlocked"
 ]
 
 // Stats read per plot and crop (by plant and harvest), so targeted upgrades may use them.

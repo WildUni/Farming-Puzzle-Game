@@ -6,6 +6,7 @@ import rawModes from "../data/modes.json"
 type SurvivalMode = {
     startLives: number
     maxLives: number // Survival lives can't go above this, plus Extra heart
+    storageCap: number // most crops storage holds, before Bigger barn
 }
 
 // Timed combo: each order filled in a row adds stepPct to the score multiplier, up to capPct.
@@ -29,6 +30,7 @@ type RushRules = {
 type TimedMode = {
     runTicks: number // a Timed run ends on this tick
     openOrders: number // step keeps this many orders open in Timed
+    storageCap: number // most crops storage holds, before Bigger barn
     combo: ComboRules
     rush: RushRules
 }
@@ -68,11 +70,13 @@ function validateModes(raw: unknown): ModesConfig {
     if (!isObject(survival)) fail("survival", "an object")
     const startLives = wholeAtLeast(survival, "startLives", 1, "survival.startLives")
     const maxLives = wholeAtLeast(survival, "maxLives", startLives, "survival.maxLives")
+    const survivalCap = wholeAtLeast(survival, "storageCap", 1, "survival.storageCap")
 
     const timed = raw.timed
     if (!isObject(timed)) fail("timed", "an object")
     const runSeconds = wholeAtLeast(timed, "runSeconds", 1, "timed.runSeconds")
     const openOrders = wholeAtLeast(timed, "openOrders", 1, "timed.openOrders")
+    const timedCap = wholeAtLeast(timed, "storageCap", 1, "timed.storageCap")
 
     const combo = timed.combo
     if (!isObject(combo)) fail("timed.combo", "an object")
@@ -81,10 +85,11 @@ function validateModes(raw: unknown): ModesConfig {
     const windowSeconds = wholeAtLeast(combo, "windowSeconds", 1, "timed.combo.windowSeconds")
 
     return {
-        survival: { startLives, maxLives },
+        survival: { startLives, maxLives, storageCap: survivalCap },
         timed: {
             runTicks: runSeconds * TICKS_PER_SECOND,
             openOrders,
+            storageCap: timedCap,
             combo: { stepPct, capPct, windowTicks: windowSeconds * TICKS_PER_SECOND },
             rush: validateRush(timed.rush, runSeconds)
         }

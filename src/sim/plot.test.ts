@@ -3,8 +3,8 @@ import { buildCropTable, plant, harvest, progress, updateGrowth } from "./plot"
 import type { Plot } from "./types"
 
 const crops = buildCropTable([
-    { id: "garlic", growTicks: 80, yield: 2, value: 2 },
-    { id: "pumpkin", growTicks: 250, yield: 5, value: 12 }
+    { id: "garlic", growTicks: 80, yield: 2, value: 2, fertilizerCost: 4 },
+    { id: "pumpkin", growTicks: 250, yield: 5, value: 12, fertilizerCost: 1 }
 ])
 
 const empty: Plot = { state: "empty" }
@@ -15,6 +15,11 @@ describe("buildCropTable", () => {
     it("keys crops by id", () => {
         expect(crops.garlic.growTicks).toBe(80)
         expect(crops.pumpkin.yield).toBe(5)
+    })
+
+    it.each([0, 1.5, undefined])("throws for a fertilizerCost of %s", (cost) => {
+        const bad = { id: "garlic", growTicks: 80, yield: 2, value: 2, fertilizerCost: cost }
+        expect(() => buildCropTable([bad as never])).toThrow(/fertilizerCost/)
     })
 })
 

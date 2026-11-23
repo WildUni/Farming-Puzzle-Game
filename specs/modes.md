@@ -8,10 +8,11 @@ Survival's difficulty curve, coins and life prices stay in `difficulty.json` (se
 
 ```json
 {
-    "survival": { "startLives": 3, "maxLives": 3 },
+    "survival": { "startLives": 3, "maxLives": 3, "storageCap": 25 },
     "timed": {
         "runSeconds": 300,
         "openOrders": 3,
+        "storageCap": 30,
         "combo": { "stepPct": 25, "capPct": 300, "windowSeconds": 20 },
         "rush": {
             "atSeconds": [75, 160, 245],
@@ -28,6 +29,8 @@ Survival's difficulty curve, coins and life prices stay in `difficulty.json` (se
 | --------------------------- | ----------------------------------------------------------------------------------------- |
 | `survival.startLives`       | Lives a Survival run starts with. The run ends when lives reach 0                         |
 | `survival.maxLives`         | Most lives a Survival run can hold (Extra heart adds to it). Whole number `>= startLives` |
+| `survival.storageCap`       | Most crops a Survival run can hold (Bigger barn adds to it). Whole number `>= 1`          |
+| `timed.storageCap`          | Most crops a Timed run can hold. Separate from Survival's so the two can be tuned apart   |
 | `timed.runSeconds`          | Length of a Timed run. Timed has no lives and ends when this runs out                     |
 | `timed.openOrders`          | `step` keeps this many orders open in Timed, so a run starts with this many               |
 | `timed.combo.stepPct`       | Percent the score multiplier climbs for each order filled in a row                        |
@@ -46,7 +49,7 @@ Lengths in the JSON are in seconds, like `powerups.json` and `events.json`; the 
 ## Types
 
 ```ts
-type SurvivalMode = { startLives: number; maxLives: number }
+type SurvivalMode = { startLives: number; maxLives: number; storageCap: number }
 type ComboRules = { stepPct: number; capPct: number; windowTicks: number }
 type RushRules = {
     atTicks: number[]
@@ -55,7 +58,13 @@ type RushRules = {
     timePct: number
     valuePct: number
 }
-type TimedMode = { runTicks: number; openOrders: number; combo: ComboRules; rush: RushRules }
+type TimedMode = {
+    runTicks: number
+    openOrders: number
+    storageCap: number
+    combo: ComboRules
+    rush: RushRules
+}
 type ModesConfig = { survival: SurvivalMode; timed: TimedMode }
 ```
 
@@ -68,6 +77,7 @@ Checks a parsed JSON value and returns it typed, with `timed.runTicks = runSecon
 - `survival` or `timed` is not an object.
 - `survival.startLives` is not a whole number `>= 1`.
 - `survival.maxLives` is not a whole number `>= startLives`.
+- `survival.storageCap` or `timed.storageCap` is not a whole number `>= 1`.
 - `timed.runSeconds` or `timed.openOrders` is not a whole number `>= 1`.
 - `timed.combo` is not an object; `stepPct` or `windowSeconds` is not a whole number `>= 1`; `capPct` is not a whole number `>= 100`.
 - `timed.rush` is not an object; `atSeconds` is not an array of whole numbers, strictly ascending, each `>= 1` and `< runSeconds` (an empty array means no waves); `warnSeconds` is not a whole number `>= 0`, or is not shorter than the first wave's time or the gap between two waves; `orders`, `timePct` or `valuePct` is not a whole number `>= 1`; `timePct` is above 100.
@@ -98,6 +108,7 @@ Both work from `tick` alone, so `GameState` stores nothing about waves.
 
 - `createGame`: `lives` starts at `MODES.survival.startLives` in Survival, `0` otherwise.
 - `maxLivesFor`: `MODES.survival.maxLives` plus Extra heart.
+- `storageCap` (economy): each mode's `storageCap` plus Bigger barn.
 - `isRunOver` (in `step`): Timed ends on tick `MODES.timed.runTicks`.
 - `orderRules`: Timed keeps `MODES.timed.openOrders` orders open.
 - `completeOrder` and `step`: the Timed combo (see [main.md](main.md)).
@@ -122,7 +133,8 @@ Both work from `tick` alone, so `GameState` stores nothing about waves.
 
 ## Open items
 
-- [ ] Life price rule per mode (Day 6): rises per life bought, or scales with elapsed time.
+- [ ] Life price rule per mode: rises per life bought, or scales with elapsed time. Per life only for now; the time rule is likely to be dropped (see [economy.md](economy.md)).
+- [x] `survival.storageCap` and `timed.storageCap` (Day 6): each mode's storage limit, kept separate so they can be tuned apart (see [economy.md](economy.md)). Placeholders 25 and 30 until the Day 6 tuning pass.
 - [x] Timed combo numbers (placeholders: +25% per fill, up to ×3, 20 s window).
 - [x] Rush wave numbers (placeholders: 3 waves at 75 s, 160 s and 245 s, 5 s warning, 3 orders each at half time and 150% value).
 - [ ] Rush pay (Timed upgrade): a modifier added to `rush.valuePct`.

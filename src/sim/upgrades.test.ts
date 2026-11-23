@@ -21,8 +21,8 @@ import rawUpgrades from "../data/upgrades.json"
 import type { GameState, OwnedUpgrade, Tier, UpgradeConfig } from "./types"
 
 const crops = buildCropTable([
-    { id: "garlic", growTicks: 80, yield: 2, value: 2 },
-    { id: "carrot", growTicks: 150, yield: 2, value: 8 }
+    { id: "garlic", growTicks: 80, yield: 2, value: 2, fertilizerCost: 4 },
+    { id: "carrot", growTicks: 150, yield: 2, value: 8, fertilizerCost: 2 }
 ])
 
 // A small config of our own, so these tests don't depend on the shipped numbers.
@@ -64,7 +64,9 @@ function rawConfig(): Record<string, unknown> {
             birdPlotsPct: { base: 100, min: 34, max: 100 },
             rotPct: { base: 100, min: 25, max: 100 },
             fogDurationPct: { base: 100, min: 25, max: 100 },
-            emergencyTimePct: { base: 100, min: 100, max: 200 }
+            emergencyTimePct: { base: 100, min: 100, max: 200 },
+            storageBonus: { base: 0, min: 0, max: 30 },
+            fertilizerUnlocked: { base: 0, min: 0, max: 1 }
         },
         tiers: {
             common: { weight: 40, sellPrice: 1 },
@@ -320,7 +322,9 @@ describe("modifiersFor", () => {
             birdPlotsPct: 100,
             rotPct: 100,
             fogDurationPct: 100,
-            emergencyTimePct: 100
+            emergencyTimePct: 100,
+            storageBonus: 0,
+            fertilizerUnlocked: 0
         })
     })
 

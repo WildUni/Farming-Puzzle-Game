@@ -4,6 +4,7 @@ import type {
     GameState,
     Plot,
     Action,
+    Inventory,
     CropTable,
     Order,
     OrderRules,
@@ -41,6 +42,13 @@ import {
 } from "./effects"
 import { EVENTS, announceEvent, gapTicks, startEvent } from "./events"
 import { POWER_UPS, rollDrop, canUsePowerUp, durationFor } from "./powerups"
+import {
+    storageFree,
+    sellValue,
+    fertilizerAllowed,
+    fertilizedReadyAt,
+    rerollPrice
+} from "./economy"
 
 // Salts for the separate streams. The orders stream uses the seed itself (see specs/mulberry.md).
 const UPGRADE_STREAM_SALT = 1
@@ -88,7 +96,9 @@ function createGame(seed: RNGSeed, config: GameConfig): GameState {
         secondWind: false,
         combo: 0,
         comboEndsAt: 0,
-        bestCombo: 0
+        bestCombo: 0,
+        fertilizer: 0,
+        rerollsThisOffer: 0
     }
 }
 
@@ -136,12 +146,52 @@ function replacePlot(plots: Plot[], i: number, plot: Plot): Plot[] {
     return plots.map((p, j) => (j === i ? plot : p))
 }
 
+// True when `amount` is a whole number >= 1 and the player holds at least that many of a known
+// crop.
+function holds(state: GameState, crops: CropTable, cropId: string, amount: number): boolean {
+    return (
+        Object.prototype.hasOwnProperty.call(crops, cropId) &&
+        Number.isInteger(amount) &&
+        amount >= 1 &&
+        (state.inventory[cropId] ?? 0) >= amount
+    )
+}
+
+// Inventory with `amount` of a crop taken out; a crop at 0 is removed.
+function takeCrops(state: GameState, cropId: string, amount: number): Inventory {
+    const { [cropId]: held, ...rest } = state.inventory
+    const left = held - amount
+    return left > 0 ? { ...rest, [cropId]: left } : rest
+}
+
+// Price of the next reroll of the open offer.
+function rerollPriceFor(state: GameState): number {
+    return rerollPrice(state.rerollsThisOffer)
+}
+
+// True when a rerollOffer action would succeed. The reroll button uses this.
+function canReroll(state: GameState): boolean {
+    return (
+        state.status === "running" &&
+        state.upgradeOffer !== null &&
+        offerPool(state) !== null &&
+        state.coins >= rerollPriceFor(state)
+    )
+}
+
 // Applies one player move. Returns a new state, or null if the move isn't allowed.
-// Never changes `state` or `tick`; only harvest draws (rng.harvest and rng.drops). See specs/main.md.
+// Never changes `state` or `tick`; only harvest (rng.harvest and rng.drops) and rerollOffer
+// (rng.upgrades) draw. See specs/main.md.
 function applyAction(state: GameState, action: Action, crops: CropTable): GameState | null {
     if (state.status === "ended") return null
-    // While an upgrade offer is open the clock is stopped and only the pick is allowed.
-    if (state.upgradeOffer !== null && action.type !== "chooseUpgrade") return null
+    // While an upgrade offer is open the clock is stopped; only the pick and rerolls are allowed.
+    if (
+        state.upgradeOffer !== null &&
+        action.type !== "chooseUpgrade" &&
+        action.type !== "rerollOffer"
+    ) {
+        return null
+    }
 
     switch (action.type) {
         case "plant": {
@@ -162,6 +212,9 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
             if (!isPlotIndex(state, action.plot)) return null
             // Crows: no harvesting on this plot while they're here.
             if (harvestBlocked(state.activeEffects, action.plot, state.tick)) return null
+            // Full storage: refused, and the plot stays ready.
+            const free = storageFree(state)
+            if (free === 0) return null
             const result = harvest(state.plots[action.plot])
             if (result === null) return null
             const { plot, cropId } = result
@@ -180,7 +233,8 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
             }
             // Worms add their crops while they work.
             const worms = harvestBonusAt(state.activeEffects, action.plot, state.tick)
-            const amount = crops[cropId].yield + yieldBonus + bumper + worms
+            // Only what fits is stored; the rest is lost.
+            const amount = Math.min(free, crops[cropId].yield + yieldBonus + bumper + worms)
             // Power-up drop: rolled from rng.drops whether or not a slot is free.
             const [drop, dropsRng] = rollDrop(state)
             rng = { ...rng, drops: dropsRng }
@@ -211,6 +265,57 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
             const inventory = fulfill(order, state.inventory)
             if (inventory === null) return null
             return completeOrder({ ...state, inventory }, order, true)
+        }
+
+        case "sellCrop": {
+            if (!holds(state, crops, action.cropId, action.amount)) return null
+            return {
+                ...state,
+                inventory: takeCrops(state, action.cropId, action.amount),
+                coins: state.coins + sellValue(crops[action.cropId], action.amount)
+            }
+        }
+
+        case "makeFertilizer": {
+            if (!fertilizerAllowed(state)) return null
+            if (!Object.prototype.hasOwnProperty.call(crops, action.cropId)) return null
+            const cost = crops[action.cropId].fertilizerCost
+            if (!holds(state, crops, action.cropId, cost)) return null
+            return {
+                ...state,
+                inventory: takeCrops(state, action.cropId, cost),
+                fertilizer: state.fertilizer + 1
+            }
+        }
+
+        case "useFertilizer": {
+            if (!fertilizerAllowed(state) || state.fertilizer < 1) return null
+            if (!isPlotIndex(state, action.plot)) return null
+            const plot = state.plots[action.plot]
+            if (plot.state !== "growing" || plot.fertilized === true) return null
+            const fertilized: Plot = {
+                ...plot,
+                readyAt: fertilizedReadyAt(plot, state.tick),
+                fertilized: true
+            }
+            return {
+                ...state,
+                plots: replacePlot(state.plots, action.plot, fertilized),
+                fertilizer: state.fertilizer - 1
+            }
+        }
+
+        case "rerollOffer": {
+            if (!canReroll(state)) return null
+            const [offer, upgrades] = rollOffer(state, offerPool(state)!, crops)
+            if (offer.length === 0) return null
+            return {
+                ...state,
+                coins: state.coins - rerollPriceFor(state),
+                rerollsThisOffer: state.rerollsThisOffer + 1,
+                upgradeOffer: offer,
+                rng: { ...state.rng, upgrades }
+            }
         }
 
         case "buyLife": {
@@ -561,7 +666,8 @@ function step(state: GameState, crops: CropTable): GameState {
         ...announced,
         rng: { ...announced.rng, upgrades: upgradesRng },
         upgradeOffer: offer.length > 0 ? offer : null,
-        offersMade: announced.offersMade + 1
+        offersMade: announced.offersMade + 1,
+        rerollsThisOffer: 0
     }
 }
 
@@ -579,6 +685,8 @@ export {
     applyAction,
     step,
     canBuyLife,
+    canReroll,
+    rerollPriceFor,
     orderRules,
     lifePriceFor,
     maxLivesFor,

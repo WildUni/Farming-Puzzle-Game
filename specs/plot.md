@@ -58,5 +58,6 @@ The `now >= readyAt` check comes first, so a plot whose `readyAt` was pulled bac
 ## Open items
 
 - [x] Store the ready tick on the plot (`readyAt`) so growth-speed upgrades and instant-grow power-ups don't change crops retroactively.
-- [ ] Plot modifiers (fertilizer, weeds, blocked plots).
+- [ ] Plot modifiers (weeds, blocked plots).
+- [x] Fertilizer (Day 6): `Crop.fertilizerCost`, checked by `buildCropTable` (throws for a value that isn't a whole number `>= 1`), and a `fertilized` flag on growing plots (see [economy.md](economy.md)).
 - [x] Effects that change speed _while_ a crop grows move `readyAt` and `plantedAt` together, a little each tick (see [effects.md](effects.md)), so `progress` keeps working without a stored progress field.

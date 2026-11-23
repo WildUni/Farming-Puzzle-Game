@@ -258,24 +258,24 @@ Cap how many crops the player can hold, and give in-run coins all three of their
 
 ### Storage (about 3 hours)
 
-- [ ] Storage cap in config, read from `crops.json` total can never pass it
-- [ ] Harvest is rejected when storage is full, and the plot stays ready
-- [ ] `sellCrop` action: sell stored crops for coins at each crop's sell price
-- [ ] Storage bar in the heads-up display that turns red when full
-- [ ] Test: full storage blocks harvesting until a crop is sold
+- [x] Storage cap in config (one per mode in `modes.json`); the total can never pass it
+- [x] Harvest is rejected when storage is full, and the plot stays ready
+- [x] `sellCrop` action: sell stored crops for coins at each crop's sell price
+- [x] Storage bar in the heads-up display that turns red when full
+- [x] Test: full storage blocks harvesting until a crop is sold
 
 ### Fertilizer (about 2 hours)
 
-- [ ] `makeFertilizer` action turns crops into fertilizer, at a rate set in config
-- [ ] `useFertilizer` on one growing plot speeds up that crop
-- [ ] A config flag makes fertilizer a basic action or locks it behind an upgrade, since the design hasn't decided
-- [ ] Test: fertilizer frees storage and shortens growth by the configured amount
+- [x] `makeFertilizer` action turns crops into fertilizer, at a rate set in config
+- [x] `useFertilizer` on one growing plot speeds up that crop
+- [x] A config flag makes fertilizer a basic action or locks it behind an upgrade, since the design hasn't decided
+- [x] Test: fertilizer frees storage and shortens growth by the configured amount
 
 ### Rerolls and lives (about 1.5 hours)
 
-- [ ] `reroll` action: pay coins to redraw the 3 free upgrade choices; each reroll in a run costs more than the last
-- [ ] Life price rule per mode in `modes.json`: rises per life bought, or scales with elapsed time
-- [ ] Test: coins and the reroll price reset when a new run starts
+- [x] `reroll` action: pay coins to redraw the 3 free upgrade choices; each reroll of the same offer costs more than the last, and the price resets on the next offer
+- [ ] Life price rule per mode in `modes.json`: rises per life bought, or scales with elapsed time (deferred: per life only for now; the time rule is an open question)
+- [x] Test: coins and the reroll price reset when a new run starts
 
 ### Tuning (about 1.5 hours)
 

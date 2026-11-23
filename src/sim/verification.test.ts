@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { replay } from "./verification"
-import { createGame, applyAction, step } from "./main"
+import { createGame, applyAction, step, canReroll } from "./main"
+import { storageFree, storageUsed, storageCap } from "./economy"
 import { buildCropTable } from "./plot"
 import { canFulfill } from "./orders"
 import { UPGRADES, validTargets } from "./upgrades"
@@ -10,9 +11,9 @@ import { MODES } from "./modes"
 import type { Action, Crop, CropTable, GameConfig, GameState, LogEntry } from "./types"
 
 const cropList: Crop[] = [
-    { id: "garlic", growTicks: 80, yield: 2, value: 2 },
-    { id: "carrot", growTicks: 150, yield: 2, value: 8 },
-    { id: "pumpkin", growTicks: 250, yield: 5, value: 12 }
+    { id: "garlic", growTicks: 80, yield: 2, value: 2, fertilizerCost: 4 },
+    { id: "carrot", growTicks: 150, yield: 2, value: 8, fertilizerCost: 2 },
+    { id: "pumpkin", growTicks: 250, yield: 5, value: 12, fertilizerCost: 1 }
 ]
 const crops: CropTable = buildCropTable(cropList)
 
@@ -66,6 +67,32 @@ function buyer(state: GameState): Action[] {
     return [{ type: "buyLife" }, ...botMoves(state)]
 }
 
+// Uses the in-run economy: rerolls each offer up to twice before picking; when storage is full,
+// sells half of its biggest pile and makes fertilizer from the others; uses fertilizer on every
+// growing plot; and plants pumpkins on plots 0 and 1 so storage fills up.
+function economist(state: GameState): Action[] {
+    if (state.upgradeOffer !== null) {
+        if (state.rerollsThisOffer < 2 && canReroll(state)) return [{ type: "rerollOffer" }]
+        return [pickCard(state)]
+    }
+    const moves: Action[] = []
+    if (storageFree(state) === 0) {
+        // Full: sell half of the biggest pile and turn the next one into fertilizer.
+        const piles = Object.entries(state.inventory).sort((x, y) => y[1] - x[1])
+        moves.push({ type: "sellCrop", cropId: piles[0][0], amount: Math.ceil(piles[0][1] / 2) })
+        for (const [cropId] of piles.slice(1)) moves.push({ type: "makeFertilizer", cropId })
+    }
+    state.plots.forEach((p, plot) => {
+        if (p.state === "growing") moves.push({ type: "useFertilizer", plot })
+    })
+    return [
+        ...moves,
+        ...botMoves(state).map((a): Action =>
+            a.type === "plant" && a.plot < 2 ? { ...a, cropId: "pumpkin" } : a
+        )
+    ]
+}
+
 // Plays a run the way the client game loop does (see specs/verification.md)
 // and returns the final state with the log of accepted actions.
 function play(
@@ -79,6 +106,7 @@ function play(
     while (true) {
         // Moves are planned once per tick, so a harvest and a deliver can both
         // be tried on the same tick; only the ones that work are logged.
+        let accepted = false
         for (const action of movesFor(state)) {
             if (action.type === "deliver") {
                 const order = state.orders.find((o) => o.id === action.orderId)
@@ -88,10 +116,15 @@ function play(
             if (next === null) continue
             log.push({ tick: state.tick, action })
             state = next
+            accepted = true
         }
         if (state.tick >= finalTick || state.status === "ended") break
         const next = step(state, crops)
-        if (next === state) break // an unanswered upgrade offer stopped the clock
+        if (next === state) {
+            // An open offer stopped the clock: plan again after a reroll, else give up.
+            if (accepted) continue
+            break
+        }
         state = next
     }
     return { state, log }
@@ -117,6 +150,38 @@ function replayState(...args: Parameters<typeof replay>): GameState {
     if (!result.ok) throw new Error(`replay failed: ${result.error} at entry ${result.entry}`)
     return result.state
 }
+
+describe("replay: the in-run economy", () => {
+    it.each([1, 2, 3, 42])(
+        "replays a Survival run with sells, fertilizer and rerolls equal (seed %i)",
+        (seed) => {
+            const { state, log } = play(seed, survival, 6000, economist)
+            const types = new Set(log.map((e) => e.action.type))
+            for (const t of ["sellCrop", "makeFertilizer", "useFertilizer", "rerollOffer"]) {
+                expect(types).toContain(t)
+            }
+            expect(replayState(seed, survival, log, state.tick, crops)).toEqual(state)
+        }
+    )
+
+    it("storage fills and empties, and never passes the cap", () => {
+        let state = createGame(7, survival)
+        let wasFull = false
+        let emptiedAfterFull = false
+        for (let tick = 0; tick < 6000 && state.status === "running"; tick++) {
+            for (const action of economist(state)) {
+                const next = applyAction(state, action, crops)
+                if (next !== null) state = next
+            }
+            expect(storageUsed(state)).toBeLessThanOrEqual(storageCap(state))
+            if (storageFree(state) === 0) wasFull = true
+            else if (wasFull && storageUsed(state) < storageCap(state) / 2) emptiedAfterFull = true
+            if (state.upgradeOffer === null) state = step(state, crops)
+        }
+        expect(wasFull).toBe(true)
+        expect(emptiedAfterFull).toBe(true)
+    })
+})
 
 describe("replay: matches the original run", () => {
     it("gives the same state as stepping when the log is empty", () => {

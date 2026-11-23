@@ -1,10 +1,13 @@
 // Upgrade pick screen: a shade over the board, a title and one card per offered card.
 // Shown while state.upgradeOffer is set; the shade swallows clicks so the board can't be used.
 // A targeted card opens a second step with one button per valid target and a Back button.
+// Under the cards, a Reroll button pays coins to redraw them; its price rises with each reroll
+// of the same offer.
 import { GameObjects, Scene } from "phaser"
 import type { CropTable, GameState, OfferCard, UpgradeTarget } from "../../sim/types"
 import { UPGRADES, validTargets } from "../../sim/upgrades"
-import { targetText, targetTitle, upgradeCardText } from "../format"
+import { canReroll } from "../../sim/main"
+import { rerollText, targetText, targetTitle, upgradeCardText } from "../format"
 import { COLORS, TEXT } from "../theme"
 
 const CARD_W = 200
@@ -22,15 +25,17 @@ export class UpgradePickView {
     private scene: Scene
     private crops: CropTable
     private onPick: OnPick
+    private onReroll: () => void
     private shade: GameObjects.Rectangle
     private title: GameObjects.Text
     private parts: GameObjects.GameObject[] = [] // everything below the title, rebuilt per screen
     private shown: readonly OfferCard[] | null = null // the offer the screen was built for
 
-    constructor(scene: Scene, crops: CropTable, onPick: OnPick) {
+    constructor(scene: Scene, crops: CropTable, onPick: OnPick, onReroll: () => void) {
         this.scene = scene
         this.crops = crops
         this.onPick = onPick
+        this.onReroll = onReroll
         const { width, height } = scene.scale
 
         this.shade = scene.add
@@ -102,6 +107,16 @@ export class UpgradePickView {
                 .setDepth(DEPTH + 2)
             this.parts.push(box, label)
         })
+        // The view is rebuilt whenever the offer changes, and coins only change here by
+        // rerolling, so the button's state is fixed for this build.
+        const enabled = canReroll(state)
+        this.addButton(
+            width / 2,
+            height / 2 + CARD_H / 2 + 30 + BUTTON_H / 2,
+            rerollText(state),
+            () => this.onReroll(),
+            enabled
+        )
     }
 
     // Step 2 for a targeted card: one button per valid target, then Back.
@@ -123,18 +138,26 @@ export class UpgradePickView {
         )
     }
 
-    private addButton(x: number, y: number, text: string, onClick: () => void): void {
+    private addButton(
+        x: number,
+        y: number,
+        text: string,
+        onClick: () => void,
+        enabled = true
+    ): void {
+        const fill = enabled ? COLORS.button : COLORS.buttonDisabled
         const box = this.scene.add
-            .rectangle(x, y, BUTTON_W, BUTTON_H, COLORS.button)
+            .rectangle(x, y, BUTTON_W, BUTTON_H, fill)
             .setDepth(DEPTH + 1)
-            .setInteractive({ useHandCursor: true })
-            .on("pointerover", () => box.setFillStyle(COLORS.buttonHover))
-            .on("pointerout", () => box.setFillStyle(COLORS.button))
-            .on("pointerdown", onClick)
+            .setInteractive({ useHandCursor: enabled })
+            .on("pointerover", () => enabled && box.setFillStyle(COLORS.buttonHover))
+            .on("pointerout", () => box.setFillStyle(fill))
+            .on("pointerdown", () => enabled && onClick())
         const label = this.scene.add
-            .text(x, y, text, TEXT.label)
+            .text(x, y, text, { ...TEXT.label, fontSize: text.includes("\n") ? 17 : 20 })
             .setOrigin(0.5)
             .setDepth(DEPTH + 2)
+            .setAlpha(enabled ? 1 : 0.6)
         this.parts.push(box, label)
     }
 }

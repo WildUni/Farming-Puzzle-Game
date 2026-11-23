@@ -67,7 +67,21 @@ Crops grow 7% faster
 - **Targeted card:** clicking it moves to a second step instead of picking. The title becomes `Choose a plot` or `Choose a crop`.
     - One button per target in `validTargets`, in that order: `Plot 1`, `Plot 2`, … for plot upgrades (`targetText`), crop ids for crop upgrades.
     - Clicking a target sends `chooseUpgrade { upgradeId, target }` through `act()`. A **Back** button returns to the cards without sending anything.
+- **Reroll** button under the cards (`rerollText`): `Reroll` and the next reroll's price (`rerollPriceFor`). Disabled when `canReroll` is false. Clicking it sends `rerollOffer` through `act()`; the cards are rebuilt for the new offer, and the price shown rises.
 - The game loop does not step while an offer is open. Pause still works on top of it.
+
+## Barn (BarnView)
+
+A panel under the power-up bar for storage, selling and fertilizer (see [economy.md](economy.md)).
+
+- **Storage bar** across the screen: `Storage 12 / 25` (`storageText`), filled by `storageFill`. It turns red and the label adds `FULL` when `isStorageFull`.
+- **Crop buttons**, one per crop in id order, each showing the crop and how many are held (`barnCropText`). Clicking one selects it (white outline) and resets the amount to 1.
+- **Amount box** (an HTML input) with **-** and **+** buttons on either side. `sellAmount` reads it as a whole number from 1 to the amount held. Keys typed in it don't reach the game's shortcuts.
+- **Sell** (`sellButtonText`: `Sell 3` and the coins it pays) sends `sellCrop` with the amount. **Sell all** sends `sellCrop` with everything held of the selected crop.
+- **Make fertilizer** (`makeFertilizerText`: what one costs in the selected crop) sends `makeFertilizer`. Disabled with too few crops, or when fertilizer is locked behind an upgrade.
+- **Fertilize** (`fertilizeText`: how many are held) starts choosing a plot: the plots in `fertilizerTargets` are outlined and the rest dimmed, as for a plot power-up, and the button says `Cancel`. Clicking a highlighted plot sends `useFertilizer`; clicking anything else, Esc, or starting a power-up cancels. Disabled with no fertilizer or nothing to fertilize.
+- A fertilized crop shows `FERT` along the top of its plot (`plotOverlays`).
+- Every button is greyed out when its action would be refused. The whole panel is off (and the amount box hidden, since HTML sits above the canvas) while paused, while the plant picker or an upgrade offer is open, and after the run ends.
 
 ## Power-ups (PowerUpBar)
 
@@ -192,6 +206,7 @@ Three sections, top to bottom:
 - `heartsText(lives, max)` shows a full heart per life and an empty one up to the cap; `buyLifeText` says `Lives full` at the cap.
 - `plotOverlays` marks every plot Worms are working on.
 - The Level row and the game-over level follow `runLevel` (Steady pace).
+- Storage, selling, fertilizer and reroll text: see the "Screen text" tests in [economy.md](economy.md).
 
 ## Open items
 

@@ -24,6 +24,7 @@ import { POWER_UPS } from "./powerups"
 import { cutGrowth, startEffect, stealCrop } from "./effects"
 import { plant } from "./plot"
 import { createOrder } from "./orders"
+import { storageFree } from "./economy"
 import rawEvents from "../data/events.json"
 
 const EVENT_MODES: readonly GameMode[] = ["survival", "timed"]
@@ -353,9 +354,16 @@ function buildEvent(state: GameState, def: EventDef, plot: number | null): RunEv
 // Starting
 
 // Helpful neighbor: every ready crop is harvested into storage (yield + yieldBonus, no bumper
-// roll or drop), and with Good neighbors replanted with the same crop.
+// roll or drop), and with Good neighbors replanted with the same crop. If the whole harvest
+// doesn't fit in storage, nothing happens.
 function harvestAll(state: GameState, crops: CropTable): GameState {
     const replant = modifiersFor(state.upgrades).neighborReplant > 0
+    const total = state.plots.reduce((sum, p, plot) => {
+        if (p.state !== "ready") return sum
+        const { yieldBonus } = modifiersAt(state.upgrades, { plot, cropId: p.cropId })
+        return sum + crops[p.cropId].yield + yieldBonus
+    }, 0)
+    if (total > storageFree(state)) return state
     const inventory: Inventory = { ...state.inventory }
     let changed = false
     const plots = state.plots.map((p, plot): Plot => {

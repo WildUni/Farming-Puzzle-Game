@@ -10,6 +10,7 @@ One spec per module in `src/sim/`. Each spec says what the module is for, what i
 | `src/sim/mulberry.ts`       | [mulberry.md](mulberry.md)             | Seeded random number generator                                         |
 | `src/sim/modes.ts`          | [modes.md](modes.md)                   | Per-mode rules: starting lives, lives cap, Timed length and orders     |
 | `src/sim/difficulty.ts`     | [difficulty.md](difficulty.md)         | Survival coins, life prices and difficulty levels                      |
+| `src/sim/economy.ts`        | [economy.md](economy.md)               | Storage cap, selling crops, fertilizer and upgrade rerolls             |
 | `src/sim/upgrades.ts`       | [upgrades.md](upgrades.md)             | Upgrades: tiers, pools, offers, picks and the modifiers they add up to |
 | `src/sim/effects.ts`        | [effects.md](effects.md)               | Instant and lasting effects that move crops' and orders' clocks        |
 | `src/sim/powerups.ts`       | [powerups.md](powerups.md)             | Power-ups: drops from harvests, held slots, using them                 |

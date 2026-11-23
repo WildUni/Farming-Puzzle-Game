@@ -18,7 +18,8 @@ import { MODES, comboPct, upcomingRushWave } from "../sim/modes"
 import { progress } from "../sim/plot"
 import { timeLeft } from "../sim/orders"
 import { runLevel } from "../sim/difficulty"
-import { lifePriceFor, maxLivesFor } from "../sim/main"
+import { lifePriceFor, maxLivesFor, rerollPriceFor } from "../sim/main"
+import { sellValue, storageCap, storageUsed } from "../sim/economy"
 import { copyCount, effectAmount } from "../sim/upgrades"
 import { POWER_UPS, durationFor } from "../sim/powerups"
 import { EVENTS, shieldedPlots } from "../sim/events"
@@ -351,10 +352,10 @@ function eventIsGood(state: GameState): boolean {
     return state.event !== null && EVENTS.events[state.event.id].kind === "good"
 }
 
-type PlotOverlay = "target" | "blocked" | "frozen" | "fast" | "worms" | "shield"
+type PlotOverlay = "target" | "blocked" | "frozen" | "fast" | "worms" | "shield" | "fertilized"
 
 // Markers drawn on each plot: the plot a plot event will hit, harvest blocked, growth stopped or
-// slowed, growth sped up, extra crops from Worms, and Greenhouse protection.
+// slowed, growth sped up, extra crops from Worms, Greenhouse protection, and a fertilized crop.
 function plotOverlays(state: GameState): PlotOverlay[][] {
     const { event, tick } = state
     const shielded = shieldedPlots(state)
@@ -372,6 +373,8 @@ function plotOverlays(state: GameState): PlotOverlay[][] {
         }
         if (here.some((a) => a.effect.kind === "harvestBonus")) marks.push("worms")
         if (shielded.includes(i)) marks.push("shield")
+        const plot = state.plots[i]
+        if (plot.state === "growing" && plot.fertilized === true) marks.push("fertilized")
         return marks
     })
 }
@@ -379,3 +382,55 @@ function plotOverlays(state: GameState): PlotOverlay[][] {
 export { powerUpButtonText, shownEffects, activeEffectText, ordersFrozen }
 export { eventBannerText, eventIsGood, rushBannerText, plotOverlays }
 export type { PlotOverlay }
+
+// The storage bar's label: crops held out of the cap, e.g. "Storage 12 / 25".
+function storageText(state: GameState): string {
+    return `Storage ${storageUsed(state)} / ${storageCap(state)}`
+}
+
+// How full storage is, from 0 to 1, for the storage bar.
+function storageFill(state: GameState): number {
+    const cap = storageCap(state)
+    return cap === Infinity ? 0 : Math.min(1, storageUsed(state) / cap)
+}
+
+// True when storage is full and harvests are refused; the bar turns red.
+function isStorageFull(state: GameState): boolean {
+    return storageUsed(state) >= storageCap(state)
+}
+
+// The amount typed in the sell box, as a whole number from 1 to `held` (1 when nothing is
+// held). Blank or bad text counts as 1.
+function sellAmount(text: string, held: number): number {
+    const n = Number.parseInt(text.trim(), 10)
+    if (!Number.isFinite(n) || n < 1) return 1
+    return Math.max(1, Math.min(n, held))
+}
+
+// Label on a crop button in the barn panel: the crop and how many are held.
+function barnCropText(cropId: string, state: GameState): string {
+    return `${cropId}\n${state.inventory[cropId] ?? 0}`
+}
+
+// Label on the Sell button: how many, and the coins they pay.
+function sellButtonText(crop: Crop, amount: number): string {
+    return `Sell ${amount}\n+${sellValue(crop, amount)} coins`
+}
+
+// Label on the Make fertilizer button: what one fertilizer costs in the selected crop.
+function makeFertilizerText(crop: Crop): string {
+    return `Make fertilizer\nuses ${crop.fertilizerCost} ${crop.id}`
+}
+
+// Label on the Fertilize button: how many are held.
+function fertilizeText(state: GameState): string {
+    return `Fertilize\n${state.fertilizer} held`
+}
+
+// Label on the upgrade pick screen's reroll button: the next reroll's price.
+function rerollText(state: GameState): string {
+    return `Reroll\n${rerollPriceFor(state)} coins`
+}
+
+export { storageText, storageFill, isStorageFull, sellAmount, barnCropText, sellButtonText }
+export { makeFertilizerText, fertilizeText, rerollText }

@@ -1,8 +1,15 @@
 import type { Plot, Crop, CropTable } from "./types"
 import { scalePct } from "./upgrades"
 
-// Turns the crop list from crops.json into a lookup table keyed by id.
+// Turns the crop list from crops.json into a lookup table keyed by id. Throws when a crop's
+// fertilizerCost is not a whole number >= 1.
 function buildCropTable(crops: Crop[]): CropTable {
+    for (const c of crops) {
+        const cost: unknown = c.fertilizerCost
+        if (typeof cost !== "number" || !Number.isInteger(cost) || cost < 1) {
+            throw new Error(`crops: ${c.id}.fertilizerCost must be a whole number >= 1`)
+        }
+    }
     return Object.fromEntries(crops.map((c) => [c.id, c]))
 }
 

@@ -7,8 +7,8 @@ import { START_PLOTS, TIERS } from "./game_constants"
 import type { GameConfig, GameState, Plot } from "./types"
 
 const crops = buildCropTable([
-    { id: "garlic", growTicks: 80, yield: 2, value: 2 },
-    { id: "pumpkin", growTicks: 250, yield: 5, value: 12 }
+    { id: "garlic", growTicks: 80, yield: 2, value: 2, fertilizerCost: 4 },
+    { id: "pumpkin", growTicks: 250, yield: 5, value: 12, fertilizerCost: 1 }
 ])
 
 const all: GameConfig = { mode: "survival", allowPowerUps: true, allowEvents: true }

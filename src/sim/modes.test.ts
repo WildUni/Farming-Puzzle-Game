@@ -6,10 +6,11 @@ import shipped from "../data/modes.json"
 
 // A small valid config, as it appears in modes.json (seconds, not ticks).
 const raw = {
-    survival: { startLives: 2, maxLives: 4 },
+    survival: { startLives: 2, maxLives: 4, storageCap: 15 },
     timed: {
         runSeconds: 60,
         openOrders: 2,
+        storageCap: 18,
         combo: { stepPct: 50, capPct: 200, windowSeconds: 5 },
         rush: { atSeconds: [10, 30], warnSeconds: 3, orders: 2, timePct: 40, valuePct: 200 }
     }
@@ -35,6 +36,7 @@ describe("validateModes", () => {
             timed: {
                 runTicks: shipped.timed.runSeconds * TICKS_PER_SECOND,
                 openOrders: shipped.timed.openOrders,
+                storageCap: shipped.timed.storageCap,
                 combo: {
                     stepPct: shipped.timed.combo.stepPct,
                     capPct: shipped.timed.combo.capPct,
@@ -59,10 +61,11 @@ describe("validateModes", () => {
 
     it("accepts a valid config", () => {
         expect(validateModes(raw)).toEqual({
-            survival: { startLives: 2, maxLives: 4 },
+            survival: { startLives: 2, maxLives: 4, storageCap: 15 },
             timed: {
                 runTicks: 60 * TICKS_PER_SECOND,
                 openOrders: 2,
+                storageCap: 18,
                 combo: { stepPct: 50, capPct: 200, windowTicks: 5 * TICKS_PER_SECOND },
                 rush: {
                     atTicks: [10 * TICKS_PER_SECOND, 30 * TICKS_PER_SECOND],
@@ -95,6 +98,10 @@ describe("validateModes", () => {
         ["runSeconds text", broken((c) => (c.timed.runSeconds = "60"))],
         ["openOrders 0", broken((c) => (c.timed.openOrders = 0))],
         ["openOrders missing", broken((c) => delete c.timed.openOrders)],
+        ["survival.storageCap missing", broken((c) => delete c.survival.storageCap)],
+        ["survival.storageCap 0", broken((c) => (c.survival.storageCap = 0))],
+        ["timed.storageCap missing", broken((c) => delete c.timed.storageCap)],
+        ["timed.storageCap fractional", broken((c) => (c.timed.storageCap = 12.5))],
         ["combo missing", broken((c) => delete c.timed.combo)],
         [
             "combo.stepPct 0",

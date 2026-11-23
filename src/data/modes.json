@@ -1,11 +1,13 @@
 {
     "survival": {
         "startLives": 3,
-        "maxLives": 3
+        "maxLives": 3,
+        "storageCap": 25
     },
     "timed": {
         "runSeconds": 300,
         "openOrders": 3,
+        "storageCap": 30,
         "combo": {
             "stepPct": 25,
             "capPct": 300,

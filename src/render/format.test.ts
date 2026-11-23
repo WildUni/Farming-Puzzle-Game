@@ -33,8 +33,18 @@ import {
     modeName,
     modeButtonText,
     PLAYABLE_MODES,
-    MAX_SEED
+    MAX_SEED,
+    storageText,
+    storageFill,
+    isStorageFull,
+    sellAmount,
+    barnCropText,
+    sellButtonText,
+    makeFertilizerText,
+    fertilizeText,
+    rerollText
 } from "./format"
+import { sellValue, storageUsed, rerollPrice } from "../sim/economy"
 import { createGame } from "../sim/main"
 import { buildCropTable } from "../sim/plot"
 import { lifePrice, levelFor, DIFFICULTY } from "../sim/difficulty"
@@ -47,8 +57,8 @@ import { EVENTS } from "../sim/events"
 import type { ActiveEffect, GameState, Order, RunEvent } from "../sim/types"
 
 const crops = buildCropTable([
-    { id: "garlic", growTicks: 80, yield: 2, value: 2 },
-    { id: "carrot", growTicks: 150, yield: 2, value: 8 }
+    { id: "garlic", growTicks: 80, yield: 2, value: 2, fertilizerCost: 4 },
+    { id: "carrot", growTicks: 150, yield: 2, value: 8, fertilizerCost: 2 }
 ])
 
 function game(mode: GameState["mode"]): GameState {
@@ -658,5 +668,63 @@ describe("rush wave text", () => {
         const tick = WAVE - 1
         expect(rushBannerText({ ...game("survival"), tick })).toBeNull()
         expect(rushBannerText({ ...game("timed"), tick, status: "ended" })).toBeNull()
+    })
+})
+
+describe("barn panel and reroll text", () => {
+    const cap = MODES.survival.storageCap
+
+    it("storageText, storageFill and isStorageFull follow the crops held", () => {
+        const empty = game("survival")
+        expect(storageText(empty)).toBe(`Storage 0 / ${cap}`)
+        expect(storageFill(empty)).toBe(0)
+        expect(isStorageFull(empty)).toBe(false)
+        const half = { ...empty, inventory: { garlic: 5, carrot: 5 } }
+        expect(storageFill(half)).toBeCloseTo(storageUsed(half) / cap)
+        const full = { ...empty, inventory: { garlic: cap } }
+        expect(storageText(full)).toBe(`Storage ${cap} / ${cap}`)
+        expect(storageFill(full)).toBe(1)
+        expect(isStorageFull(full)).toBe(true)
+        expect(storageText({ ...game("timed"), inventory: { garlic: 3 } })).toBe(
+            `Storage 3 / ${MODES.timed.storageCap}`
+        )
+    })
+
+    it("sellAmount keeps the typed amount between 1 and what is held", () => {
+        expect(sellAmount("3", 5)).toBe(3)
+        expect(sellAmount(" 9 ", 5)).toBe(5)
+        expect(sellAmount("0", 5)).toBe(1)
+        expect(sellAmount("", 5)).toBe(1)
+        expect(sellAmount("abc", 5)).toBe(1)
+        expect(sellAmount("4", 0)).toBe(1)
+    })
+
+    it("button labels show counts, coins and costs", () => {
+        const s = { ...game("survival"), inventory: { garlic: 4 }, fertilizer: 2 }
+        expect(barnCropText("garlic", s)).toBe("garlic\n4")
+        expect(barnCropText("carrot", s)).toBe("carrot\n0")
+        expect(sellButtonText(crops.carrot, 3)).toBe(`Sell 3\n+${sellValue(crops.carrot, 3)} coins`)
+        expect(makeFertilizerText(crops.garlic)).toBe(
+            `Make fertilizer\nuses ${crops.garlic.fertilizerCost} garlic`
+        )
+        expect(fertilizeText(s)).toBe("Fertilize\n2 held")
+        expect(rerollText({ ...s, rerollsThisOffer: 2 })).toBe(`Reroll\n${rerollPrice(2)} coins`)
+    })
+
+    it("plotOverlays marks a fertilized crop", () => {
+        const s = {
+            ...game("survival"),
+            plots: [
+                { state: "growing" as const, cropId: "garlic", plantedAt: 0, readyAt: 50 },
+                {
+                    state: "growing" as const,
+                    cropId: "garlic",
+                    plantedAt: 0,
+                    readyAt: 50,
+                    fertilized: true as const
+                }
+            ]
+        }
+        expect(plotOverlays(s)).toEqual([[], ["fertilized"]])
     })
 })

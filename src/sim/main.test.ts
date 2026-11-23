@@ -4,6 +4,8 @@ import {
     applyAction,
     step,
     canBuyLife,
+    canReroll,
+    rerollPriceFor,
     orderRules,
     lifePriceFor,
     maxLivesFor,
@@ -34,6 +36,7 @@ import {
 } from "./upgrades"
 import { EVENTS } from "./events"
 import { POWER_UPS } from "./powerups"
+import { ECONOMY, sellValue, fertilizedReadyAt, rerollPrice } from "./economy"
 import type {
     Action,
     Crop,
@@ -50,9 +53,9 @@ const config: GameConfig = { mode: "survival", allowPowerUps: false, allowEvents
 const timed: GameConfig = { mode: "timed", allowPowerUps: false, allowEvents: false }
 
 const cropList: Crop[] = [
-    { id: "garlic", growTicks: 80, yield: 2, value: 2 },
-    { id: "carrot", growTicks: 150, yield: 2, value: 8 },
-    { id: "pumpkin", growTicks: 250, yield: 5, value: 12 }
+    { id: "garlic", growTicks: 80, yield: 2, value: 2, fertilizerCost: 4 },
+    { id: "carrot", growTicks: 150, yield: 2, value: 8, fertilizerCost: 2 },
+    { id: "pumpkin", growTicks: 250, yield: 5, value: 12, fertilizerCost: 1 }
 ]
 const crops = buildCropTable(cropList)
 
@@ -1702,5 +1705,161 @@ describe("Timed rush waves", () => {
         const next = step(s, crops)
         expect(next.ordersFailed).toBe(1)
         expect(next.combo).toBe(0)
+    })
+})
+
+describe("storage", () => {
+    const cap = MODES.survival.storageCap
+    const readyPumpkin: Plot = { state: "ready", cropId: "pumpkin" }
+
+    it("full storage refuses a harvest and the plot stays ready; selling frees it", () => {
+        const full = makeState({ plots: [readyPumpkin], inventory: { garlic: cap } })
+        expect(applyAction(full, { type: "harvest", plot: 0 }, crops)).toBeNull()
+        const sold = applyAction(full, { type: "sellCrop", cropId: "garlic", amount: 5 }, crops)!
+        expect(sold.plots[0]).toEqual(readyPumpkin)
+        const harvested = applyAction(sold, { type: "harvest", plot: 0 }, crops)!
+        expect(harvested.inventory.pumpkin).toBe(crops.pumpkin.yield)
+        expect(harvested.plots[0]).toEqual({ state: "empty" })
+    })
+
+    it("a harvest bigger than the space left stores what fits and loses the rest", () => {
+        const s = makeState({ plots: [readyPumpkin], inventory: { garlic: cap - 2 } })
+        const next = applyAction(s, { type: "harvest", plot: 0 }, crops)!
+        expect(next.inventory).toEqual({ garlic: cap - 2, pumpkin: 2 })
+        expect(next.plots[0]).toEqual({ state: "empty" })
+    })
+
+    it("Timed uses its own cap", () => {
+        const t = MODES.timed.storageCap
+        const s = makeTimed({ plots: [readyPumpkin], inventory: { garlic: t } })
+        expect(applyAction(s, { type: "harvest", plot: 0 }, crops)).toBeNull()
+        const room = makeTimed({ plots: [readyPumpkin], inventory: { garlic: t - 1 } })
+        expect(applyAction(room, { type: "harvest", plot: 0 }, crops)!.inventory.pumpkin).toBe(1)
+    })
+})
+
+describe("sellCrop", () => {
+    it("removes the crops and pays sellValue", () => {
+        const s = makeState({ inventory: { pumpkin: 4, garlic: 1 }, coins: 2 })
+        const next = applyAction(s, { type: "sellCrop", cropId: "pumpkin", amount: 3 }, crops)!
+        expect(next.inventory).toEqual({ pumpkin: 1, garlic: 1 })
+        expect(next.coins).toBe(2 + sellValue(crops.pumpkin, 3))
+        const all = applyAction(s, { type: "sellCrop", cropId: "garlic", amount: 1 }, crops)!
+        expect(all.inventory).toEqual({ pumpkin: 4 })
+    })
+
+    it.each<[string, Action]>([
+        ["more than is held", { type: "sellCrop", cropId: "pumpkin", amount: 5 }],
+        ["0", { type: "sellCrop", cropId: "pumpkin", amount: 0 }],
+        ["a fraction", { type: "sellCrop", cropId: "pumpkin", amount: 1.5 }],
+        ["an unknown crop", { type: "sellCrop", cropId: "melon", amount: 1 }],
+        ["a crop not held", { type: "sellCrop", cropId: "carrot", amount: 1 }]
+    ])("is refused for %s", (_, action) => {
+        expect(applyAction(makeState({ inventory: { pumpkin: 4 } }), action, crops)).toBeNull()
+    })
+
+    it("selling and making fertilizer are refused while an upgrade offer is open", () => {
+        const [offer] = rollOffer(makeState(), "survival", crops)
+        const s = makeState({ inventory: { pumpkin: 4 }, upgradeOffer: offer })
+        const sell: Action = { type: "sellCrop", cropId: "pumpkin", amount: 1 }
+        expect(applyAction(s, sell, crops)).toBeNull()
+        expect(applyAction(s, { type: "makeFertilizer", cropId: "pumpkin" }, crops)).toBeNull()
+    })
+})
+
+describe("fertilizer", () => {
+    const growing: Plot = { state: "growing", cropId: "pumpkin", plantedAt: 0, readyAt: 250 }
+
+    it("makeFertilizer uses fertilizerCost crops, freeing storage, and adds 1 fertilizer", () => {
+        const s = makeState({ inventory: { garlic: 5 } })
+        const next = applyAction(s, { type: "makeFertilizer", cropId: "garlic" }, crops)!
+        expect(next.inventory).toEqual({ garlic: 5 - crops.garlic.fertilizerCost })
+        expect(next.fertilizer).toBe(1)
+        const short = makeState({ inventory: { garlic: crops.garlic.fertilizerCost - 1 } })
+        expect(applyAction(short, { type: "makeFertilizer", cropId: "garlic" }, crops)).toBeNull()
+        expect(applyAction(s, { type: "makeFertilizer", cropId: "melon" }, crops)).toBeNull()
+    })
+
+    it("useFertilizer cuts the remaining growth by cutPct, once per planting", () => {
+        const s = makeState({ tick: 50, plots: [growing], fertilizer: 2 })
+        const next = applyAction(s, { type: "useFertilizer", plot: 0 }, crops)!
+        expect(next.plots[0]).toEqual({
+            ...growing,
+            readyAt: fertilizedReadyAt(growing, 50),
+            fertilized: true
+        })
+        expect(fertilizedReadyAt(growing, 50)).toBe(
+            250 - Math.floor((200 * ECONOMY.fertilizer.cutPct) / 100)
+        )
+        expect(next.fertilizer).toBe(1)
+        expect(applyAction(next, { type: "useFertilizer", plot: 0 }, crops)).toBeNull()
+    })
+
+    it.each<[string, Partial<GameState>]>([
+        ["an empty plot", { plots: [{ state: "empty" }], fertilizer: 1 }],
+        ["a ready plot", { plots: [{ state: "ready", cropId: "garlic" }], fertilizer: 1 }],
+        ["a plot with none held", { plots: [growing], fertilizer: 0 }]
+    ])("useFertilizer is refused on %s", (_, overrides) => {
+        const s = makeState(overrides)
+        expect(applyAction(s, { type: "useFertilizer", plot: 0 }, crops)).toBeNull()
+    })
+
+    it("a fully cut crop turns ready on the next step", () => {
+        const almost: Plot = { ...growing, readyAt: 51 }
+        const s = makeState({ tick: 50, plots: [almost], fertilizer: 1 })
+        const used = applyAction(s, { type: "useFertilizer", plot: 0 }, crops)!
+        expect(step(used, crops).plots[0].state).toBe("ready")
+    })
+
+    it("held fertilizer does not count toward storage", () => {
+        const s = makeState({
+            plots: [{ state: "ready", cropId: "garlic" }],
+            inventory: { pumpkin: MODES.survival.storageCap - 2 },
+            fertilizer: 10
+        })
+        expect(applyAction(s, { type: "harvest", plot: 0 }, crops)!.inventory.garlic).toBe(2)
+    })
+})
+
+describe("rerollOffer", () => {
+    function offered(coins: number): GameState {
+        const [offer, rng] = rollOffer(makeState(), "survival", crops)
+        const s = makeState({ coins, upgradeOffer: offer })
+        return { ...s, rng: { ...s.rng, upgrades: rng } }
+    }
+
+    it("pays the rising price, counts the reroll and redraws from rng.upgrades", () => {
+        let s = offered(100)
+        const paid: number[] = []
+        for (let n = 0; n < 4; n++) {
+            const before = s
+            s = applyAction(s, { type: "rerollOffer" }, crops)!
+            paid.push(before.coins - s.coins)
+            const [offer, rng] = rollOffer(before, "survival", crops)
+            expect(s.upgradeOffer).toEqual(offer)
+            expect(s.rng.upgrades).toBe(rng)
+            expect(s.rerollsThisOffer).toBe(n + 1)
+        }
+        expect(paid).toEqual([0, 1, 2, 3].map((n) => rerollPrice(n)))
+        expect(canReroll(s)).toBe(s.coins >= rerollPriceFor(s))
+    })
+
+    it("is refused with no offer open, or with too few coins", () => {
+        expect(applyAction(makeState({ coins: 100 }), { type: "rerollOffer" }, crops)).toBeNull()
+        expect(applyAction(offered(rerollPrice(0) - 1), { type: "rerollOffer" }, crops)).toBeNull()
+        expect(applyAction(offered(rerollPrice(0)), { type: "rerollOffer" }, crops)).not.toBeNull()
+    })
+
+    it("the price goes back to its base on the next offer", () => {
+        let s = applyAction(offered(100), { type: "rerollOffer" }, crops)!
+        s = applyAction(s, { type: "rerollOffer" }, crops)!
+        expect(s.rerollsThisOffer).toBe(2)
+        // Pick a card, then fill orders until step makes the next offer.
+        const card = s.upgradeOffer!.find((c) => UPGRADES.upgrades[c.id].target === null)!
+        s = applyAction(s, { type: "chooseUpgrade", upgradeId: card.id }, crops)!
+        s = step({ ...s, ordersCompleted: (s.offersMade + 1) * ORDERS_PER_UPGRADE }, crops)
+        expect(s.upgradeOffer).not.toBeNull()
+        expect(s.rerollsThisOffer).toBe(0)
+        expect(rerollPriceFor(s)).toBe(rerollPrice(0))
     })
 })
