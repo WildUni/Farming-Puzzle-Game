@@ -13,12 +13,17 @@ import type {
     RNGState
 } from "./types"
 import { randomInt, seedRNG, seedStream } from "./mulberry"
-import { START_PLOTS, DEFAULT_ORDER_RULES, ORDERS_PER_UPGRADE } from "./game_constants"
+import {
+    START_PLOTS,
+    DEFAULT_ORDER_RULES,
+    ORDERS_PER_UPGRADE,
+    TICKS_PER_SECOND
+} from "./game_constants"
 import { plant, harvest, updateGrowth } from "./plot"
 import { createOrder, fulfill, isExpired, timeLeft } from "./orders"
 import { DIFFICULTY, runLevel, orderRulesFor, lifePrice } from "./difficulty"
 import { MODES, rushWaveAt } from "./modes"
-import { orderPoints } from "./scoring"
+import { isPairFill, orderPoints } from "./scoring"
 import {
     UPGRADES,
     modifiersFor,
@@ -44,7 +49,7 @@ import { EVENTS, announceEvent, gapTicks, startEvent } from "./events"
 import { POWER_UPS, rollDrop, canUsePowerUp, durationFor } from "./powerups"
 import {
     storageFree,
-    sellValue,
+    sellValueFor,
     fertilizerAllowed,
     fertilizedReadyAt,
     rerollPrice
@@ -96,21 +101,24 @@ function createGame(seed: RNGSeed, config: GameConfig): GameState {
         secondWind: false,
         combo: 0,
         comboEndsAt: 0,
+        comboMisses: 0,
+        pairOpenUntil: 0,
         bestCombo: 0,
         fertilizer: 0,
-        rerollsThisOffer: 0
+        rerollsThisOffer: 0,
+        miracleReadyAt: 0
     }
 }
 
 // The rules step uses for new orders: the current level in Survival (slowed by Steady pace),
-// fixed otherwise, with Timed keeping MODES.timed.openOrders open. Survival order timers are
-// scaled by the orderTimePct upgrade modifier.
+// fixed otherwise, with Timed keeping MODES.timed.openOrders open. Survival and Timed order
+// timers are scaled by the orderTimePct upgrade modifier (Patient customers).
 function orderRules(state: GameState): OrderRules {
-    if (state.mode === "timed") {
-        return { ...DEFAULT_ORDER_RULES, maxOpenOrders: MODES.timed.openOrders }
-    }
-    if (state.mode !== "survival") return DEFAULT_ORDER_RULES
-    const rules = orderRulesFor(runLevel(state))
+    if (state.mode === "puzzle") return DEFAULT_ORDER_RULES
+    const rules =
+        state.mode === "timed"
+            ? { ...DEFAULT_ORDER_RULES, maxOpenOrders: MODES.timed.openOrders }
+            : orderRulesFor(runLevel(state))
     const { orderTimePct } = modifiersFor(state.upgrades)
     return { ...rules, orderTicks: scalePct(rules.orderTicks, orderTimePct) }
 }
@@ -162,6 +170,28 @@ function takeCrops(state: GameState, cropId: string, amount: number): Inventory 
     const { [cropId]: held, ...rest } = state.inventory
     const left = held - amount
     return left > 0 ? { ...rest, [cropId]: left } : rest
+}
+
+// Ticks Miracle grow takes to recharge after a use: miracleRechargeSeconds, in ticks.
+function miracleRechargeTicks(state: GameState): number {
+    return modifiersFor(state.upgrades).miracleRechargeSeconds * TICKS_PER_SECOND
+}
+
+// True when Miracle grow is owned and charged, and the run is taking moves. It still needs a
+// growing plot (miracleTargets) to be used.
+function canUseMiracleGrow(state: GameState): boolean {
+    return (
+        state.status === "running" &&
+        state.upgradeOffer === null &&
+        modifiersFor(state.upgrades).miracleGrow > 0 &&
+        state.tick >= state.miracleReadyAt
+    )
+}
+
+// Plots Miracle grow can finish now: the growing ones, or none while it can't be used.
+function miracleTargets(state: GameState): number[] {
+    if (!canUseMiracleGrow(state)) return []
+    return state.plots.flatMap((p, i) => (p.state === "growing" ? [i] : []))
 }
 
 // Price of the next reroll of the open offer.
@@ -272,7 +302,7 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
             return {
                 ...state,
                 inventory: takeCrops(state, action.cropId, action.amount),
-                coins: state.coins + sellValue(crops[action.cropId], action.amount)
+                coins: state.coins + sellValueFor(state, crops[action.cropId], action.amount)
             }
         }
 
@@ -302,6 +332,17 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
                 ...state,
                 plots: replacePlot(state.plots, action.plot, fertilized),
                 fertilizer: state.fertilizer - 1
+            }
+        }
+
+        case "useMiracleGrow": {
+            if (!canUseMiracleGrow(state) || !isPlotIndex(state, action.plot)) return null
+            const ready = finishGrowth(state.plots[action.plot])
+            if (ready === null) return null
+            return {
+                ...state,
+                plots: replacePlot(state.plots, action.plot, ready),
+                miracleReadyAt: state.tick + miracleRechargeTicks(state)
             }
         }
 
@@ -405,9 +446,9 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
 }
 
 // Fills `order`: removes it, adds 1 to ordersCompleted, adds orderPoints to score when `scored`
-// (level, combo and speed bonuses, from the state before the fill), and in Survival pays coins:
-// the base pay, Big tips, Generous customer / Gold rush, and Early bird when at least half the
-// order's time is left. deliver and the Finish power-ups use it. In Timed a scored fill then
+// (level, combo and speed bonuses, from the state before the fill), and pays coins (Survival and
+// Timed alike, for now): the base pay, Big tips, Generous customer / Gold rush, and Early bird
+// when at least half the order's time is left. deliver and the Finish power-ups use it. In Timed a scored fill then
 // extends the streak (see withCombo).
 function completeOrder(state: GameState, order: Order, scored: boolean): GameState {
     const combo = state.mode === "timed" && scored
@@ -424,19 +465,22 @@ function completeOrder(state: GameState, order: Order, scored: boolean): GameSta
         orders: state.orders.filter((o) => o.id !== order.id),
         score: scored ? state.score + points : state.score,
         ordersCompleted: state.ordersCompleted + 1,
-        coins: state.mode === "survival" ? state.coins + pay : state.coins
+        coins: state.mode === "puzzle" ? state.coins : state.coins + pay
     }
-    return combo ? withCombo(filled) : filled
+    return combo ? withCombo(filled, state) : filled
 }
 
 // One more order in the streak: combo + 1, the window restarts from this tick, best combo kept.
-function withCombo(state: GameState): GameState {
+// Double delivery: a fill that pairs with the one before closes the pair; any other fill opens
+// one for MODES.timed.pairTicks. `before` is the state before the fill.
+function withCombo(state: GameState, before: GameState): GameState {
     const combo = state.combo + 1
     return {
         ...state,
         combo,
         comboEndsAt: state.tick + MODES.timed.combo.windowTicks,
-        bestCombo: Math.max(state.bestCombo, combo)
+        bestCombo: Math.max(state.bestCombo, combo),
+        pairOpenUntil: isPairFill(before) ? 0 : state.tick + MODES.timed.pairTicks
     }
 }
 
@@ -523,9 +567,9 @@ function isRunOver(state: GameState): boolean {
 }
 
 // The pool free picks draw from in this mode, or null when the mode makes no offers.
-// Only Survival makes offers so far (Timed joins in a later phase).
+// Survival and Timed each draw from their own pool; Puzzle makes no offers.
 function offerPool(state: GameState): Pool | null {
-    return state.mode === "survival" ? "survival" : null
+    return state.mode === "puzzle" ? null : state.mode
 }
 
 // True when enough orders are filled for the next upgrade offer.
@@ -582,7 +626,15 @@ function step(state: GameState, crops: CropTable): GameState {
         if (lost > 0) secondWind = true
     }
     // Timed: a failed order breaks the combo, and so does a window with no order filled.
-    const comboBroken = ev.combo > 0 && (failed > 0 || tick > ev.comboEndsAt)
+    // Combo keeper forgives up to comboMissesForgiven failed orders per streak.
+    let comboMisses = ev.comboMisses
+    let comboBroken = ev.combo > 0 && tick > ev.comboEndsAt
+    if (ev.combo > 0 && failed > 0 && !comboBroken) {
+        const forgiven = modifiersFor(state.upgrades).comboMissesForgiven
+        if (comboMisses + failed <= forgiven) comboMisses += failed
+        else comboBroken = true
+    }
+    if (comboBroken) comboMisses = 0
 
     const next: GameState = {
         ...ev,
@@ -594,6 +646,7 @@ function step(state: GameState, crops: CropTable): GameState {
         secondWind,
         combo: comboBroken ? 0 : ev.combo,
         comboEndsAt: comboBroken ? 0 : ev.comboEndsAt,
+        comboMisses,
         rng: { ...ev.rng, lives: livesRng },
         activeEffects: moved.active
     }
@@ -624,7 +677,8 @@ function step(state: GameState, crops: CropTable): GameState {
                 crops,
                 rushRules
             )
-            orders.push({ ...order, value: scalePct(order.value, rush.valuePct), rush: true })
+            const valuePct = rush.valuePct + modifiersFor(next.upgrades).rushValuePct
+            orders.push({ ...order, value: scalePct(order.value, valuePct), rush: true })
             rushRng = afterRush
             shrinkRng = afterShrink
             nextOrderId += 1
@@ -687,6 +741,9 @@ export {
     canBuyLife,
     canReroll,
     rerollPriceFor,
+    canUseMiracleGrow,
+    miracleTargets,
+    miracleRechargeTicks,
     orderRules,
     lifePriceFor,
     maxLivesFor,

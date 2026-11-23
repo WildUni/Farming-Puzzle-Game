@@ -40,18 +40,20 @@ import {
     sellAmount,
     barnCropText,
     sellButtonText,
+    miracleGrowText,
     makeFertilizerText,
     fertilizeText,
     rerollText
 } from "./format"
 import { sellValue, storageUsed, rerollPrice } from "../sim/economy"
+import { ECONOMY } from "../sim/economy_config"
 import { createGame } from "../sim/main"
 import { buildCropTable } from "../sim/plot"
 import { lifePrice, levelFor, DIFFICULTY } from "../sim/difficulty"
 import { ORDER_TICKS, TICKS_PER_SECOND } from "../sim/game_constants"
 import { MODES, comboPct } from "../sim/modes"
-import { SCORING } from "../sim/scoring"
-import { UPGRADES, effectAmount, scalePct } from "../sim/upgrades"
+import { SCORING, comboPctFor } from "../sim/scoring"
+import { UPGRADES, effectAmount, modifiersFor, scalePct } from "../sim/upgrades"
 import { POWER_UPS } from "../sim/powerups"
 import { EVENTS } from "../sim/events"
 import type { ActiveEffect, GameState, Order, RunEvent } from "../sim/types"
@@ -143,6 +145,7 @@ describe("statRows", () => {
             ["Time left", "5:00"],
             ["Score", "12"],
             ["Combo", "x1"],
+            ["Coins", "0"],
             ["Filled", "2"],
             ["Failed", "1"],
             ["carrot", "0"],
@@ -154,6 +157,13 @@ describe("statRows", () => {
         const s = { ...game("timed"), tick: 100, combo: 3, comboEndsAt: 150 }
         expect(comboText(s)).toBe(`x${comboPct(3) / 100} 0:05`)
         expect(comboText({ ...game("timed"), combo: 0 })).toBe("x1")
+        // Head start lifts the multiplier even with no streak.
+        const lifted = {
+            ...game("timed"),
+            upgrades: [{ id: "headStart", tier: "epic" as const, target: null }]
+        }
+        expect(comboText(lifted)).toBe(`x${comboPctFor(lifted) / 100}`)
+        expect(comboPctFor(lifted)).toBeGreaterThan(100)
         const labels = statRows({ ...game("survival"), combo: 3 }, crops).map(([l]) => l)
         expect(labels).not.toContain("Combo")
     })
@@ -181,10 +191,12 @@ describe("statRows", () => {
         ])
     })
 
-    it("leaves Survival-only rows out of Timed, even with coins or lives set", () => {
+    it("leaves Survival-only rows out of Timed, even with lives set", () => {
         const state = { ...game("timed"), lives: 2, coins: 9, ordersCompleted: 40 }
-        const labels = statRows(state, crops).map(([label]) => label)
-        for (const row of ["Level", "Lives", "Coins"]) expect(labels).not.toContain(row)
+        const rows = statRows(state, crops)
+        const labels = rows.map(([label]) => label)
+        for (const row of ["Level", "Lives"]) expect(labels).not.toContain(row)
+        expect(rows).toContainEqual(["Coins", "9"])
     })
 })
 
@@ -671,6 +683,18 @@ describe("rush wave text", () => {
     })
 })
 
+describe("miracleGrowText", () => {
+    it("reads ready, or the time left on the recharge", () => {
+        const s = { ...game("survival"), tick: 100 }
+        expect(miracleGrowText(s)).toBe("Miracle grow\nready")
+        expect(miracleGrowText({ ...s, miracleReadyAt: 100 })).toBe("Miracle grow\nready")
+        const later = 100 + 42 * TICKS_PER_SECOND
+        expect(miracleGrowText({ ...s, miracleReadyAt: later })).toBe(
+            `Miracle grow\n${formatClock(42 * TICKS_PER_SECOND)}`
+        )
+    })
+})
+
 describe("barn panel and reroll text", () => {
     const cap = MODES.survival.storageCap
 
@@ -703,7 +727,21 @@ describe("barn panel and reroll text", () => {
         const s = { ...game("survival"), inventory: { garlic: 4 }, fertilizer: 2 }
         expect(barnCropText("garlic", s)).toBe("garlic\n4")
         expect(barnCropText("carrot", s)).toBe("carrot\n0")
-        expect(sellButtonText(crops.carrot, 3)).toBe(`Sell 3\n+${sellValue(crops.carrot, 3)} coins`)
+        expect(sellButtonText(s, crops.carrot, 3)).toBe(
+            `Sell 3\n+${sellValue(crops.carrot, 3)} coins`
+        )
+        const premium = {
+            ...s,
+            upgrades: [{ id: "premiumProduce", tier: "legendary" as const, target: null }]
+        }
+        const boosted = sellValue(
+            crops.carrot,
+            8,
+            ECONOMY,
+            modifiersFor(premium.upgrades).sellPricePct
+        )
+        expect(boosted).toBeGreaterThan(sellValue(crops.carrot, 8))
+        expect(sellButtonText(premium, crops.carrot, 8)).toBe(`Sell 8\n+${boosted} coins`)
         expect(makeFertilizerText(crops.garlic)).toBe(
             `Make fertilizer\nuses ${crops.garlic.fertilizerCost} garlic`
         )

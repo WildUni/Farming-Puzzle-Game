@@ -29,9 +29,20 @@ function storageFree(state: GameState): number {
     return Math.max(0, storageCap(state) - storageUsed(state))
 }
 
-// Coins for selling `amount` of `crop`. The total is rounded down, not each crop.
-function sellValue(crop: Crop, amount: number, config: EconomyConfig = ECONOMY): number {
-    return Math.floor((amount * crop.value * config.sellPricePct) / 100)
+// Coins for selling `amount` of `crop`, with `bonusPct` (Premium produce's sellPricePct; 100 =
+// normal) on top of the config's price. The total is rounded down once, not each crop.
+function sellValue(
+    crop: Crop,
+    amount: number,
+    config: EconomyConfig = ECONOMY,
+    bonusPct = 100
+): number {
+    return Math.floor((amount * crop.value * config.sellPricePct * bonusPct) / 10_000)
+}
+
+// sellValue with the run's Premium produce bonus. The sell action and its button use this.
+function sellValueFor(state: GameState, crop: Crop, amount: number): number {
+    return sellValue(crop, amount, ECONOMY, modifiersFor(state.upgrades).sellPricePct)
 }
 
 // True when fertilizer can be made and used in this run.
@@ -71,6 +82,7 @@ export {
     storageUsed,
     storageFree,
     sellValue,
+    sellValueFor,
     fertilizerAllowed,
     fertilizedReadyAt,
     fertilizerTargets,

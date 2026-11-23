@@ -85,8 +85,11 @@ type GameState = {
     combo: number // Timed: orders filled in a row; sets the score multiplier (comboPct)
     comboEndsAt: number // Timed: last tick the streak survives without another fill (0 with no streak)
     bestCombo: number // Timed: longest streak this run
+    comboMisses: number // Timed: failed orders Combo keeper has forgiven in the current streak
+    pairOpenUntil: number // Timed: last tick a fill pairs with the one before (Double delivery); 0 = none
     fertilizer: number // fertilizer held; doesn't count toward storage
     rerollsThisOffer: number // paid rerolls of the open offer; sets the next reroll's price
+    miracleReadyAt: number // first tick Miracle grow can be used again (0: ready)
 }
 
 // What the run's upgrades add up to. Worked out from GameState.upgrades, never stored.
@@ -129,6 +132,15 @@ type Modifiers = {
     emergencyTimePct: number // % of an Emergency order's time share
     storageBonus: number // crops storage holds on top of the mode's cap (Bigger barn)
     fertilizerUnlocked: number // 1: fertilizer can be made and used when economy.json locks it
+    comboMissesForgiven: number // Timed: failed orders per streak that don't break the combo
+    comboStepBonusPct: number // Timed: % added to the combo's step per order in a row
+    comboStartPct: number // Timed: % added to the combo multiplier, from x1 up
+    rushValuePct: number // Timed: % added to rush waves' value boost
+    finalePct: number // Timed: % more points for orders filled in the last finaleTicks
+    doubleDeliveryPct: number // Timed: % more points for a fill that pairs with the one before
+    sellPricePct: number // % of the usual sell price (Premium produce)
+    miracleGrow: number // 1: the Miracle grow button is unlocked
+    miracleRechargeSeconds: number // seconds Miracle grow takes to recharge after a use
 }
 
 type ModifierStat = keyof Modifiers
@@ -183,6 +195,7 @@ type Action =
     | { type: "makeFertilizer"; cropId: string }
     | { type: "useFertilizer"; plot: number }
     | { type: "rerollOffer" }
+    | { type: "useMiracleGrow"; plot: number }
 
 // Effects move crops' and orders' clocks. See specs/effects.md.
 type LastingEffect =

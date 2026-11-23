@@ -44,12 +44,12 @@ The Timed length comes from `MODES.timed.runTicks` (`modes.json`), so it stays r
 | Combo  | no                                                         | `comboText`: `x1.75 0:05`, or `x1` with no streak |
 | Level  | yes, counted from 1                                        | no                                                |
 | Lives  | yes, as full and empty hearts up to the cap (`heartsText`) | no                                                |
-| Coins  | yes                                                        | no                                                |
+| Coins  | yes                                                        | yes                                               |
 | Filled | yes                                                        | yes                                               |
 | Failed | yes                                                        | yes                                               |
 | Crops  | one row per crop, sorted                                   | one row per crop, sorted                          |
 
-- Timed has no lives, coins or levels (see [main.md](main.md)), so those rows are left out instead of showing zeros.
+- Timed has no lives or levels (see [main.md](main.md)), so those rows are left out instead of showing zeros. It shows coins, since orders and selling earn them and rerolls spend them.
 - The **Buy life** button only shows in Survival. At the lives cap it reads `Lives full` and is disabled.
 
 ## Upgrade pick (UpgradePickView)
@@ -82,6 +82,14 @@ A panel under the power-up bar for storage, selling and fertilizer (see [economy
 - **Fertilize** (`fertilizeText`: how many are held) starts choosing a plot: the plots in `fertilizerTargets` are outlined and the rest dimmed, as for a plot power-up, and the button says `Cancel`. Clicking a highlighted plot sends `useFertilizer`; clicking anything else, Esc, or starting a power-up cancels. Disabled with no fertilizer or nothing to fertilize.
 - A fertilized crop shows `FERT` along the top of its plot (`plotOverlays`).
 - Every button is greyed out when its action would be refused. The whole panel is off (and the amount box hidden, since HTML sits above the canvas) while paused, while the plant picker or an upgrade offer is open, and after the run ends.
+
+## Miracle grow (MiracleGrowView)
+
+A button in the right-hand column under Buy life, shown only once Miracle grow is owned (both modes).
+
+- Shows `miracleGrowText`: `Miracle grow` then `ready`, or the time left on the recharge (`formatClock(miracleReadyAt − tick)`).
+- Enabled when `miracleTargets` is not empty. Clicking starts choosing a plot: the plots in `miracleTargets` are outlined and the rest dimmed, as for fertilizer, and the button says `Cancel`. Clicking a highlighted plot sends `useMiracleGrow { plot }`; clicking the button again, anything else, Esc, starting a power-up or fertilizer cancels.
+- Choosing ends when no plot is a target any more, and when the game pauses, ends or opens an upgrade offer.
 
 ## Power-ups (PowerUpBar)
 
@@ -206,7 +214,8 @@ Three sections, top to bottom:
 - `heartsText(lives, max)` shows a full heart per life and an empty one up to the cap; `buyLifeText` says `Lives full` at the cap.
 - `plotOverlays` marks every plot Worms are working on.
 - The Level row and the game-over level follow `runLevel` (Steady pace).
-- Storage, selling, fertilizer and reroll text: see the "Screen text" tests in [economy.md](economy.md).
+- Storage, selling, fertilizer and reroll text: see the "Screen text" tests in [economy.md](economy.md). `sellButtonText` shows Premium produce's boosted price.
+- `miracleGrowText` reads `ready` with no recharge left (and on `miracleReadyAt` itself), and the time left otherwise.
 
 ## Open items
 

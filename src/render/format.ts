@@ -14,17 +14,17 @@ import type {
     UpgradeTarget
 } from "../sim/types"
 import { TICKS_PER_SECOND } from "../sim/game_constants"
-import { MODES, comboPct, upcomingRushWave } from "../sim/modes"
+import { MODES, upcomingRushWave } from "../sim/modes"
 import { progress } from "../sim/plot"
 import { timeLeft } from "../sim/orders"
 import { runLevel } from "../sim/difficulty"
 import { lifePriceFor, maxLivesFor, rerollPriceFor } from "../sim/main"
-import { sellValue, storageCap, storageUsed } from "../sim/economy"
+import { sellValueFor, storageCap, storageUsed } from "../sim/economy"
 import { copyCount, effectAmount } from "../sim/upgrades"
 import { POWER_UPS, durationFor } from "../sim/powerups"
 import { EVENTS, shieldedPlots } from "../sim/events"
 import { appliesTo, fogged } from "../sim/effects"
-import { scoreBreakdown } from "../sim/scoring"
+import { comboPctFor, scoreBreakdown } from "../sim/scoring"
 import type { ScoreLineKind } from "../sim/scoring"
 
 const MAX_HEARTS = 5 // a cap above this shows lives as a count
@@ -215,7 +215,13 @@ function statRows(state: GameState, crops: CropTable): [string, string][] {
                   ["Coins", String(state.coins)]
               ]
             : []
-    const timed: [string, string][] = state.mode === "timed" ? [["Combo", comboText(state)]] : []
+    const timed: [string, string][] =
+        state.mode === "timed"
+            ? [
+                  ["Combo", comboText(state)],
+                  ["Coins", String(state.coins)]
+              ]
+            : []
     return [
         ["Mode", modeName(state.mode)],
         [state.mode === "timed" ? "Time left" : "Time", timerText(state)],
@@ -233,7 +239,7 @@ function statRows(state: GameState, crops: CropTable): [string, string][] {
 // Combo row: the multiplier the next filled order gets, then the time left to keep the streak.
 // "x1" with no streak.
 function comboText(state: GameState): string {
-    const mult = `x${comboPct(state.combo) / 100}`
+    const mult = `x${comboPctFor(state) / 100}`
     if (state.combo === 0) return mult
     return `${mult} ${formatClock(state.comboEndsAt - state.tick)}`
 }
@@ -412,9 +418,9 @@ function barnCropText(cropId: string, state: GameState): string {
     return `${cropId}\n${state.inventory[cropId] ?? 0}`
 }
 
-// Label on the Sell button: how many, and the coins they pay.
-function sellButtonText(crop: Crop, amount: number): string {
-    return `Sell ${amount}\n+${sellValue(crop, amount)} coins`
+// Label on the Sell button: how many, and the coins they pay (with Premium produce).
+function sellButtonText(state: GameState, crop: Crop, amount: number): string {
+    return `Sell ${amount}\n+${sellValueFor(state, crop, amount)} coins`
 }
 
 // Label on the Make fertilizer button: what one fertilizer costs in the selected crop, or that
@@ -436,3 +442,11 @@ function rerollText(state: GameState): string {
 
 export { storageText, storageFill, isStorageFull, sellAmount, barnCropText, sellButtonText }
 export { makeFertilizerText, fertilizeText, rerollText }
+
+// Label on the Miracle grow button: ready, or the time left on its recharge.
+function miracleGrowText(state: GameState): string {
+    const left = state.miracleReadyAt - state.tick
+    return left > 0 ? `Miracle grow\n${formatClock(left)}` : "Miracle grow\nready"
+}
+
+export { miracleGrowText }

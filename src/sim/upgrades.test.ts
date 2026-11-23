@@ -68,7 +68,16 @@ function rawConfig(): Record<string, unknown> {
             fogDurationPct: { base: 100, min: 25, max: 100 },
             emergencyTimePct: { base: 100, min: 100, max: 200 },
             storageBonus: { base: 0, min: 0, max: 30 },
-            fertilizerUnlocked: { base: 0, min: 0, max: 1 }
+            fertilizerUnlocked: { base: 0, min: 0, max: 1 },
+            comboMissesForgiven: { base: 0, min: 0, max: 3 },
+            comboStepBonusPct: { base: 0, min: 0, max: 25 },
+            comboStartPct: { base: 0, min: 0, max: 50 },
+            rushValuePct: { base: 0, min: 0, max: 100 },
+            finalePct: { base: 0, min: 0, max: 100 },
+            doubleDeliveryPct: { base: 0, min: 0, max: 100 },
+            sellPricePct: { base: 100, min: 100, max: 200 },
+            miracleGrow: { base: 0, min: 0, max: 1 },
+            miracleRechargeSeconds: { base: 60, min: 20, max: 60 }
         },
         tiers: {
             common: { weight: 40, sellPrice: 1 },
@@ -326,7 +335,16 @@ describe("modifiersFor", () => {
             fogDurationPct: 100,
             emergencyTimePct: 100,
             storageBonus: 0,
-            fertilizerUnlocked: 0
+            fertilizerUnlocked: 0,
+            comboMissesForgiven: 0,
+            comboStepBonusPct: 0,
+            comboStartPct: 0,
+            rushValuePct: 0,
+            finalePct: 0,
+            doubleDeliveryPct: 0,
+            sellPricePct: 100,
+            miracleGrow: 0,
+            miracleRechargeSeconds: 60
         })
     })
 

@@ -2,7 +2,8 @@
 // a few bonuses and penalties are worked out at the end of the run (scoreBreakdown). Every
 // number comes from src/data/scoring.json. See specs/scoring.md.
 import type { GameMode, GameState, Order } from "./types"
-import { comboPct } from "./modes"
+import { MODES, comboPct } from "./modes"
+import { modifiersFor } from "./upgrades"
 import { runLevel } from "./difficulty"
 import { timeLeft } from "./orders"
 import rawScoring from "../data/scoring.json"
@@ -72,18 +73,45 @@ function scoringRules(mode: GameMode, config: ScoringConfig = SCORING): ScoringR
     return mode === "puzzle" ? NO_SCORING : config[mode]
 }
 
+// The Timed combo multiplier, in percent, for the next fill, with Combo builder and Head start.
+// 100 outside Timed.
+function comboPctFor(state: GameState): number {
+    if (state.mode !== "timed") return 100
+    const m = modifiersFor(state.upgrades)
+    return comboPct(state.combo, MODES.timed.combo, m.comboStepBonusPct, m.comboStartPct)
+}
+
+// True when a fill now pairs with the one before (Double delivery's window is open).
+function isPairFill(state: GameState): boolean {
+    return state.mode === "timed" && state.pairOpenUntil > 0 && state.tick <= state.pairOpenUntil
+}
+
+// True during the Timed run's last MODES.timed.finaleTicks (Grand finale).
+function isFinale(state: GameState): boolean {
+    return state.mode === "timed" && state.tick >= MODES.timed.runTicks - MODES.timed.finaleTicks
+}
+
+// % added to the base points of a fill now: Grand finale in the last stretch, Double delivery
+// on a paired fill. 0 outside Timed.
+function fillBonusPct(state: GameState): number {
+    if (state.mode !== "timed") return 0
+    const m = modifiersFor(state.upgrades)
+    return (isFinale(state) ? m.finalePct : 0) + (isPairFill(state) ? m.doubleDeliveryPct : 0)
+}
+
 // Points for filling `order` now, from the state before the fill: the value raised by the
-// Survival level and the Timed combo, plus a speed bonus for the time still left on it.
+// Survival level, the Timed combo and the Timed fill bonuses (Grand finale, Double delivery),
+// plus a speed bonus for the time still left on it.
 function orderPoints(
     state: GameState,
     order: Order,
     rules: ScoringRules = scoringRules(state.mode)
 ): number {
     const level = state.mode === "survival" ? runLevel(state) : 0
-    const combo = state.mode === "timed" ? state.combo : 0
     // Whole numbers until the one division, so rounding never depends on float error.
     const levelPct = 100 + rules.levelBonusPct * level
-    const base = Math.floor((order.value * levelPct * comboPct(combo)) / 10_000)
+    const bonusPct = 100 + fillBonusPct(state)
+    const base = Math.floor((order.value * levelPct * comboPctFor(state) * bonusPct) / 1_000_000)
     // An Order freeze can push the deadline past the time limit; the bonus stops at full.
     const left = Math.min(timeLeft(order, state.tick), order.timeLimit)
     const speed = Math.floor((order.value * rules.speedBonusPct * left) / (100 * order.timeLimit))
@@ -123,6 +151,10 @@ export {
     SCORING,
     NO_SCORING,
     scoringRules,
+    comboPctFor,
+    isPairFill,
+    isFinale,
+    fillBonusPct,
     orderPoints,
     scoreBreakdown,
     finalScore

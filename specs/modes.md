@@ -13,6 +13,8 @@ Survival's difficulty curve, coins and life prices stay in `difficulty.json` (se
         "runSeconds": 300,
         "openOrders": 3,
         "storageCap": 30,
+        "finaleSeconds": 30,
+        "pairSeconds": 3,
         "combo": { "stepPct": 25, "capPct": 300, "windowSeconds": 20 },
         "rush": {
             "atSeconds": [75, 160, 245],
@@ -33,6 +35,8 @@ Survival's difficulty curve, coins and life prices stay in `difficulty.json` (se
 | `timed.storageCap`          | Most crops a Timed run can hold. Separate from Survival's so the two can be tuned apart   |
 | `timed.runSeconds`          | Length of a Timed run. Timed has no lives and ends when this runs out                     |
 | `timed.openOrders`          | `step` keeps this many orders open in Timed, so a run starts with this many               |
+| `timed.finaleSeconds`       | Grand finale: the run's last stretch, in seconds, that scores more. `1` to `runSeconds`   |
+| `timed.pairSeconds`         | Double delivery: a fill this soon after an unpaired fill pairs with it. `>= 1`            |
 | `timed.combo.stepPct`       | Percent the score multiplier climbs for each order filled in a row                        |
 | `timed.combo.capPct`        | Highest multiplier, in percent. Whole number `>= 100`                                     |
 | `timed.combo.windowSeconds` | Time after a fill to fill the next order before the streak breaks                         |
@@ -62,6 +66,8 @@ type TimedMode = {
     runTicks: number
     openOrders: number
     storageCap: number
+    finaleTicks: number
+    pairTicks: number
     combo: ComboRules
     rush: RushRules
 }
@@ -79,6 +85,7 @@ Checks a parsed JSON value and returns it typed, with `timed.runTicks = runSecon
 - `survival.maxLives` is not a whole number `>= startLives`.
 - `survival.storageCap` or `timed.storageCap` is not a whole number `>= 1`.
 - `timed.runSeconds` or `timed.openOrders` is not a whole number `>= 1`.
+- `timed.finaleSeconds` is not a whole number `>= 1` or is above `runSeconds`; `timed.pairSeconds` is not a whole number `>= 1`.
 - `timed.combo` is not an object; `stepPct` or `windowSeconds` is not a whole number `>= 1`; `capPct` is not a whole number `>= 100`.
 - `timed.rush` is not an object; `atSeconds` is not an array of whole numbers, strictly ascending, each `>= 1` and `< runSeconds` (an empty array means no waves); `warnSeconds` is not a whole number `>= 0`, or is not shorter than the first wave's time or the gap between two waves; `orders`, `timePct` or `valuePct` is not a whole number `>= 1`; `timePct` is above 100.
 
@@ -90,9 +97,9 @@ A bad config is a setup mistake, not a player move, so this throws instead of re
 
 `src/data/modes.json` passed through `validateModes` once, when the module loads.
 
-### `comboPct(combo: number, rules: ComboRules = MODES.timed.combo): number`
+### `comboPct(combo: number, rules: ComboRules = MODES.timed.combo, stepBonusPct = 0, startPct = 0): number`
 
-The score multiplier, in percent, for the next order filled when `combo` orders have already been filled in a row: `min(100 + combo × stepPct, capPct)`. Whole percents keep the score a whole number (`completeOrder` rounds down).
+The score multiplier, in percent, for the next order filled when `combo` orders have already been filled in a row: `min(100 + startPct + combo × (stepPct + stepBonusPct), capPct)`. The two bonuses are Combo builder's `comboStepBonusPct` and Head start's `comboStartPct`; `comboPctFor` in [scoring.md](scoring.md) passes them in. Whole percents keep the score a whole number (`completeOrder` rounds down).
 
 ### `rushWaveAt(tick: number, rules: RushRules = MODES.timed.rush): number | null`
 
@@ -137,6 +144,8 @@ Both work from `tick` alone, so `GameState` stores nothing about waves.
 - [x] `survival.storageCap` and `timed.storageCap` (Day 6): each mode's storage limit, kept separate so they can be tuned apart (see [economy.md](economy.md)). Placeholders 25 and 30 until the Day 6 tuning pass.
 - [x] Timed combo numbers (placeholders: +25% per fill, up to ×3, 20 s window).
 - [x] Rush wave numbers (placeholders: 3 waves at 75 s, 160 s and 245 s, 5 s warning, 3 orders each at half time and 150% value).
-- [ ] Rush pay (Timed upgrade): a modifier added to `rush.valuePct`.
-- [ ] Combo freeze (Day 9): a lasting effect that pushes `comboEndsAt` back each tick, like Order freeze. Combo keeper, Combo builder and Head start become modifiers on these numbers.
+- [x] Rush pay (Timed upgrade): `rushValuePct` is added to `rush.valuePct` (see [main.md](main.md)).
+- [x] Combo builder and Head start: `comboPct` takes their bonuses. Combo keeper forgives failed orders in `step` (see [main.md](main.md)).
+- [x] `finaleSeconds` (Grand finale, placeholder 30 s, from the design doc) and `pairSeconds` (Double delivery, placeholder 3 s).
+- [ ] Combo freeze (Day 9): a lasting effect that pushes `comboEndsAt` back each tick, like Order freeze.
 - [ ] Puzzle's entry once it has an end rule.

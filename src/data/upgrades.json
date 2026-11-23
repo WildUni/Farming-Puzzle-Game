@@ -189,6 +189,51 @@
             "base": 0,
             "min": 0,
             "max": 1
+        },
+        "comboMissesForgiven": {
+            "base": 0,
+            "min": 0,
+            "max": 3
+        },
+        "comboStepBonusPct": {
+            "base": 0,
+            "min": 0,
+            "max": 25
+        },
+        "comboStartPct": {
+            "base": 0,
+            "min": 0,
+            "max": 50
+        },
+        "rushValuePct": {
+            "base": 0,
+            "min": 0,
+            "max": 100
+        },
+        "finalePct": {
+            "base": 0,
+            "min": 0,
+            "max": 100
+        },
+        "doubleDeliveryPct": {
+            "base": 0,
+            "min": 0,
+            "max": 100
+        },
+        "sellPricePct": {
+            "base": 100,
+            "min": 100,
+            "max": 200
+        },
+        "miracleGrow": {
+            "base": 0,
+            "min": 0,
+            "max": 1
+        },
+        "miracleRechargeSeconds": {
+            "base": 60,
+            "min": 20,
+            "max": 60
         }
     },
     "tiers": {
@@ -598,7 +643,7 @@
             "id": "earlyBird",
             "name": "Early bird",
             "text": "+{0} coins for an order filled with half its time left",
-            "pools": ["survival"],
+            "pools": ["survival", "timed"],
             "maxCopies": 5,
             "sellable": true,
             "effects": [
@@ -769,6 +814,136 @@
                 }
             ],
             "needs": ["events"]
+        },
+        {
+            "id": "comboKeeper",
+            "name": "Combo keeper",
+            "text": "Your combo survives {0} failed order(s) per streak",
+            "pools": ["timed"],
+            "maxCopies": 2,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "comboMissesForgiven",
+                    "perTier": [1, 1, 1, 2, 2]
+                }
+            ]
+        },
+        {
+            "id": "comboBuilder",
+            "name": "Combo builder",
+            "text": "Each order in a row adds {0}% more to the combo",
+            "pools": ["timed"],
+            "maxCopies": 3,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "comboStepBonusPct",
+                    "perTier": [3, 5, 8, 12, 15]
+                }
+            ]
+        },
+        {
+            "id": "rushPay",
+            "name": "Rush pay",
+            "text": "Rush orders are worth {0}% more",
+            "pools": ["timed"],
+            "maxCopies": 3,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "rushValuePct",
+                    "perTier": [10, 15, 25, 35, 50]
+                }
+            ]
+        },
+        {
+            "id": "headStart",
+            "name": "Head start",
+            "text": "Combos start {0}% above x1",
+            "pools": ["timed"],
+            "maxCopies": 3,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "comboStartPct",
+                    "perTier": [5, 10, 15, 20, 30]
+                }
+            ]
+        },
+        {
+            "id": "grandFinale",
+            "name": "Grand finale",
+            "text": "Orders score {0}% more in the last 30 seconds",
+            "pools": ["timed"],
+            "maxCopies": 3,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "finalePct",
+                    "perTier": [10, 15, 25, 35, 50]
+                }
+            ]
+        },
+        {
+            "id": "doubleDelivery",
+            "name": "Double delivery",
+            "text": "Filling two orders back to back scores the second {0}% more",
+            "pools": ["timed"],
+            "maxCopies": 3,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "doubleDeliveryPct",
+                    "perTier": [10, 15, 25, 35, 50]
+                }
+            ]
+        },
+        {
+            "id": "biggerBarn",
+            "name": "Bigger barn",
+            "text": "Storage holds {0} more crops",
+            "pools": ["survival", "timed"],
+            "maxCopies": 3,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "storageBonus",
+                    "perTier": [3, 5, 8, 12, 15]
+                }
+            ]
+        },
+        {
+            "id": "premiumProduce",
+            "name": "Premium produce",
+            "text": "Crops sell for {0}% more",
+            "pools": ["survival", "timed"],
+            "maxCopies": 3,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "sellPricePct",
+                    "perTier": [10, 15, 25, 35, 50]
+                }
+            ]
+        },
+        {
+            "id": "miracleGrow",
+            "name": "Miracle grow",
+            "text": "Tap to finish a growing crop; recharges {1}s faster",
+            "pools": ["survival", "timed"],
+            "maxCopies": 1,
+            "sellable": false,
+            "effects": [
+                {
+                    "stat": "miracleGrow",
+                    "perTier": [1, 1, 1, 1, 1]
+                },
+                {
+                    "stat": "miracleRechargeSeconds",
+                    "perTier": [-5, -10, -15, -20, -30]
+                }
+            ]
         }
     ]
 }

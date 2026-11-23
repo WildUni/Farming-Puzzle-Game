@@ -170,7 +170,7 @@ export class BarnView {
         this.plus.label.setText("+")
         this.minus.enabled = usable && amount > 1
         this.plus.enabled = usable && amount < held
-        this.sellButton.label.setText(sellButtonText(crop, amount))
+        this.sellButton.label.setText(sellButtonText(state, crop, amount))
         this.sellButton.enabled = usable && held >= amount && held > 0
         this.sellAllButton.enabled = usable && held > 0
         this.makeButton.label.setText(makeFertilizerText(crop, fertilizer))

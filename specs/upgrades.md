@@ -4,7 +4,7 @@ Upgrades: what each one does, the tiers they come in, which mode's pool they bel
 
 What each upgrade does lives in **`src/data/upgrades.json`**. Which upgrades the player owns lives in **`GameState.upgrades`**. Rules never look at upgrade ids: they read one number from `modifiersFor` or `modifiersAt`, which add up the owned upgrades into a flat `Modifiers` object.
 
-This spec is **phase 1** of the upgrade plan: the data shape, tiers, pools, caps, copy limits, targeted upgrades and a separate random stream. Only Survival makes offers so far. Rerolls, offers in Timed, the shop and selling come later (see [Later phases](#later-phases)); the data already carries the fields they need.
+This spec is **phase 1** of the upgrade plan: the data shape, tiers, pools, caps, copy limits, targeted upgrades and a separate random stream. Survival and Timed both make offers, each from its own pool. The shop and selling upgrades come later (see [Later phases](#later-phases)); the data already carries the fields they need.
 
 ## Concepts
 
@@ -149,7 +149,7 @@ Every upgrade from the design doc that works with the systems that exist now (or
 | `smallOrder`    | Small order    | survival, timed | tiered | 5         | `smallOrderChance` +5, +8, +12, +18, +25   | –      | yes      |
 | `sneakPeek`     | Sneak peek     | survival, timed | rare   | 1         | `sneakPeek` +1                             | –      | yes      |
 | `pestControl`   | Pest control   | survival, timed | epic   | 1         | `crowBan` +1                               | events | yes      |
-| `earlyBird`     | Early bird     | survival        | tiered | 5         | `earlyBirdCoins` +1, +2, +3, +5, +8        | –      | yes      |
+| `earlyBird`     | Early bird     | survival, timed | tiered | 5         | `earlyBirdCoins` +1, +2, +3, +5, +8        | –      | yes      |
 | `steadyPace`    | Steady pace    | survival        | tiered | 5         | `levelPacePct` +5, +8, +12, +18, +25       | –      | yes      |
 | `extraHeart`    | Extra heart    | survival        | rare   | 2         | `extraLives` +1 (max lives +1, filled)     | –      | no       |
 | `lastStand`     | Last stand     | survival        | tiered | 3         | `lastStandGrowthPct` −5, −8, −12, −18, −25 | –      | yes      |
@@ -163,28 +163,31 @@ Every upgrade from the design doc that works with the systems that exist now (or
 | `lantern`       | Lantern        | survival, timed | tiered | 3         | `fogDurationPct` −10, −15, −25, −35, −50   | events | yes      |
 | `calmNerves`    | Calm nerves    | survival, timed | tiered | 3         | `emergencyTimePct` +10, +15, +25, +35, +50 | events | yes      |
 
-Bigger bumper has `"requires": ["bumperHarvest"]`. Early bird is Survival only because only Survival earns coins; Steady pace, Extra heart, Last stand, Second chance and Second wind are Survival only by design. Extra heart is not sellable because it adds lives, like Extra plot adds plots.
+Bigger bumper has `"requires": ["bumperHarvest"]`. Early bird is in both pools, since Timed orders pay coins too (for now); Steady pace, Extra heart, Last stand, Second chance and Second wind are Survival only by design. Extra heart is not sellable because it adds lives, like Extra plot adds plots.
 
-| Stat                 | base | min | max | Meaning                                                                                        |
-| -------------------- | ---- | --- | --- | ---------------------------------------------------------------------------------------------- |
-| `bumperExtra`        | 1    | 1   | 4   | Crops a Bumper harvest hit adds                                                                |
-| `smallOrderChance`   | 0    | 0   | 50  | % chance a new order asks for half as much                                                     |
-| `sneakPeek`          | 0    | 0   | 1   | 1: the next order is shown before it arrives                                                   |
-| `crowBan`            | 0    | 0   | 1   | 1: Crows are never announced (Crows' `banStat`)                                                |
-| `earlyBirdCoins`     | 0    | 0   | 15  | Coins for filling an order with at least half its time left                                    |
-| `levelPacePct`       | 100  | 100 | 200 | % of filled orders a Survival level takes                                                      |
-| `extraLives`         | 0    | 0   | 2   | Added to the lives cap (`MODES.survival.maxLives`); each rise also adds a life                 |
-| `lastStandGrowthPct` | 100  | 50  | 100 | % of growth time for crops planted on the last life                                            |
-| `secondChance`       | 0    | 0   | 50  | % chance a failed order costs no life                                                          |
-| `secondWindPct`      | 100  | 100 | 200 | % of the time limit of the first new order after a lost life                                   |
-| `wormBonusPct`       | 100  | 100 | 300 | Worms' `amountStat`                                                                            |
-| `neighborReplant`    | 0    | 0   | 1   | 1: Helpful neighbor replants what they harvest                                                 |
-| `fertilizerUnlocked` | 0    | 0   | 1   | 1: fertilizer can be made and used when `economy.json` locks it (see [economy.md](economy.md)) |
-| `storageBonus`       | 0    | 0   | 30  | Crops storage holds on top of the mode's cap (Bigger barn, not offered yet)                    |
-| `birdPlotsPct`       | 100  | 34  | 100 | Birds' `amountStat` (3 plots: 34% is 1 plot)                                                   |
-| `rotPct`             | 100  | 25  | 100 | Rot's `amountStat`                                                                             |
-| `fogDurationPct`     | 100  | 25  | 100 | Fog's `durationStat`                                                                           |
-| `emergencyTimePct`   | 100  | 100 | 200 | Emergency order's `amountStat` (its share of the usual time, capped at 100% by events.json)    |
+| Stat                     | base | min | max | Meaning                                                                                        |
+| ------------------------ | ---- | --- | --- | ---------------------------------------------------------------------------------------------- |
+| `bumperExtra`            | 1    | 1   | 4   | Crops a Bumper harvest hit adds                                                                |
+| `smallOrderChance`       | 0    | 0   | 50  | % chance a new order asks for half as much                                                     |
+| `sneakPeek`              | 0    | 0   | 1   | 1: the next order is shown before it arrives                                                   |
+| `crowBan`                | 0    | 0   | 1   | 1: Crows are never announced (Crows' `banStat`)                                                |
+| `earlyBirdCoins`         | 0    | 0   | 15  | Coins for filling an order with at least half its time left                                    |
+| `levelPacePct`           | 100  | 100 | 200 | % of filled orders a Survival level takes                                                      |
+| `extraLives`             | 0    | 0   | 2   | Added to the lives cap (`MODES.survival.maxLives`); each rise also adds a life                 |
+| `lastStandGrowthPct`     | 100  | 50  | 100 | % of growth time for crops planted on the last life                                            |
+| `secondChance`           | 0    | 0   | 50  | % chance a failed order costs no life                                                          |
+| `secondWindPct`          | 100  | 100 | 200 | % of the time limit of the first new order after a lost life                                   |
+| `wormBonusPct`           | 100  | 100 | 300 | Worms' `amountStat`                                                                            |
+| `neighborReplant`        | 0    | 0   | 1   | 1: Helpful neighbor replants what they harvest                                                 |
+| `fertilizerUnlocked`     | 0    | 0   | 1   | 1: fertilizer can be made and used when `economy.json` locks it (see [economy.md](economy.md)) |
+| `storageBonus`           | 0    | 0   | 30  | Crops storage holds on top of the mode's cap (Bigger barn)                                     |
+| `sellPricePct`           | 100  | 100 | 200 | % of the usual sell price (Premium produce)                                                    |
+| `miracleGrow`            | 0    | 0   | 1   | 1: the Miracle grow button is unlocked                                                         |
+| `miracleRechargeSeconds` | 60   | 20  | 60  | Seconds Miracle grow takes to recharge after a use                                             |
+| `birdPlotsPct`           | 100  | 34  | 100 | Birds' `amountStat` (3 plots: 34% is 1 plot)                                                   |
+| `rotPct`                 | 100  | 25  | 100 | Rot's `amountStat`                                                                             |
+| `fogDurationPct`         | 100  | 25  | 100 | Fog's `durationStat`                                                                           |
+| `emergencyTimePct`       | 100  | 100 | 200 | Emergency order's `amountStat` (its share of the usual time, capped at 100% by events.json)    |
 
 Changes from the old six: `bigHarvest` (flat +1 yield) is replaced by `bumperHarvest`, a chance of 1 extra crop per harvest (see [The harvest roll](#the-harvest-roll)). `haggler` becomes `lifeDiscount` (the new Haggler belongs to the Bulk buyer event). `tips` becomes `bigTips`. `extraPlot` is shop-only, so it is not offered until the shop exists. `"timed"` is already listed in the pools so that turning Timed offers on later is a code change only.
 
@@ -495,7 +498,7 @@ Adding a stat means: a `Modifiers` field, an entry under `stats` in `upgrades.js
 - While an offer is open, `step` returns the same state and every other action returns `null`.
 - `chooseUpgrade` stores `{ id, tier, target }` with the card's tier and clears the offer.
 - It refuses: no offer open; an id not on the offer; a target on an untargeted upgrade; no target, or a target not in `validTargets`, on a targeted one.
-- The next offer comes at `2 × ORDERS_PER_UPGRADE`; Timed never makes an offer; with nothing eligible the run carries on with no offer.
+- The next offer comes at `2 × ORDERS_PER_UPGRADE`; Timed makes offers from the `timed` pool on the same schedule; with nothing eligible the run carries on with no offer.
 - Bumper harvest: with `bumperChance` 0, a harvest leaves `rng.harvest` unchanged; above 0, it draws exactly once, adds 1 crop exactly when the roll is below the chance, and both outcomes happen over many seeds. A harvest never changes `rng.orders` or `rng.upgrades`.
 - Making an offer leaves `rng.orders` unchanged, so two Survival runs on the same seed that pick different upgrades get the same order sequence (same crops and same draws).
 - Each modifier changes its rule as in the table above; a Favorite crop copy changes growth and yield only for its crop.
@@ -514,19 +517,70 @@ Adding a stat means: a `Modifiers` field, an entry under `stats` in `upgrades.js
 - Second wind stretches only the first new order after a lost life.
 - Pest control removes Crows from `eligibleEvents`; Worm farm, Bird net, Root cellar, Lantern and Calm nerves change their event as in [events.md](events.md); Good neighbors replants.
 
+**Timed pool (`main.test.ts`)**
+
+- All six are in the `timed` pool only; `createGame` starts with `comboMisses` and `pairOpenUntil` at 0.
+- Combo keeper: forgives `comboMissesForgiven` failed orders per streak, then breaks; breaks when more fail on one tick than it has left, and when the window ran out; without it the first failed order breaks the streak.
+- Combo builder adds its step per order in a row under the same cap; Head start lifts the multiplier from x1 (and the HUD's combo text), and gives 100 outside Timed.
+- Rush pay changes only rush orders' value, as `scalePct(value, valuePct + rushValuePct)`.
+- Grand finale scores more from tick `runTicks − finaleTicks` on and not the tick before.
+- Double delivery: a fill opens a pair, one within `pairTicks` scores more and closes it, the next opens a new one; a late fill doesn't pair; Finish all leaves the pair alone.
+- Scripted Timed runs that pick upgrades replay equal.
+
+**Storage, selling and Miracle grow (`main.test.ts`, `economy.test.ts`, `format.test.ts`)**
+
+- Bigger barn raises the cap in both modes, lets a harvest fit that wouldn't before, and stops being offered once `storageBonus` is capped.
+- Premium produce raises what `sellCrop` pays; `sellValue` applies the bonus before its one rounding; the Sell button shows the boosted price.
+- Miracle grow: starts ready and is unusable without the upgrade; finishes a growing plot and sets `miracleReadyAt`, shorter at higher tiers; refused while recharging and usable again on `miracleReadyAt`; refused on a plot that isn't growing, a bad index, or with an offer open; the recharge waits while an offer is open. `miracleGrowText` reads `ready` or the time left.
+- Runs that pick and use Miracle grow replay equal.
+
 **Replay (`verification.test.ts`)**
 
 - Scripted Survival runs that pick upgrades replay equal, including a targeted pick and runs with Bumper harvest.
 - A log that leaves an offer unanswered and has later entries, or a later `finalTick`, fails with `offer-pending`.
 
+## Timed pool
+
+The six Timed-only upgrades from the design doc. All numbers are placeholders. Their stats only matter in Timed (combos, rush waves and the run clock exist only there), and they are only in the `timed` pool.
+
+| id               | Name            | Pools | Tier   | maxCopies | Effects (common → legendary)                | Stat cap |
+| ---------------- | --------------- | ----- | ------ | --------- | ------------------------------------------- | -------- |
+| `comboKeeper`    | Combo keeper    | timed | tiered | 2         | `comboMissesForgiven` +1, +1, +1, +2, +2    | 3        |
+| `comboBuilder`   | Combo builder   | timed | tiered | 3         | `comboStepBonusPct` +3, +5, +8, +12, +15    | 25       |
+| `rushPay`        | Rush pay        | timed | tiered | 3         | `rushValuePct` +10, +15, +25, +35, +50      | 100      |
+| `headStart`      | Head start      | timed | tiered | 3         | `comboStartPct` +5, +10, +15, +20, +30      | 50       |
+| `grandFinale`    | Grand finale    | timed | tiered | 3         | `finalePct` +10, +15, +25, +35, +50         | 100      |
+| `doubleDelivery` | Double delivery | timed | tiered | 3         | `doubleDeliveryPct` +10, +15, +25, +35, +50 | 100      |
+
+- **Combo keeper:** each streak forgives up to `comboMissesForgiven` failed orders (counted in `GameState.comboMisses`, back to 0 when the streak breaks). A window that runs out still breaks the streak. See [main.md](main.md).
+- **Combo builder** and **Head start:** added to the combo's step and starting multiplier through `comboPct`; the cap stays `capPct`. Head start lifts even the first fill of a streak.
+- **Rush pay:** rush orders are made with `value = scalePct(value, rush.valuePct + rushValuePct)`, so only waves after the pick pay more.
+- **Grand finale:** fills in the last `MODES.timed.finaleTicks` get `finalePct` more base points.
+- **Double delivery:** a scored fill within `MODES.timed.pairTicks` of an unpaired one gets `doubleDeliveryPct` more base points and closes the pair; the next fill starts a new one. Tracked in `GameState.pairOpenUntil`.
+
+## Storage, selling and Miracle grow
+
+The last three Day 7 upgrades. All numbers are placeholders.
+
+| id               | Name            | Pools           | Tier   | maxCopies | Effects (common → legendary)                                                    | Sellable |
+| ---------------- | --------------- | --------------- | ------ | --------- | ------------------------------------------------------------------------------- | -------- |
+| `biggerBarn`     | Bigger barn     | survival, timed | tiered | 3         | `storageBonus` +3, +5, +8, +12, +15                                             | yes      |
+| `premiumProduce` | Premium produce | survival, timed | tiered | 3         | `sellPricePct` +10, +15, +25, +35, +50                                          | yes      |
+| `miracleGrow`    | Miracle grow    | survival, timed | tiered | 1         | `miracleGrow` +1 at every tier; `miracleRechargeSeconds` −5, −10, −15, −20, −30 | no       |
+
+- **Bigger barn:** `storageCap` already adds `storageBonus` (see [economy.md](economy.md)). Once the bonus reaches 30 it stops being offered.
+- **Premium produce:** `sellCrop` pays `sellValueFor(state, crop, amount)`, which is `sellValue` with `sellPricePct` on top, rounded down once (see [economy.md](economy.md)). The Sell button shows the boosted price.
+- **Miracle grow:** the first upgrade with a button. Owning it (`miracleGrow` 1) shows the button; `useMiracleGrow { plot }` finishes a growing plot like Ready one and sets `GameState.miracleReadyAt = tick + miracleRechargeTicks(state)`. It starts ready. The recharge counts ticks, so it waits while the game is paused or an offer is open. The base recharge (60 s) is the stat's `base`, so a tier only needs a negative amount; no new config. Not sellable, like Extra heart: selling a button mid-recharge has no clear meaning yet. See [main.md](main.md) and [ui.md](ui.md).
+- The `kind: "active"` field from [Later phases](#later-phases) is not added yet: owning the `miracleGrow` stat is enough while it is the only upgrade with a button. Add `kind` (and a general `useAbility` action) with the second one.
+
 ## Later phases
 
 Each later phase adds to this design without changing the stored shapes above.
 
-1. **Timed offers and rerolls.** `isOfferDue` and `rollOffer` use the mode's pool instead of always `survival`. A `rerollOffer` action pays a rising coin price (`rerollsThisOffer` in state, back to 0 on each new offer) and redraws the whole offer from `rng.upgrades`, with the same tier weights as a normal roll. Rerolls ship on Day 6, specified in [economy.md](economy.md); Timed offers come later.
+1. **Timed offers and rerolls.** Done: `offerPool` gives the mode's pool (`survival` or `timed`; Puzzle makes none), so `isOfferDue` and `rollOffer` work in both modes. Rerolls shipped on Day 6 (see [economy.md](economy.md)); in Timed they are paid from order and selling coins.
 2. **Shop** (its own `shop.ts` and spec). Stock is drawn from the mode's pool plus `shop`, from `rng.upgrades` or its own stream. `sellUpgrade { index }` removes `upgrades[index]` and pays its tier's `sellPrice`; only `sellable` upgrades, only while the shop is open. Selling frees a copy and, for targeted upgrades, its target.
 3. **More upgrade kinds**, behind a `kind` field: `instant` (Promotion: changes an owned copy's tier and is not stored), `active` (Miracle grow: owning it unlocks a `useAbility` action, its recharge is a stat), `economy` (Interest, Discount card, Free restock: stats read by the shop).
-4. **Upgrades for events, power-ups and storage** ship with those systems. Still waiting: Bigger barn, Premium produce, Price floor, Haggler (storage and selling); Keen eye, Interest, Discount card, Free restock, Lucky stars, Promotion, Rich soil, Quick soil, Auto-harvester (shop); Miracle grow (an `active` kind); Four-leaf (Lucky clover); Irrigation, Guard dog (tap actions for Drought and Raccoon); Clear orders (Mix-up); Festival spirit, Weed killer, Loaded coin (tradeoff events); and the Timed pool's Combo keeper, Combo builder, Rush pay, Head start, Grand finale and Double delivery (Timed offers, combos and rush waves). The power-up upgrades are in (see [Shipped with power-ups](#shipped-with-power-ups)); they use `needs` rather than `requires`, since they depend on a system being on, not on another upgrade. The event upgrades use `"events"` the same way. Other chance-based upgrades (Second chance, Lucky drops) draw from a stream of their own, as Bumper harvest does.
+4. **Upgrades for events, power-ups and storage** ship with those systems. Still waiting: Price floor, Haggler (selling); Keen eye, Interest, Discount card, Free restock, Lucky stars, Promotion, Rich soil, Quick soil, Auto-harvester (shop); Four-leaf (Lucky clover); Irrigation, Guard dog (tap actions for Drought and Raccoon); Clear orders (Mix-up); Festival spirit, Weed killer, Loaded coin (tradeoff events);. The Timed pool's six are in (see [Timed pool](#timed-pool)). The power-up upgrades are in (see [Shipped with power-ups](#shipped-with-power-ups)); they use `needs` rather than `requires`, since they depend on a system being on, not on another upgrade. The event upgrades use `"events"` the same way. Other chance-based upgrades (Second chance, Lucky drops) draw from a stream of their own, as Bumper harvest does.
 
 ## Open items
 
@@ -538,6 +592,6 @@ Each later phase adds to this design without changing the stored shapes above.
 - [x] Bumper harvest: a third stream, `rng.harvest`, used only by `harvest` and only when `bumperChance` is above 0.
 - [ ] Should `orderTimePct`'s `min` stay at 100? It stops any effect from shortening order timers, which rules out negative effects such as the Fake merchant's.
 - [ ] Pre-run boosts (meta currency, Daily Challenge) as starting entries in `upgrades`, passed through `createGame`.
-- [ ] Early bird pays only in Survival (Timed earns no coins). Should it pay points in Timed once Timed makes offers?
+- [ ] Big tips and Early bird are in the Timed pool again because Timed orders now pay the same coins as Survival. If Timed gets its own lower rate or stops paying, revisit both (Design Doc open question).
 - [ ] Sneak peek shows the next order under the current rules; a level-up or Second wind before it arrives can still change its amount or time.
 - [x] Offers use their own random stream (`rng.upgrades`), so they don't shift which orders come next.

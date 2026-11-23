@@ -31,6 +31,8 @@ type TimedMode = {
     runTicks: number // a Timed run ends on this tick
     openOrders: number // step keeps this many orders open in Timed
     storageCap: number // most crops storage holds, before Bigger barn
+    finaleTicks: number // Grand finale: the run's last finaleTicks score more
+    pairTicks: number // Double delivery: a fill within pairTicks of an unpaired one pairs with it
     combo: ComboRules
     rush: RushRules
 }
@@ -77,6 +79,9 @@ function validateModes(raw: unknown): ModesConfig {
     const runSeconds = wholeAtLeast(timed, "runSeconds", 1, "timed.runSeconds")
     const openOrders = wholeAtLeast(timed, "openOrders", 1, "timed.openOrders")
     const timedCap = wholeAtLeast(timed, "storageCap", 1, "timed.storageCap")
+    const finaleSeconds = wholeAtLeast(timed, "finaleSeconds", 1, "timed.finaleSeconds")
+    if (finaleSeconds > runSeconds) fail("timed.finaleSeconds", "at most timed.runSeconds")
+    const pairSeconds = wholeAtLeast(timed, "pairSeconds", 1, "timed.pairSeconds")
 
     const combo = timed.combo
     if (!isObject(combo)) fail("timed.combo", "an object")
@@ -90,6 +95,8 @@ function validateModes(raw: unknown): ModesConfig {
             runTicks: runSeconds * TICKS_PER_SECOND,
             openOrders,
             storageCap: timedCap,
+            finaleTicks: finaleSeconds * TICKS_PER_SECOND,
+            pairTicks: pairSeconds * TICKS_PER_SECOND,
             combo: { stepPct, capPct, windowTicks: windowSeconds * TICKS_PER_SECOND },
             rush: validateRush(timed.rush, runSeconds)
         }
@@ -131,9 +138,15 @@ function validateRush(rush: unknown, runSeconds: number): RushRules {
 const MODES: ModesConfig = validateModes(rawModes)
 
 // Score multiplier, in percent, for the next order filled with `combo` orders already filled
-// in a row: 100 + combo x stepPct, capped at capPct.
-function comboPct(combo: number, rules: ComboRules = MODES.timed.combo): number {
-    return Math.min(100 + combo * rules.stepPct, rules.capPct)
+// in a row: 100 + startPct + combo x (stepPct + stepBonusPct), capped at capPct. The two
+// bonuses come from Head start and Combo builder.
+function comboPct(
+    combo: number,
+    rules: ComboRules = MODES.timed.combo,
+    stepBonusPct = 0,
+    startPct = 0
+): number {
+    return Math.min(100 + startPct + combo * (rules.stepPct + stepBonusPct), rules.capPct)
 }
 
 // Index of the rush wave starting on `tick`, or null when none does.

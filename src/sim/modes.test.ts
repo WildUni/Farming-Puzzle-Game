@@ -11,6 +11,8 @@ const raw = {
         runSeconds: 60,
         openOrders: 2,
         storageCap: 18,
+        finaleSeconds: 10,
+        pairSeconds: 2,
         combo: { stepPct: 50, capPct: 200, windowSeconds: 5 },
         rush: { atSeconds: [10, 30], warnSeconds: 3, orders: 2, timePct: 40, valuePct: 200 }
     }
@@ -37,6 +39,8 @@ describe("validateModes", () => {
                 runTicks: shipped.timed.runSeconds * TICKS_PER_SECOND,
                 openOrders: shipped.timed.openOrders,
                 storageCap: shipped.timed.storageCap,
+                finaleTicks: shipped.timed.finaleSeconds * TICKS_PER_SECOND,
+                pairTicks: shipped.timed.pairSeconds * TICKS_PER_SECOND,
                 combo: {
                     stepPct: shipped.timed.combo.stepPct,
                     capPct: shipped.timed.combo.capPct,
@@ -66,6 +70,8 @@ describe("validateModes", () => {
                 runTicks: 60 * TICKS_PER_SECOND,
                 openOrders: 2,
                 storageCap: 18,
+                finaleTicks: 10 * TICKS_PER_SECOND,
+                pairTicks: 2 * TICKS_PER_SECOND,
                 combo: { stepPct: 50, capPct: 200, windowTicks: 5 * TICKS_PER_SECOND },
                 rush: {
                     atTicks: [10 * TICKS_PER_SECOND, 30 * TICKS_PER_SECOND],
@@ -102,6 +108,11 @@ describe("validateModes", () => {
         ["survival.storageCap 0", broken((c) => (c.survival.storageCap = 0))],
         ["timed.storageCap missing", broken((c) => delete c.timed.storageCap)],
         ["timed.storageCap fractional", broken((c) => (c.timed.storageCap = 12.5))],
+        ["timed.finaleSeconds missing", broken((c) => delete c.timed.finaleSeconds)],
+        ["timed.finaleSeconds 0", broken((c) => (c.timed.finaleSeconds = 0))],
+        ["timed.finaleSeconds past the run", broken((c) => (c.timed.finaleSeconds = 61))],
+        ["timed.pairSeconds missing", broken((c) => delete c.timed.pairSeconds)],
+        ["timed.pairSeconds 0", broken((c) => (c.timed.pairSeconds = 0))],
         ["combo missing", broken((c) => delete c.timed.combo)],
         [
             "combo.stepPct 0",

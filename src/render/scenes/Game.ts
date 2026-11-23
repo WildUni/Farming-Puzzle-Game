@@ -1,6 +1,6 @@
 import { Scene, GameObjects } from "phaser"
 import type { Action, CropTable, GameMode, GameState, LogEntry } from "../../sim/types"
-import { createGame, applyAction, step, nextOrderPreview } from "../../sim/main"
+import { createGame, applyAction, step, nextOrderPreview, miracleTargets } from "../../sim/main"
 import { TICKS_PER_SECOND } from "../../sim/game_constants"
 import { debugText, MAX_SEED } from "../format"
 import { COLORS, MARGIN, TEXT } from "../theme"
@@ -13,6 +13,7 @@ import { BuyLifeView } from "../views/BuyLifeView"
 import { GameOverView } from "../views/GameOverView"
 import { UpgradePickView } from "../views/UpgradePickView"
 import { PowerUpBar } from "../views/PowerUpBar"
+import { MiracleGrowView } from "../views/MiracleGrowView"
 import { EventBanner } from "../views/EventBanner"
 import { RushBanner } from "../views/RushBanner"
 import { DebugPanel } from "../views/DebugPanel"
@@ -39,6 +40,7 @@ export class Game extends Scene {
     private pickerPlot: number | null // plot the plant picker is open for
     private choosingSlot: number | null // power-up slot whose plot or order target is being picked
     private fertilizing: boolean // the plot to fertilize is being picked
+    private miracling: boolean // the plot for Miracle grow is being picked
 
     private orders: OrdersView
     private stats: StatsView
@@ -49,6 +51,7 @@ export class Game extends Scene {
     private gameOver: GameOverView
     private upgradePick: UpgradePickView
     private powerUpBar: PowerUpBar
+    private miracle: MiracleGrowView
     private eventBanner: EventBanner
     private rushBanner: RushBanner
     private barn: BarnView
@@ -81,6 +84,7 @@ export class Game extends Scene {
         this.pickerPlot = null
         this.choosingSlot = null
         this.fertilizing = false
+        this.miracling = false
         this.debugged = false
 
         this.orders = new OrdersView(this, (id) => this.onOrderClick(id))
@@ -114,6 +118,12 @@ export class Game extends Scene {
             () => this.act({ type: "rerollOffer" })
         )
         this.powerUpBar = new PowerUpBar(this, (slot) => this.onPowerUpClick(slot))
+        this.miracle = new MiracleGrowView(
+            this,
+            this.scale.width - MARGIN,
+            this.buyLife.bottom + GAP,
+            () => this.toggleMiracle()
+        )
         this.eventBanner = new EventBanner(this)
         this.rushBanner = new RushBanner(this)
         this.barn = new BarnView(this, this.crops, {
@@ -138,7 +148,8 @@ export class Game extends Scene {
         const keys = this.input.keyboard!
         keys.on("keydown-P", () => this.togglePause())
         keys.on("keydown-ESC", () => {
-            if (this.choosingSlot !== null || this.fertilizing) this.stopChoosing()
+            if (this.choosingSlot !== null || this.fertilizing || this.miracling)
+                this.stopChoosing()
             else this.togglePause()
         })
         keys.on("keydown-R", () => this.scene.restart({ seed: this.seed, mode: this.mode }))
@@ -166,6 +177,7 @@ export class Game extends Scene {
             this.closePicker()
             this.choosingSlot = null
             this.fertilizing = false
+            this.miracling = false
         }
         this.render()
     }
@@ -174,13 +186,16 @@ export class Game extends Scene {
         // Drop target mode once nothing can be targeted (the last growing crop turned ready).
         if (this.choosingSlot !== null && this.targets() === null) this.choosingSlot = null
         if (this.fertilizing && fertilizerTargets(this.state).length === 0) this.fertilizing = false
+        if (this.miracling && miracleTargets(this.state).length === 0) this.miracling = false
         const aiming = this.choosingSlot === null ? null : this.choosingDef()?.target
         const plotTargets =
             aiming === "plot"
                 ? this.targets()
                 : this.fertilizing
                   ? fertilizerTargets(this.state)
-                  : null
+                  : this.miracling
+                    ? miracleTargets(this.state)
+                    : null
         this.orders.update(
             this.state,
             nextOrderPreview(this.state, this.crops),
@@ -197,6 +212,7 @@ export class Game extends Scene {
             this.state.upgradeOffer === null
         this.barn.update(this.state, barnFree, this.fertilizing)
         this.powerUpBar.update(this.state, this.choosingSlot)
+        this.miracle.update(this.state, this.miracling)
         this.eventBanner.update(this.state)
         this.rushBanner.update(this.state)
         this.pause.update(this.paused)
@@ -220,6 +236,7 @@ export class Game extends Scene {
             this.closePicker()
             this.choosingSlot = null
             this.fertilizing = false
+            this.miracling = false
         }
         this.render()
     }
@@ -280,6 +297,7 @@ export class Game extends Scene {
         }
         this.closePicker()
         this.fertilizing = false
+        this.miracling = false
         this.choosingSlot = this.choosingSlot === slot ? null : slot
         this.render()
     }
@@ -287,6 +305,17 @@ export class Game extends Scene {
     private stopChoosing(): void {
         this.choosingSlot = null
         this.fertilizing = false
+        this.miracling = false
+        this.render()
+    }
+
+    // The Miracle grow button: start (or cancel) choosing the growing plot to finish.
+    private toggleMiracle(): void {
+        if (this.paused) return
+        this.closePicker()
+        this.choosingSlot = null
+        this.fertilizing = false
+        this.miracling = !this.miracling
         this.render()
     }
 
@@ -295,6 +324,7 @@ export class Game extends Scene {
         if (this.paused) return
         this.closePicker()
         this.choosingSlot = null
+        this.miracling = false
         this.fertilizing = !this.fertilizing
         this.render()
     }
@@ -310,6 +340,14 @@ export class Game extends Scene {
             this.choosingSlot = null
             if (aimsAtPlot && powerUpTargets(this.state, slot).includes(plot)) {
                 this.act({ type: "usePowerUp", slot, target: plot })
+            }
+            this.render()
+            return
+        }
+        if (this.miracling) {
+            this.miracling = false
+            if (miracleTargets(this.state).includes(plot)) {
+                this.act({ type: "useMiracleGrow", plot })
             }
             this.render()
             return
@@ -342,6 +380,7 @@ export class Game extends Scene {
     // While an order power-up is being aimed, a click fills that order (or cancels) instead.
     private onOrderClick(orderId: number): void {
         this.fertilizing = false
+        this.miracling = false
         if (this.choosingSlot !== null) {
             const slot = this.choosingSlot
             const aimsAtOrder = this.choosingDef()?.target === "order"

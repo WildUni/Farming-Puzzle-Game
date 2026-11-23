@@ -8,6 +8,8 @@
         "runSeconds": 300,
         "openOrders": 3,
         "storageCap": 30,
+        "finaleSeconds": 30,
+        "pairSeconds": 3,
         "combo": {
             "stepPct": 25,
             "capPct": 300,

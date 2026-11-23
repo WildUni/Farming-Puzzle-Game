@@ -43,7 +43,7 @@ Changes elsewhere:
 - `Crop` gets `fertilizerCost: number`: crops of this kind used up to make one fertilizer. Whole number `>= 1`, checked by `buildCropTable`.
 - The `growing` plot gets `fertilized?: true`, set when fertilizer is used and absent before.
 - `GameState` gets `fertilizer: number` (held, starts at 0) and `rerollsThisOffer: number` (starts at 0).
-- `Modifiers` gets `storageBonus` (Bigger barn, base 0; no upgrade uses it yet) and `fertilizerUnlocked` (base 0, max 1; set by Compost).
+- `Modifiers` gets `storageBonus` (Bigger barn, base 0), `sellPricePct` (Premium produce, base 100) and `fertilizerUnlocked` (base 0, max 1; set by Compost).
 - `Action` gets `sellCrop { cropId, amount }`, `makeFertilizer { cropId }`, `useFertilizer { plot }` and `rerollOffer`.
 
 ## Exports
@@ -64,9 +64,13 @@ Checks a parsed JSON value and returns it typed. Throws an `Error` naming the ba
 
 The total of every crop in `inventory`, and `max(0, cap − used)`. Held fertilizer does not count.
 
-### `sellValue(crop: Crop, amount: number, config?): number`
+### `sellValue(crop: Crop, amount: number, config?, bonusPct = 100): number`
 
-`floor(amount × crop.value × sellPricePct / 100)`. The total is rounded down, not each crop, so selling one Garlic (value 2) at 25% pays 0 but selling two pays 1.
+`floor(amount × crop.value × sellPricePct × bonusPct / 10000)`, where `bonusPct` is Premium produce's `sellPricePct` modifier (100 = no bonus). The total is rounded down once, not each crop, so selling one Garlic (value 2) at 25% pays 0 but selling two pays 1.
+
+### `sellValueFor(state, crop, amount): number`
+
+`sellValue` with the run's `sellPricePct` modifier. `sellCrop` pays this and the Sell button shows it.
 
 ### `fertilizerAllowed(state, config?): boolean`
 
@@ -96,7 +100,7 @@ None of these are allowed once the run has ended. While an upgrade offer is open
 
 **Helpful neighbor (changed, `harvestAll` in `events.ts`).** Adds up what every ready plot would give. If that is more than `storageFree`, the event does nothing: no plot is harvested or replanted. Otherwise it works as before.
 
-**`sellCrop { cropId, amount }`.** Refused unless `amount` is a whole number `>= 1` and at most what is held. Removes the crops (a crop at 0 is removed from `inventory`) and pays `sellValue`. Allowed in both modes.
+**`sellCrop { cropId, amount }`.** Refused unless `amount` is a whole number `>= 1` and at most what is held. Removes the crops (a crop at 0 is removed from `inventory`) and pays `sellValueFor` (with Premium produce). Allowed in both modes.
 
 **`makeFertilizer { cropId }`.** Refused unless `fertilizerAllowed` and at least `fertilizerCost` of the crop are held. Removes `fertilizerCost` crops and adds 1 fertilizer. There is no limit on fertilizer held.
 
@@ -129,7 +133,7 @@ No action here reads the clock or moves the tick, so replays work as before: a r
 
 **Selling**
 
-- `sellCrop` removes the crops and pays `sellValue`; refused for more than is held, 0, a fraction, or an unknown crop.
+- `sellCrop` removes the crops and pays `sellValue` (and more with Premium produce); refused for more than is held, 0, a fraction, or an unknown crop.
 - `sellValue` rounds the total down.
 - Refused while an upgrade offer is open.
 
@@ -170,6 +174,6 @@ No action here reads the clock or moves the tick, so replays work as before: a r
 - [ ] Compost is not sellable for now, so held fertilizer never becomes useless. Revisit when the shop buys upgrades back (Day 8).
 - [ ] Life price that scales with elapsed time (as well as, or instead of, per life bought). Likely to be dropped; not planned.
 - [ ] Should a reroll avoid repeating the cards it replaces? Should rerolls roll better tiers (see [upgrades.md](upgrades.md))?
-- [ ] Timed orders pay no coins, so in Timed coins come only from selling until the shop (Day 8).
-- [ ] Bigger barn and Premium produce (Day 7) set `storageBonus` and a sell price bonus.
+- [ ] Timed orders pay the same coins as Survival for now (base pay, Big tips, Early bird). Open question: should Timed have its own, lower rate (for example `timed.coinsPerOrder` in `modes.json`) once the shop exists? See the design doc.
+- [x] Bigger barn and Premium produce (Day 7) set `storageBonus` and `sellPricePct` (see [upgrades.md](upgrades.md)).
 - [ ] Shop restock price resets each time the shop opens (Day 8, `shop.md`).

@@ -247,4 +247,4 @@ Paid coins, bought with real money, carry over between runs and are separate fro
 - [ ] Fertilizer: for now it cuts a share of the crop's remaining growth time, works once per plot per planting, has no holding limit and doesn't count toward storage. Which of these should change?
 - [ ] Compost: for now it can't be sold, so fertilizer the player holds never becomes useless. Should it be sellable once the shop buys upgrades back?
 - [ ] Life price that scales with elapsed time instead of (or as well as) per life bought. Likely to be dropped.
-- [ ] Should Timed orders pay coins? For now they don't, so selling crops is Timed's only coin source until the shop.
+- [ ] Should Timed orders pay coins, and how many? For now they pay the same as Survival (base pay, Big tips, Early bird). Revisit once the shop exists: Timed may want its own, lower rate.

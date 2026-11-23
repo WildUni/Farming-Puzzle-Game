@@ -63,7 +63,16 @@ const MODIFIER_STATS: readonly ModifierStat[] = [
     "fogDurationPct",
     "emergencyTimePct",
     "storageBonus",
-    "fertilizerUnlocked"
+    "fertilizerUnlocked",
+    "comboMissesForgiven",
+    "comboStepBonusPct",
+    "comboStartPct",
+    "rushValuePct",
+    "finalePct",
+    "doubleDeliveryPct",
+    "sellPricePct",
+    "miracleGrow",
+    "miracleRechargeSeconds"
 ]
 
 // Stats read per plot and crop (by plant and harvest), so targeted upgrades may use them.

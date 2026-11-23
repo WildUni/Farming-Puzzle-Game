@@ -33,7 +33,7 @@ Every number lives in **`src/data/scoring.json`**, so tuning never needs a code 
 | `failedOrderPoints` | End of run | Points taken away per failed order                                                            |
 | `coinsPerPoint`     | End of run | Coins left over that make 1 point. `0` means coins don't count                                |
 
-All are whole numbers `>= 0`. The numbers are placeholders until a tuning pass. Timed earns no coins yet, so its coin line is always 0 until it does; its rate is lower than Survival's on purpose.
+All are whole numbers `>= 0`. The numbers are placeholders until a tuning pass. Timed orders pay coins like Survival's (for now), so its coin line counts them; its rate is lower than Survival's on purpose.
 
 Puzzle has no entry yet: it scores with every field at `0` (`NO_SCORING`), so an order is worth its value and nothing is added at the end.
 
@@ -70,12 +70,28 @@ Checks a parsed JSON value and returns it typed. Throws an `Error` naming the ba
 
 The mode's rules; `NO_SCORING` (every field `0`) for Puzzle.
 
+### `comboPctFor(state: GameState): number`
+
+The Timed combo multiplier for the next fill: `comboPct(state.combo, MODES.timed.combo, comboStepBonusPct, comboStartPct)` with the Combo builder and Head start modifiers. `100` outside Timed. The HUD's combo text uses it too.
+
+### `isFinale(state: GameState): boolean`
+
+True in Timed from tick `runTicks − finaleTicks` on (Grand finale's stretch).
+
+### `isPairFill(state: GameState): boolean`
+
+True in Timed when `pairOpenUntil > 0` and `tick <= pairOpenUntil`: a fill now pairs with the one before (Double delivery).
+
+### `fillBonusPct(state: GameState): number`
+
+Percent added to a fill's base points: `finalePct` while `isFinale`, plus `doubleDeliveryPct` while `isPairFill`. `0` outside Timed and with neither upgrade.
+
 ### `orderPoints(state: GameState, order: Order, rules = scoringRules(state.mode)): number`
 
 Points for filling `order` now, in `state` as it is **before** the fill (so the level and combo are the ones the player built up to this order):
 
-1. `multPct = (100 + levelBonusPct × level) × comboPct(combo) / 100`, where `level` is `runLevel(state)` (0 for level 1) in Survival and `0` in other modes, and `combo` is `state.combo` in Timed and `0` in other modes.
-2. `base = floor(value × multPct / 100)`.
+1. `multPct = (100 + levelBonusPct × level) × comboPctFor(state) / 100 × (100 + fillBonusPct(state)) / 100`, where `level` is `runLevel(state)` (0 for level 1) in Survival and `0` in other modes.
+2. `base = floor(value × multPct / 100)`, worked out in whole numbers with one division at the end.
 3. `left = min(timeLeft(order, tick), timeLimit)` (an Order freeze can push the deadline past the time limit).
 4. `speed = floor(value × speedBonusPct × left / (100 × timeLimit))`.
 5. Returns `base + speed`.
@@ -127,6 +143,6 @@ The final score and how it is made up. Works on any state; the summary shows it 
 - [x] Timed combo multiplier: applied per order through `orderPoints`, with its numbers in `modes.json`.
 - [x] Survival and Timed formulas, in one file with their numbers in `scoring.json`.
 - [ ] Tune every number after playtesting.
-- [ ] Timed coins (once Timed earns them) count at `coinsPerPoint` 4.
+- [ ] Timed coins count at `coinsPerPoint` 4. Re-check now that Timed orders pay the same coins as Survival.
 - [ ] Puzzle scoring once puzzle levels exist.
-- [ ] Rush pay and Grand finale (Timed upgrades) become modifiers on these numbers.
+- [x] Rush pay raises rush orders' value when they are made (see [main.md](main.md)); Grand finale and Double delivery add `fillBonusPct`; Combo builder and Head start go through `comboPctFor`.

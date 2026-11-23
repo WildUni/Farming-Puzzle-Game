@@ -225,6 +225,15 @@ describe("replay: matches the original run", () => {
         expect(replayState(7, timed, log, MODES.timed.runTicks, crops)).toEqual(state)
     })
 
+    it.each([1, 2, 3])("replays a full Timed run with upgrade picks equal (seed %i)", (seed) => {
+        const { state, log } = play(seed, timed, MODES.timed.runTicks)
+        const picks = log.filter((e) => e.action.type === "chooseUpgrade")
+        expect(picks.length).toBeGreaterThan(0)
+        expect(state.upgrades).toHaveLength(picks.length)
+        for (const u of state.upgrades) expect(UPGRADES.upgrades[u.id].pools).toContain("timed")
+        expect(replayState(seed, timed, log, MODES.timed.runTicks, crops)).toEqual(state)
+    })
+
     it.each([1, 2, 3])(
         "replays a full Survival run that runs out of lives, with lives bought (seed %i)",
         (seed) => {
@@ -426,6 +435,29 @@ describe("replay: rejects bad logs", () => {
         const other = replay(4, survival, log, state.tick, crops)
         if (other.ok) expect(other.state).not.toEqual(state)
         else expect(other.error).toBe("refused")
+    })
+})
+
+describe("replay: Miracle grow", () => {
+    // Takes Miracle grow whenever offered, and uses it on the first growing plot it can.
+    const miracleBot = (state: GameState): Action[] => {
+        if (state.upgradeOffer !== null) {
+            const i = state.upgradeOffer.findIndex((c) => c.id === "miracleGrow")
+            return [pickCard(state, Math.max(0, i))]
+        }
+        const plot = state.plots.findIndex((p) => p.state === "growing")
+        const use: Action[] = plot >= 0 ? [{ type: "useMiracleGrow", plot }] : []
+        return [...use, ...botMoves(state)]
+    }
+
+    it("replays runs that pick and use Miracle grow equal", () => {
+        let uses = 0
+        for (const seed of [1, 2, 3, 4, 5]) {
+            const { state, log } = play(seed, survival, 20_000, miracleBot)
+            uses += log.filter((e) => e.action.type === "useMiracleGrow").length
+            expect(replayState(seed, survival, log, state.tick, crops)).toEqual(state)
+        }
+        expect(uses).toBeGreaterThan(0)
     })
 })
 

@@ -61,5 +61,11 @@
 * crows only land on plots with crop, if all plots are empty, the event does nothing
 * added storage system
 * players can now sell crops for money and clear up storage
+* players can use crops for fertilizers after unlocking the corresponding upgrade
 * upgrades now come every 5 order instead of 10
+* crop harvest over the storage limit truncates crops. (will change to drop later, players can pick up)
+* reroll price increase per reroll
+* helpfulNeighbor event does not help you harvest if it puts u over the limit
+* crops have a different conversion rate to fertilizers
+* fertilizers can only be used once per plot, and dont count towards total store. might add a limit later.
 * 

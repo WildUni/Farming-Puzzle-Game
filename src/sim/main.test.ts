@@ -10,7 +10,10 @@ import {
     lifePriceFor,
     maxLivesFor,
     withUpgrade,
-    nextOrderPreview
+    nextOrderPreview,
+    canUseMiracleGrow,
+    miracleTargets,
+    miracleRechargeTicks
 } from "./main"
 import { buildCropTable, updateGrowth } from "./plot"
 import { createOrder } from "./orders"
@@ -21,11 +24,12 @@ import {
     ORDER_TICKS,
     DEFAULT_ORDER_RULES,
     ORDERS_PER_UPGRADE,
-    UPGRADE_CHOICES
+    UPGRADE_CHOICES,
+    TICKS_PER_SECOND
 } from "./game_constants"
 import { DIFFICULTY, lifePrice, levelFor, orderRulesFor, runLevel } from "./difficulty"
 import { MODES, comboPct, rushWaveAt } from "./modes"
-import { SCORING, orderPoints } from "./scoring"
+import { SCORING, comboPctFor, fillBonusPct, isFinale, isPairFill, orderPoints } from "./scoring"
 import {
     UPGRADES,
     effectAmount,
@@ -36,7 +40,14 @@ import {
 } from "./upgrades"
 import { EVENTS } from "./events"
 import { POWER_UPS } from "./powerups"
-import { ECONOMY, sellValue, fertilizedReadyAt, rerollPrice } from "./economy"
+import {
+    ECONOMY,
+    sellValue,
+    sellValueFor,
+    storageCap,
+    fertilizedReadyAt,
+    rerollPrice
+} from "./economy"
 import type {
     Action,
     Crop,
@@ -317,9 +328,23 @@ describe("applyAction: deliver", () => {
         )
     })
 
-    it("pays no coins in Timed", () => {
-        const state = makeTimed({ orders: [makeOrder()], inventory: { carrot: 3 } })
-        expect(apply(state, { type: "deliver", orderId: 0 }).coins).toBe(0)
+    it("pays the same coinsPerOrder coins in Timed", () => {
+        const state = makeTimed({ orders: [makeOrder()], inventory: { carrot: 3 }, coins: 2 })
+        expect(apply(state, { type: "deliver", orderId: 0 }).coins).toBe(
+            2 + DIFFICULTY.coinsPerOrder
+        )
+    })
+
+    it("pays Big tips and Early bird in Timed too", () => {
+        const order = makeOrder({ expiresAt: 600, timeLimit: 600 })
+        const upgrades = [own("bigTips", "rare"), own("earlyBird", "rare")]
+        const state = makeTimed({ orders: [order], inventory: { carrot: 3 }, upgrades })
+        const extra =
+            effectAmount(UPGRADES.upgrades.bigTips, 0, "rare") +
+            effectAmount(UPGRADES.upgrades.earlyBird, 0, "rare")
+        expect(apply(state, { type: "deliver", orderId: 0 }).coins).toBe(
+            DIFFICULTY.coinsPerOrder + extra
+        )
     })
 
     it("removes crops that drop to 0", () => {
@@ -929,10 +954,29 @@ describe("upgrades: offer flow", () => {
         expect(next.offersMade).toBe(2)
     })
 
-    it("never makes an offer in Timed", () => {
-        const next = step(makeTimed({ ordersCompleted: 5 * ORDERS_PER_UPGRADE }), crops)
-        expect(next.upgradeOffer).toBeNull()
-        expect(next.offersMade).toBe(0)
+    it("makes offers in Timed from the Timed pool, with the clock stopped", () => {
+        const early = makeTimed({ ordersCompleted: ORDERS_PER_UPGRADE - 1 })
+        expect(step(early, crops).upgradeOffer).toBeNull()
+        const next = step(makeTimed({ ordersCompleted: ORDERS_PER_UPGRADE }), crops)
+        expect(next.upgradeOffer).toHaveLength(UPGRADE_CHOICES)
+        expect(next.offersMade).toBe(1)
+        for (const c of next.upgradeOffer!) {
+            expect(UPGRADES.upgrades[c.id].pools).toContain("timed")
+        }
+        expect(step(next, crops)).toBe(next)
+        const picked = apply(next, { type: "chooseUpgrade", upgradeId: next.upgradeOffer![0].id })
+        expect(picked.upgradeOffer).toBeNull()
+        expect(step(picked, crops).tick).toBe(next.tick + 1)
+    })
+
+    it("lets Timed reroll an offer with coins from selling", () => {
+        const open = step(makeTimed({ ordersCompleted: ORDERS_PER_UPGRADE }), crops)
+        expect(canReroll(open)).toBe(false)
+        const rich = { ...open, coins: 100 }
+        expect(canReroll(rich)).toBe(true)
+        const rerolled = apply(rich, { type: "rerollOffer" })
+        expect(rerolled.rerollsThisOffer).toBe(1)
+        expect(rerolled.coins).toBeLessThan(100)
     })
 
     it("carries on with no offer when every upgrade is at maxCopies", () => {
@@ -1048,6 +1092,14 @@ describe("upgrades: modifiers change the rules", () => {
         const state = makeState({ upgrades: [own("patientCustomers", "uncommon")] })
         const pct = 100 + effectAmount(UPGRADES.upgrades.patientCustomers, 0, "uncommon")
         const expected = scalePct(orderRulesFor(0).orderTicks, pct)
+        expect(orderRules(state).orderTicks).toBe(expected)
+        expect(step(state, crops).orders[0].timeLimit).toBe(expected)
+    })
+
+    it("orderTimePct lengthens new orders' time limit in Timed too", () => {
+        const state = makeTimed({ upgrades: [own("patientCustomers", "uncommon")] })
+        const pct = 100 + effectAmount(UPGRADES.upgrades.patientCustomers, 0, "uncommon")
+        const expected = scalePct(DEFAULT_ORDER_RULES.orderTicks, pct)
         expect(orderRules(state).orderTicks).toBe(expected)
         expect(step(state, crops).orders[0].timeLimit).toBe(expected)
     })
@@ -1878,5 +1930,280 @@ describe("rerollOffer", () => {
         expect(s.upgradeOffer).not.toBeNull()
         expect(s.rerollsThisOffer).toBe(0)
         expect(rerollPriceFor(s)).toBe(rerollPrice(0))
+    })
+})
+
+describe("Timed upgrades", () => {
+    const COMBO = MODES.timed.combo
+    const deliver = (orderId: number): Action => ({ type: "deliver", orderId })
+    const amount = (id: string, tier: Tier) => effectAmount(UPGRADES.upgrades[id], 0, tier)
+    // Orders due on `tick`, so the speed bonus is 0.
+    const due = (tick: number, ids: number[], value = 10) =>
+        ids.map((id) => makeOrder({ id, value, expiresAt: tick }))
+
+    it("are all in the Timed pool only", () => {
+        const ids = [
+            "comboKeeper",
+            "comboBuilder",
+            "rushPay",
+            "headStart",
+            "grandFinale",
+            "doubleDelivery"
+        ]
+        for (const id of ids) expect(UPGRADES.upgrades[id].pools).toEqual(["timed"])
+    })
+
+    it("createGame starts with no forgiven misses and no open pair", () => {
+        const g = createGame(1, timed)
+        expect([g.comboMisses, g.pairOpenUntil]).toEqual([0, 0])
+    })
+
+    describe("Combo keeper", () => {
+        const failing = (tick: number) => makeOrder({ id: 0, expiresAt: tick })
+        const at = (overrides: Partial<GameState>) =>
+            makeTimed({
+                tick: 99,
+                orders: [failing(99)],
+                nextOrderId: 1,
+                combo: 4,
+                comboEndsAt: 500,
+                ...overrides
+            })
+
+        it("forgives comboMissesForgiven failed orders per streak, then breaks", () => {
+            const upgrades = [own("comboKeeper", "common")]
+            expect(amount("comboKeeper", "common")).toBe(1)
+            const kept = step(at({ upgrades }), crops)
+            expect(kept.ordersFailed).toBe(1)
+            expect([kept.combo, kept.comboMisses]).toEqual([4, 1])
+            const second = step({ ...kept, orders: [failing(100)] }, crops)
+            expect([second.combo, second.comboMisses, second.comboEndsAt]).toEqual([0, 0, 0])
+        })
+
+        it("breaks when more orders fail on one tick than it has left", () => {
+            const two = [failing(99), makeOrder({ id: 1, expiresAt: 99 })]
+            const next = step(at({ upgrades: [own("comboKeeper", "common")], orders: two }), crops)
+            expect(next.combo).toBe(0)
+        })
+
+        it("does not save a streak whose window ran out", () => {
+            const s = at({ upgrades: [own("comboKeeper", "legendary")], comboEndsAt: 99 })
+            expect(step(s, crops).combo).toBe(0)
+        })
+
+        it("without it, the first failed order breaks the combo", () => {
+            expect(step(at({}), crops).combo).toBe(0)
+        })
+    })
+
+    it("Combo builder adds comboStepBonusPct per order in a row, under the same cap", () => {
+        const upgrades = [own("comboBuilder", "rare")]
+        const bonus = amount("comboBuilder", "rare")
+        const s = makeTimed({ tick: 100, orders: due(100, [0]), inventory: { carrot: 3 } })
+        const two = apply({ ...s, combo: 2, upgrades }, deliver(0))
+        expect(two.score).toBe(Math.floor((10 * (100 + 2 * (COMBO.stepPct + bonus))) / 100))
+        const capped = apply({ ...s, combo: 1000, upgrades }, deliver(0))
+        expect(capped.score).toBe(Math.floor((10 * COMBO.capPct) / 100))
+    })
+
+    it("Head start lifts the multiplier from x1, even with no streak", () => {
+        const upgrades = [own("headStart", "epic")]
+        const start = amount("headStart", "epic")
+        const s = makeTimed({ tick: 100, orders: due(100, [0], 20), inventory: { carrot: 3 } })
+        expect(apply({ ...s, upgrades }, deliver(0)).score).toBe(
+            Math.floor((20 * (100 + start)) / 100)
+        )
+        expect(comboPctFor({ ...s, upgrades })).toBe(100 + start)
+        expect(comboPctFor({ ...s, upgrades, combo: 1000 })).toBe(COMBO.capPct)
+        expect(comboPctFor(makeState({ upgrades }))).toBe(100)
+    })
+
+    it("Rush pay raises the value of rush orders, and nothing else about them", () => {
+        const RUSH = MODES.timed.rush
+        const WAVE = RUSH.atTicks[0]
+        const far = [0, 1, 2].map((id) => makeOrder({ id, expiresAt: 100_000 }))
+        const base = makeTimed({ tick: WAVE - 1, orders: far, nextOrderId: 3 })
+        const plain = step(base, crops)
+        const paid = step({ ...base, upgrades: [own("rushPay", "legendary")] }, crops)
+        const extra = amount("rushPay", "legendary")
+        expect(paid.orders.slice(0, 3)).toEqual(far)
+        expect(paid.orders).toHaveLength(plain.orders.length)
+        for (let i = 3; i < plain.orders.length; i++) {
+            expect({ ...paid.orders[i], value: 0 }).toEqual({ ...plain.orders[i], value: 0 })
+        }
+        const rules = { ...orderRules(base), orderTicks: scalePct(ORDER_TICKS, RUSH.timePct) }
+        const [first] = createOrder(3, WAVE, base.rng.rush, crops, rules)
+        expect(paid.orders[3].value).toBe(scalePct(first.value, RUSH.valuePct + extra))
+        expect(paid.orders[3].value).toBeGreaterThan(plain.orders[3].value)
+    })
+
+    describe("Grand finale", () => {
+        const FINALE = MODES.timed.runTicks - MODES.timed.finaleTicks
+        const at = (tick: number) =>
+            makeTimed({
+                tick,
+                orders: due(tick, [0], 40),
+                inventory: { carrot: 3 },
+                upgrades: [own("grandFinale", "rare")]
+            })
+
+        it("adds finalePct to fills from the last finaleTicks on", () => {
+            const pct = amount("grandFinale", "rare")
+            expect(apply(at(FINALE), deliver(0)).score).toBe(Math.floor((40 * (100 + pct)) / 100))
+            expect(apply(at(FINALE - 1), deliver(0)).score).toBe(40)
+        })
+
+        it("does nothing outside Timed", () => {
+            expect(isFinale(makeState({ tick: FINALE }))).toBe(false)
+        })
+    })
+
+    describe("Double delivery", () => {
+        const PAIR = MODES.timed.pairTicks
+        const ready = (upgrades: OwnedUpgrade[] = [own("doubleDelivery", "epic")]) =>
+            makeTimed({
+                tick: 100,
+                orders: [0, 1, 2].map((id) => makeOrder({ id, value: 40, expiresAt: 100_000 })),
+                inventory: { carrot: 99 },
+                upgrades
+            })
+        const gain = (s: GameState, id: number) => apply(s, deliver(id)).score - s.score
+
+        it("a fill opens a pair; one within pairTicks closes it with doubleDeliveryPct", () => {
+            const first = apply(ready(), deliver(0))
+            expect(first.pairOpenUntil).toBe(100 + PAIR)
+            const later = { ...first, tick: 100 + PAIR }
+            expect(isPairFill(later)).toBe(true)
+            expect(fillBonusPct(later)).toBe(amount("doubleDelivery", "epic"))
+            const second = apply(later, deliver(1))
+            expect(second.pairOpenUntil).toBe(0)
+            // The third fill starts a new pair rather than pairing again.
+            const third = apply(second, deliver(2))
+            expect(third.pairOpenUntil).toBe(100 + PAIR + PAIR)
+            expect(gain(later, 1)).toBe(orderPoints(later, later.orders[0]))
+            expect(gain(later, 1)).toBeGreaterThan(gain({ ...later, upgrades: [] }, 1))
+        })
+
+        it("a fill after the window does not pair", () => {
+            const first = apply(ready(), deliver(0))
+            const late = { ...first, tick: 101 + PAIR }
+            expect(isPairFill(late)).toBe(false)
+            expect(fillBonusPct(late)).toBe(0)
+            expect(apply(late, deliver(1)).pairOpenUntil).toBe(101 + PAIR + PAIR)
+        })
+
+        it("Finish all neither pays nor changes the pair", () => {
+            const on: GameConfig = { mode: "timed", allowPowerUps: true, allowEvents: false }
+            const s: GameState = {
+                ...createGame(1, on),
+                tick: 100,
+                pairOpenUntil: 150,
+                upgrades: [own("doubleDelivery", "epic")],
+                orders: due(100, [0, 1]),
+                powerUps: ["finishAll"]
+            }
+            const all = apply(s, { type: "usePowerUp", slot: 0 })
+            expect(all.pairOpenUntil).toBe(150)
+            expect(all.score).toBe(0)
+        })
+    })
+})
+
+describe("Bigger barn, Premium produce and Miracle grow", () => {
+    const readyPumpkin: Plot = { state: "ready", cropId: "pumpkin" }
+    const amount = (id: string, tier: Tier) => effectAmount(UPGRADES.upgrades[id], 0, tier)
+
+    it("Bigger barn raises the storage cap in both modes", () => {
+        const extra = amount("biggerBarn", "rare")
+        const upgrades = [own("biggerBarn", "rare")]
+        expect(storageCap(makeState({ upgrades }))).toBe(MODES.survival.storageCap + extra)
+        expect(storageCap(makeTimed({ upgrades }))).toBe(MODES.timed.storageCap + extra)
+        // A harvest that wouldn't fit without it now fits.
+        const full = { plots: [readyPumpkin], inventory: { garlic: MODES.survival.storageCap } }
+        expect(applyAction(makeState(full), { type: "harvest", plot: 0 }, crops)).toBeNull()
+        const roomy = applyAction(
+            makeState({ ...full, upgrades }),
+            { type: "harvest", plot: 0 },
+            crops
+        )!
+        expect(roomy.inventory.pumpkin).toBe(Math.min(crops.pumpkin.yield, extra))
+    })
+
+    it("Bigger barn stops being offered once storageBonus is capped", () => {
+        const max = UPGRADES.stats.storageBonus.max
+        const legendary = amount("biggerBarn", "legendary")
+        const copies = Array.from({ length: Math.ceil(max / legendary) }, () =>
+            own("biggerBarn", "legendary")
+        )
+        expect(modifiersFor(copies).storageBonus).toBe(max)
+        expect(eligibleUpgrades(makeState(), "survival", crops)).toContain("biggerBarn")
+        expect(eligibleUpgrades(makeState({ upgrades: copies }), "survival", crops)).not.toContain(
+            "biggerBarn"
+        )
+    })
+
+    it("Premium produce raises what sellCrop pays", () => {
+        const upgrades = [own("premiumProduce", "legendary")]
+        const pct = 100 + amount("premiumProduce", "legendary")
+        const s = makeState({ inventory: { pumpkin: 8 }, coins: 0, upgrades })
+        const next = applyAction(s, { type: "sellCrop", cropId: "pumpkin", amount: 8 }, crops)!
+        expect(next.coins).toBe(sellValue(crops.pumpkin, 8, ECONOMY, pct))
+        expect(next.coins).toBeGreaterThan(sellValue(crops.pumpkin, 8))
+        expect(sellValueFor(s, crops.pumpkin, 8)).toBe(next.coins)
+    })
+
+    describe("Miracle grow", () => {
+        const growing: Plot = { state: "growing", cropId: "pumpkin", plantedAt: 0, readyAt: 900 }
+        const owned = (overrides: Partial<GameState> = {}) =>
+            makeState({
+                tick: 100,
+                plots: [growing, { state: "empty" }],
+                upgrades: [own("miracleGrow", "rare")],
+                ...overrides
+            })
+        const use = (plot: number): Action => ({ type: "useMiracleGrow", plot })
+
+        it("starts ready and is shown only once owned", () => {
+            expect(createGame(1, config).miracleReadyAt).toBe(0)
+            expect(canUseMiracleGrow(makeState({ tick: 100 }))).toBe(false)
+            expect(canUseMiracleGrow(owned())).toBe(true)
+            expect(miracleTargets(owned())).toEqual([0])
+        })
+
+        it("finishes a growing plot and starts the recharge, shorter at higher tiers", () => {
+            const next = apply(owned(), use(0))
+            expect(next.plots[0]).toEqual({ state: "ready", cropId: "pumpkin" })
+            const seconds = 60 + effectAmount(UPGRADES.upgrades.miracleGrow, 1, "rare")
+            expect(UPGRADES.stats.miracleRechargeSeconds.base).toBe(60)
+            expect(miracleRechargeTicks(next)).toBe(seconds * TICKS_PER_SECOND)
+            expect(next.miracleReadyAt).toBe(100 + seconds * TICKS_PER_SECOND)
+            const legendary = owned({ upgrades: [own("miracleGrow", "legendary")] })
+            expect(miracleRechargeTicks(legendary)).toBeLessThan(miracleRechargeTicks(next))
+        })
+
+        it("is refused while recharging, then works again on miracleReadyAt", () => {
+            const used = apply(owned({ plots: [growing, growing] }), use(0))
+            expect(applyAction(used, use(1), crops)).toBeNull()
+            expect(miracleTargets(used)).toEqual([])
+            const later = { ...used, tick: used.miracleReadyAt - 1 }
+            expect(applyAction(later, use(1), crops)).toBeNull()
+            expect(
+                applyAction({ ...later, tick: used.miracleReadyAt }, use(1), crops)
+            ).not.toBeNull()
+        })
+
+        it("refuses without the upgrade, on a plot that isn't growing, a bad index, or an open offer", () => {
+            expect(applyAction(owned({ upgrades: [] }), use(0), crops)).toBeNull()
+            expect(applyAction(owned(), use(1), crops)).toBeNull()
+            expect(applyAction(owned(), use(7), crops)).toBeNull()
+            expect(applyAction(owned({ upgradeOffer: OFFER }), use(0), crops)).toBeNull()
+        })
+
+        it("the recharge waits while an offer is open, since it counts ticks", () => {
+            const used = apply(owned(), use(0))
+            const open = { ...used, upgradeOffer: OFFER }
+            expect(step(open, crops)).toBe(open)
+            expect(canUseMiracleGrow({ ...used, tick: used.miracleReadyAt })).toBe(true)
+        })
     })
 })

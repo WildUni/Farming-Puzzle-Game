@@ -110,6 +110,15 @@ describe("sellValue", () => {
         expect(sellValue(garlic, 2, config)).toBe(1)
         expect(sellValue(garlic, 3, config)).toBe(1)
     })
+
+    it("applies a bonus percent (Premium produce) before the one rounding down", () => {
+        const config: EconomyConfig = { ...ECONOMY, sellPricePct: 25 }
+        expect(sellValue(pumpkin, 1, config, 100)).toBe(sellValue(pumpkin, 1, config))
+        // 2 garlic at 25% is 1 coin; at 150% of that it is still 1 (1.5 rounds down).
+        expect(sellValue(garlic, 2, config, 150)).toBe(1)
+        expect(sellValue(garlic, 4, config, 150)).toBe(3)
+        expect(sellValue(pumpkin, 3, config, 200)).toBe(18)
+    })
 })
 
 describe("fertilizer rules", () => {
