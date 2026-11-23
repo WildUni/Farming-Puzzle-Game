@@ -14,6 +14,7 @@ import { GameOverView } from "../views/GameOverView"
 import { UpgradePickView } from "../views/UpgradePickView"
 import { PowerUpBar } from "../views/PowerUpBar"
 import { EventBanner } from "../views/EventBanner"
+import { RushBanner } from "../views/RushBanner"
 import { DebugPanel } from "../views/DebugPanel"
 import { POWER_UPS, powerUpTargets } from "../../sim/powerups"
 
@@ -46,6 +47,7 @@ export class Game extends Scene {
     private upgradePick: UpgradePickView
     private powerUpBar: PowerUpBar
     private eventBanner: EventBanner
+    private rushBanner: RushBanner
     private debugPanel: DebugPanel | null // dev builds only
     private debugged: boolean // the debug menu changed this run, so its log won't replay
     private debug: GameObjects.Text
@@ -104,6 +106,7 @@ export class Game extends Scene {
         )
         this.powerUpBar = new PowerUpBar(this, (slot) => this.onPowerUpClick(slot))
         this.eventBanner = new EventBanner(this)
+        this.rushBanner = new RushBanner(this)
         this.debugPanel = import.meta.env.DEV
             ? new DebugPanel(this.crops, (change) => this.applyDebug(change))
             : null
@@ -165,6 +168,7 @@ export class Game extends Scene {
         this.plots.update(this.state, this.pickerPlot, aiming === "plot" ? this.targets() : null)
         this.powerUpBar.update(this.state, this.choosingSlot)
         this.eventBanner.update(this.state)
+        this.rushBanner.update(this.state)
         this.pause.update(this.paused)
         this.buyLife.update(this.state)
         this.upgradePick.update(this.state)

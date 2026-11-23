@@ -10,6 +10,13 @@
             "stepPct": 25,
             "capPct": 300,
             "windowSeconds": 20
+        },
+        "rush": {
+            "atSeconds": [75, 160, 245],
+            "warnSeconds": 5,
+            "orders": 3,
+            "timePct": 50,
+            "valuePct": 150
         }
     }
 }

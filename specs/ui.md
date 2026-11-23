@@ -115,6 +115,17 @@ While `isFogged(state)` (a `fog` effect is working): growing plots show `?` inst
 
 An order Small order halved has `SMALL` after its number on the first line of its card (`Order #4  SMALL`), and so does a Sneak peek card for one (`Next order  SMALL`).
 
+## Rush waves (RushBanner, OrdersView)
+
+Timed only.
+
+- **Banner** (`rushBannerText`), orange, in the event banner's spot; while an event banner also shows, it moves up above it. It never takes clicks.
+    - During a wave's warning (`upcomingRushWave`): `Rush wave in 3s`, seconds rounded up.
+    - While any rush order is open: `Rush wave! 2 left`.
+    - Hidden otherwise, in Survival and once the run has ended.
+- **Cards:** a rush order's card has an orange fill and `RUSH` after its number (`Order #5  RUSH`, or `Order #5  RUSH SMALL`).
+- **Layout:** up to 3 open orders stack in one column of full-width cards. With more, cards narrow to fit two columns left of the stats table, filled top to bottom with `max(3, ceil(n / 2))` rows, so the first three orders keep their rows and the extra ones start the second column. That fits 8 cards above the banner.
+
 ## Sneak peek (OrdersView)
 
 With Sneak peek, a dimmed card under the open orders shows `nextOrderPreview(state, crops)` as `Next order`, one `crop xN` line per crop, and its value (`nextOrderText`). It takes no clicks. Hidden without the upgrade.
@@ -185,6 +196,6 @@ Three sections, top to bottom:
 - [ ] Plot upgrades: pick the plot on the board itself (valid plots highlighted, the rest greyed out) instead of a row of `Plot N` buttons, once a plot upgrade can be offered. Greenhouse is the first (see [events.md](events.md)).
 
 - [x] Combo multiplier in Timed, with a Combo row in the HUD and best combo on the summary.
-- [ ] Rush waves in Timed (Day 5), with a warning banner.
+- [x] Rush waves in Timed (Day 5), with a warning banner.
 - [ ] High score per mode on the mode select (Day 5 saves).
 - [ ] Puzzle in the picker once puzzle levels exist.

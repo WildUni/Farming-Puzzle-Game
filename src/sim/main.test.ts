@@ -22,7 +22,7 @@ import {
     UPGRADE_CHOICES
 } from "./game_constants"
 import { DIFFICULTY, lifePrice, levelFor, orderRulesFor, runLevel } from "./difficulty"
-import { MODES, comboPct } from "./modes"
+import { MODES, comboPct, rushWaveAt } from "./modes"
 import {
     UPGRADES,
     effectAmount,
@@ -73,6 +73,7 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
         expiresAt: 600,
         timeLimit: 600,
         small: false,
+        rush: false,
         ...overrides
     }
 }
@@ -122,7 +123,8 @@ describe("createGame", () => {
             drops: seedStream(1, 3),
             events: seedStream(1, 4),
             lives: seedStream(1, 5),
-            shrink: seedStream(1, 6)
+            shrink: seedStream(1, 6),
+            rush: seedStream(1, 7)
         })
         expect(g.secondWind).toBe(false)
         expect(g.allowEvents).toBe(false)
@@ -545,11 +547,12 @@ describe("step: orders", () => {
         expect(next.rng.orders).toBe(rng)
     })
 
-    it("never opens more than TIMED_OPEN orders", () => {
+    it("never opens more than TIMED_OPEN regular orders (rush waves add past it)", () => {
         let state = createGame(5, timed)
         for (let i = 0; i < 2000; i++) {
             state = step(state, crops)
-            expect(state.orders.length).toBeLessThanOrEqual(TIMED_OPEN)
+            const regular = state.orders.filter((o) => !o.rush)
+            expect(regular.length).toBeLessThanOrEqual(TIMED_OPEN)
         }
     })
 
@@ -1590,5 +1593,84 @@ describe("Timed combo", () => {
         const next = apply(s, deliver(0))
         expect(next.score).toBe(24)
         expect([next.combo, next.comboEndsAt, next.bestCombo]).toEqual([0, 0, 0])
+    })
+})
+
+describe("Timed rush waves", () => {
+    const RUSH = MODES.timed.rush
+    const WAVE = RUSH.atTicks[0]
+    // Three regular orders that stay open, so the board is full when the wave arrives.
+    const far = [0, 1, 2].map((id) => makeOrder({ id, expiresAt: 100_000 }))
+
+    // A Timed game on the tick before `tick`, with the board full.
+    function before(tick: number, overrides: Partial<GameState> = {}): GameState {
+        return makeTimed({ tick: tick - 1, orders: far, nextOrderId: 3, ...overrides })
+    }
+
+    it("createGame seeds rng.rush with salt 7", () => {
+        expect(createGame(1, timed).rng.rush).toBe(seedStream(1, 7))
+    })
+
+    it("adds rush.orders short, well-paid orders on a wave tick, from rng.rush", () => {
+        const s = before(WAVE)
+        const next = step(s, crops)
+        expect(rushWaveAt(WAVE)).toBe(0)
+        expect(next.orders.slice(0, 3)).toEqual(far)
+
+        const rules = { ...orderRules(s), orderTicks: scalePct(ORDER_TICKS, RUSH.timePct) }
+        let rng = s.rng.rush
+        const expected: Order[] = []
+        for (let i = 0; i < RUSH.orders; i++) {
+            const [order, after] = createOrder(3 + i, WAVE, rng, crops, rules)
+            expected.push({ ...order, value: scalePct(order.value, RUSH.valuePct), rush: true })
+            rng = after
+        }
+        expect(next.orders.slice(3)).toEqual(expected)
+        expect(next.rng.rush).toBe(rng)
+        expect(next.nextOrderId).toBe(3 + RUSH.orders)
+        expect(next.orders[3].timeLimit).toBe(scalePct(ORDER_TICKS, RUSH.timePct))
+    })
+
+    it("leaves rng.orders alone and adds nothing on the ticks either side", () => {
+        const s = before(WAVE)
+        expect(step(s, crops).rng.orders).toBe(s.rng.orders)
+        for (const tick of [WAVE - 1, WAVE + 1]) {
+            const t = before(tick)
+            const next = step(t, crops)
+            expect(next.orders).toEqual(far)
+            expect(next.rng.rush).toBe(t.rng.rush)
+        }
+    })
+
+    it("makes no rush orders in Survival", () => {
+        const s = makeState({ tick: WAVE - 1, orders: far, nextOrderId: 3 })
+        expect(step(s, crops).orders.some((o) => o.rush)).toBe(false)
+    })
+
+    it("makes no regular order until the board drops below openOrders", () => {
+        let s = step(before(WAVE), crops)
+        const open = s.orders.length
+        // Fill one regular order: the board is still at or above openOrders, so nothing comes.
+        s = apply({ ...s, inventory: { carrot: 99 } }, { type: "deliver", orderId: 0 })
+        s = step(s, crops)
+        expect(s.orders.length).toBe(open - 1)
+        // Down to one below openOrders: a regular order fills the gap.
+        s = step({ ...s, orders: s.orders.slice(0, TIMED_OPEN - 1) }, crops)
+        expect(s.orders.length).toBe(TIMED_OPEN)
+        expect(s.orders[TIMED_OPEN - 1].rush).toBe(false)
+    })
+
+    it("a failed rush order breaks the combo", () => {
+        const rush = makeOrder({ id: 3, expiresAt: 99, rush: true })
+        const s = makeTimed({
+            tick: 99,
+            orders: [...far, rush],
+            nextOrderId: 4,
+            combo: 3,
+            comboEndsAt: 500
+        })
+        const next = step(s, crops)
+        expect(next.ordersFailed).toBe(1)
+        expect(next.combo).toBe(0)
     })
 })

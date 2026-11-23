@@ -16,7 +16,7 @@ import { START_PLOTS, DEFAULT_ORDER_RULES, ORDERS_PER_UPGRADE } from "./game_con
 import { plant, harvest, updateGrowth } from "./plot"
 import { createOrder, fulfill, isExpired, timeLeft } from "./orders"
 import { DIFFICULTY, runLevel, orderRulesFor, lifePrice } from "./difficulty"
-import { MODES, comboPct } from "./modes"
+import { MODES, comboPct, rushWaveAt } from "./modes"
 import {
     UPGRADES,
     modifiersFor,
@@ -48,6 +48,7 @@ const DROPS_STREAM_SALT = 3
 const EVENTS_STREAM_SALT = 4
 const LIVES_STREAM_SALT = 5
 const SHRINK_STREAM_SALT = 6
+const RUSH_STREAM_SALT = 7
 
 function createGame(seed: RNGSeed, config: GameConfig): GameState {
     return {
@@ -61,7 +62,8 @@ function createGame(seed: RNGSeed, config: GameConfig): GameState {
             drops: seedStream(seed, DROPS_STREAM_SALT),
             events: seedStream(seed, EVENTS_STREAM_SALT),
             lives: seedStream(seed, LIVES_STREAM_SALT),
-            shrink: seedStream(seed, SHRINK_STREAM_SALT)
+            shrink: seedStream(seed, SHRINK_STREAM_SALT),
+            rush: seedStream(seed, RUSH_STREAM_SALT)
         },
         plots: Array.from({ length: START_PLOTS }, (): Plot => ({ state: "empty" })),
         inventory: {},
@@ -497,8 +499,30 @@ function step(state: GameState, crops: CropTable): GameState {
     const orders = [...next.orders]
     let ordersRng = next.rng.orders
     let shrinkRng = next.rng.shrink
+    let rushRng = next.rng.rush
     let nextOrderId = next.nextOrderId
     let wind = next.secondWind
+    // Timed rush wave: short, well-paid orders from rng.rush, added past maxOpenOrders. They
+    // count toward it, so regular orders wait until the board drops back below it.
+    if (next.mode === "timed" && rushWaveAt(tick) !== null) {
+        const rush = MODES.timed.rush
+        const rushRules = { ...rules, orderTicks: scalePct(rules.orderTicks, rush.timePct) }
+        for (let i = 0; i < rush.orders; i++) {
+            const [order, afterRush, afterShrink] = makeOrder(
+                next,
+                nextOrderId,
+                tick,
+                rushRng,
+                shrinkRng,
+                crops,
+                rushRules
+            )
+            orders.push({ ...order, value: scalePct(order.value, rush.valuePct), rush: true })
+            rushRng = afterRush
+            shrinkRng = afterShrink
+            nextOrderId += 1
+        }
+    }
     while (orders.length < rules.maxOpenOrders) {
         const [order, afterOrders, afterShrink] = makeOrder(
             next,
@@ -521,7 +545,7 @@ function step(state: GameState, crops: CropTable): GameState {
         orders,
         nextOrderId,
         secondWind: wind,
-        rng: { ...next.rng, orders: ordersRng, shrink: shrinkRng }
+        rng: { ...next.rng, orders: ordersRng, shrink: shrinkRng, rush: rushRng }
     }
 
     // 8. Event announcement, from its own stream after the orders

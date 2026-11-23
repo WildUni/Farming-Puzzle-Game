@@ -26,7 +26,15 @@ function growing(plantedAt: number, readyAt: number): Plot {
 }
 
 function order(expiresAt: number, timeLimit = 100): Order {
-    return { id: 0, required: { garlic: 2 }, value: 4, expiresAt, timeLimit, small: false }
+    return {
+        id: 0,
+        required: { garlic: 2 },
+        value: 4,
+        expiresAt,
+        timeLimit,
+        small: false,
+        rush: false
+    }
 }
 
 function effect(

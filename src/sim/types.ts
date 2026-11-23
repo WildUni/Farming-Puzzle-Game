@@ -8,6 +8,7 @@ type RNGStreams = {
     events: RNGState
     lives: RNGState // Second chance rolls
     shrink: RNGState // Small order rolls
+    rush: RNGState // Timed rush wave orders
 }
 type RNGSeed = number
 type GameMode = "survival" | "timed" | "puzzle"
@@ -41,6 +42,7 @@ type Order = {
     expiresAt: number // last tick the order can be filled; fails on the tick after
     timeLimit: number // ticks the order was given when created
     small: boolean // Small order halved its amounts
+    rush: boolean // a Timed rush wave added it
 }
 
 // How step creates orders at the current difficulty.

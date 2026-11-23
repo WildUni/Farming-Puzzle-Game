@@ -6,6 +6,7 @@ import {
     shownEffects,
     ordersFrozen,
     eventBannerText,
+    rushBannerText,
     eventIsGood,
     plotOverlays,
     timerText,
@@ -37,7 +38,7 @@ import {
 import { createGame } from "../sim/main"
 import { buildCropTable } from "../sim/plot"
 import { lifePrice, levelFor, DIFFICULTY } from "../sim/difficulty"
-import { ORDER_TICKS } from "../sim/game_constants"
+import { ORDER_TICKS, TICKS_PER_SECOND } from "../sim/game_constants"
 import { MODES, comboPct } from "../sim/modes"
 import { UPGRADES, effectAmount, scalePct } from "../sim/upgrades"
 import { POWER_UPS } from "../sim/powerups"
@@ -95,7 +96,8 @@ describe("orderText", () => {
             value: 8,
             expiresAt: 600,
             timeLimit: 600,
-            small: false
+            small: false,
+            rush: false
         }
         const state = { ...game("timed"), tick: 100, inventory: { garlic: 2 } }
         expect(orderText(order, state)).toBe("Order #3\ngarlic x4  (have 2)\nvalue 8   0:50")
@@ -314,7 +316,8 @@ describe("orderTimeFraction and isOrderUrgent", () => {
         value: 4,
         expiresAt: ORDER_TICKS,
         timeLimit: ORDER_TICKS,
-        small: false
+        small: false,
+        rush: false
     }
 
     it("runs from 1 when the order opens to 0 on its last tick", () => {
@@ -531,7 +534,8 @@ describe("second batch text: fog, worms, sneak peek, steady pace", () => {
             value: 6,
             expiresAt: 600,
             timeLimit: 600,
-            small: false
+            small: false,
+            rush: false
         }
         expect(orderText(order, fogged(12))).toBe("Order #2\ngarlic x3  (have 0)\nvalue 6   ?:??")
     })
@@ -543,7 +547,8 @@ describe("second batch text: fog, worms, sneak peek, steady pace", () => {
             value: 8,
             expiresAt: 600,
             timeLimit: 600,
-            small: true
+            small: true,
+            rush: false
         }
         expect(orderText(order, game("survival")).split("\n")[0]).toBe("Order #4  SMALL")
         expect(nextOrderText(order).split("\n")[0]).toBe("Next order  SMALL")
@@ -556,7 +561,8 @@ describe("second batch text: fog, worms, sneak peek, steady pace", () => {
             value: 16,
             expiresAt: 0,
             timeLimit: 1,
-            small: false
+            small: false,
+            rush: false
         }
         expect(nextOrderText(order)).toBe("Next order\ncarrot x2\nvalue 16")
     })
@@ -582,5 +588,46 @@ describe("second batch text: fog, worms, sneak peek, steady pace", () => {
         }
         expect(statRows(s, crops)).toContainEqual(["Level", "1"])
         expect(gameOverText(s)).toContain("Level reached 1")
+    })
+})
+
+describe("rush wave text", () => {
+    const RUSH = MODES.timed.rush
+    const WAVE = RUSH.atTicks[0]
+    const rushOrder = (id: number): Order => ({
+        id,
+        required: { garlic: 2 },
+        value: 6,
+        expiresAt: 1000,
+        timeLimit: 300,
+        small: false,
+        rush: true
+    })
+
+    it("marks a rush order, before SMALL", () => {
+        const order = rushOrder(5)
+        expect(orderText(order, game("timed")).split("\n")[0]).toBe("Order #5  RUSH")
+        const both = { ...order, small: true }
+        expect(orderText(both, game("timed")).split("\n")[0]).toBe("Order #5  RUSH SMALL")
+    })
+
+    it("counts down the warning in whole seconds, rounding up", () => {
+        const at = (tick: number) => rushBannerText({ ...game("timed"), tick })
+        expect(at(WAVE - RUSH.warnTicks - 1)).toBeNull()
+        const seconds = Math.ceil(RUSH.warnTicks / TICKS_PER_SECOND)
+        expect(at(WAVE - RUSH.warnTicks)).toBe(`Rush wave in ${seconds}s`)
+        expect(at(WAVE - 1)).toBe("Rush wave in 1s")
+    })
+
+    it("shows the rush orders left while any are open, then nothing", () => {
+        const s = { ...game("timed"), tick: WAVE + 10, orders: [rushOrder(3), rushOrder(4)] }
+        expect(rushBannerText(s)).toBe("Rush wave! 2 left")
+        expect(rushBannerText({ ...s, orders: [] })).toBeNull()
+    })
+
+    it("never shows in Survival or once the run has ended", () => {
+        const tick = WAVE - 1
+        expect(rushBannerText({ ...game("survival"), tick })).toBeNull()
+        expect(rushBannerText({ ...game("timed"), tick, status: "ended" })).toBeNull()
     })
 })

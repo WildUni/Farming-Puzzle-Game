@@ -16,10 +16,21 @@ type ComboRules = {
     windowTicks: number
 }
 
+// Timed rush waves: at each of atTicks, step adds `orders` short orders past the open-order
+// count. The screen warns warnTicks before each one.
+type RushRules = {
+    atTicks: number[] // ascending, each inside the run
+    warnTicks: number
+    orders: number // rush orders a wave adds
+    timePct: number // % of the usual order time
+    valuePct: number // % of the order's usual value
+}
+
 type TimedMode = {
     runTicks: number // a Timed run ends on this tick
     openOrders: number // step keeps this many orders open in Timed
     combo: ComboRules
+    rush: RushRules
 }
 
 type ModesConfig = {
@@ -74,8 +85,41 @@ function validateModes(raw: unknown): ModesConfig {
         timed: {
             runTicks: runSeconds * TICKS_PER_SECOND,
             openOrders,
-            combo: { stepPct, capPct, windowTicks: windowSeconds * TICKS_PER_SECOND }
+            combo: { stepPct, capPct, windowTicks: windowSeconds * TICKS_PER_SECOND },
+            rush: validateRush(timed.rush, runSeconds)
         }
+    }
+}
+
+function validateRush(rush: unknown, runSeconds: number): RushRules {
+    if (!isObject(rush)) fail("timed.rush", "an object")
+    const at = rush.atSeconds
+    if (!Array.isArray(at)) fail("timed.rush.atSeconds", "an array")
+    const atSeconds = at.map((v: unknown, i) => {
+        const path = `timed.rush.atSeconds[${i}]`
+        if (typeof v !== "number" || !Number.isInteger(v) || v < 1 || v >= runSeconds) {
+            fail(path, `a whole number from 1 to ${runSeconds - 1}`)
+        }
+        if (i > 0 && v <= at[i - 1]) fail(path, "above the time before it")
+        return v
+    })
+    const warnSeconds = wholeAtLeast(rush, "warnSeconds", 0, "timed.rush.warnSeconds")
+    atSeconds.forEach((t, i) => {
+        const gap = t - (i === 0 ? 0 : atSeconds[i - 1])
+        if (warnSeconds >= gap) {
+            fail("timed.rush.warnSeconds", `shorter than the gap before every wave (${gap})`)
+        }
+    })
+    const orders = wholeAtLeast(rush, "orders", 1, "timed.rush.orders")
+    const timePct = wholeAtLeast(rush, "timePct", 1, "timed.rush.timePct")
+    if (timePct > 100) fail("timed.rush.timePct", "at most 100")
+    const valuePct = wholeAtLeast(rush, "valuePct", 1, "timed.rush.valuePct")
+    return {
+        atTicks: atSeconds.map((t) => t * TICKS_PER_SECOND),
+        warnTicks: warnSeconds * TICKS_PER_SECOND,
+        orders,
+        timePct,
+        valuePct
     }
 }
 
@@ -87,5 +131,20 @@ function comboPct(combo: number, rules: ComboRules = MODES.timed.combo): number 
     return Math.min(100 + combo * rules.stepPct, rules.capPct)
 }
 
-export { validateModes, MODES, comboPct }
-export type { ModesConfig, SurvivalMode, TimedMode, ComboRules }
+// Index of the rush wave starting on `tick`, or null when none does.
+function rushWaveAt(tick: number, rules: RushRules = MODES.timed.rush): number | null {
+    const i = rules.atTicks.indexOf(tick)
+    return i === -1 ? null : i
+}
+
+// The rush wave whose warning is showing on `tick`, or null outside every warning.
+function upcomingRushWave(
+    tick: number,
+    rules: RushRules = MODES.timed.rush
+): { index: number; startsAt: number } | null {
+    const index = rules.atTicks.findIndex((at) => at - rules.warnTicks <= tick && tick < at)
+    return index === -1 ? null : { index, startsAt: rules.atTicks[index] }
+}
+
+export { validateModes, MODES, comboPct, rushWaveAt, upcomingRushWave }
+export type { ModesConfig, SurvivalMode, TimedMode, ComboRules, RushRules }

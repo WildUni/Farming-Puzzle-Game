@@ -54,3 +54,9 @@
 * Added combo count to stats panel for timed model
 * Added a debug panel for triggering events, adding updates, and giving power ups
 * Added a cap for max life
+
+
+## 11/23
+* changed existing crow event to block plots until they are tapped off instead of fixed timer
+* crows only land on plots with crop, if all plots are empty, the event does nothing
+* 

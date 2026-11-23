@@ -138,7 +138,8 @@ const garlicOrder: Order = {
     value: 6,
     expiresAt: 600,
     timeLimit: 600,
-    small: false
+    small: false,
+    rush: false
 }
 const mixedOrder: Order = {
     id: 1,
@@ -146,7 +147,8 @@ const mixedOrder: Order = {
     value: 12,
     expiresAt: 600,
     timeLimit: 600,
-    small: false
+    small: false,
+    rush: false
 }
 
 describe("canFulfill", () => {

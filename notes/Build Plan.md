@@ -199,9 +199,9 @@ Add the choices and hindrances that make each run different.
   - [x] A scheduler picks events with the seeded generator
   - [x] The gap between events shrinks as difficulty rises
   - [x] Warning banner with a countdown
-- [] Weeds: one plot grows at half speed until the player taps it clear
-- [] Crows: a ready crop is eaten unless it is harvested before the warning ends
-- [] Blocked plot: one empty plot can't be used for a while
+- [x] Weeds: one plot grows at half speed until the player taps it clear
+- [x] Crows: a ready crop is eaten unless it is harvested before the warning ends
+- [x] Blocked plot: one empty plot can't be used for a while
 - [x] One fixed-seed test per event
 
 **Gate:** the pick-1-of-3 screen and all 3 events work in a run, and that run still replays exactly.
@@ -226,9 +226,9 @@ Add the second mode on the same simulation, then finish scoring and local saves.
   - [x] A failed order resets it
   - [x] Shown in the heads-up display
   - [x] Combo timer: the multiplier drops back if no order is filled before it runs out (the Combo freeze power-up pauses it)
-- [ ] Rush waves
-  - [ ] A burst of short orders at set times
-  - [ ] Warning banner before each wave
+- [x] Rush waves
+  - [x] A burst of short orders at set times
+  - [x] Warning banner before each wave
 - [ ] Large run timer on screen
 - [x] A failed order breaks the combo and costs no life
 

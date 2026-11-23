@@ -6,13 +6,13 @@ Shared types for the simulation. Contains only types, so it is exported with `ex
 
 ### Basic values
 
-| Type         | Definition                                                                        | Meaning                                                         |
-| ------------ | --------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `RNGSeed`    | `number`                                                                          | The seed a run starts from                                      |
-| `RNGState`   | `number`                                                                          | One generator's current position, stored in `GameState.rng`     |
-| `RNGStreams` | `{ orders; upgrades; harvest; drops; events; lives; shrink }`, each an `RNGState` | One generator per system, so their draws don't shift each other |
-| `GameMode`   | `'survival' \| 'timed' \| 'puzzle'`                                               | Which mode the run is in                                        |
-| `GameStatus` | `'running' \| 'ended'`                                                            | Whether `step` should keep advancing the game                   |
+| Type         | Definition                                                                              | Meaning                                                         |
+| ------------ | --------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `RNGSeed`    | `number`                                                                                | The seed a run starts from                                      |
+| `RNGState`   | `number`                                                                                | One generator's current position, stored in `GameState.rng`     |
+| `RNGStreams` | `{ orders; upgrades; harvest; drops; events; lives; shrink; rush }`, each an `RNGState` | One generator per system, so their draws don't shift each other |
+| `GameMode`   | `'survival' \| 'timed' \| 'puzzle'`                                                     | Which mode the run is in                                        |
+| `GameStatus` | `'running' \| 'ended'`                                                                  | Whether `step` should keep advancing the game                   |
 
 ### `Crop` and `CropTable`
 
@@ -50,6 +50,7 @@ type Order = {
     expiresAt: number
     timeLimit: number
     small: boolean
+    rush: boolean
 }
 ```
 
@@ -58,6 +59,7 @@ type Order = {
 - `value`: score awarded when the order is filled.
 - `expiresAt`: the last tick the order can be filled. It fails on tick `expiresAt + 1`.
 - `small`: `true` when Small order halved its amounts (see [upgrades.md](upgrades.md)), so the order card can say so. `false` for every other order.
+- `rush`: `true` for an order a Timed rush wave added (see [main.md](main.md)), so the order card can say so. `false` for every other order.
 - `timeLimit`: the ticks the order was given when created (`expiresAt − createdTick`). Time limits change with the Survival level, so the countdown bar reads this instead of `ORDER_TICKS`.
 
 ### `OrderRules`

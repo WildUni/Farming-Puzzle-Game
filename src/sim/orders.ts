@@ -24,7 +24,8 @@ function createOrder(
         value: amount * crops[cropId].value,
         expiresAt: now + rules.orderTicks,
         timeLimit: rules.orderTicks,
-        small: false
+        small: false,
+        rush: false
     }
     return [order, afterAmount]
 }

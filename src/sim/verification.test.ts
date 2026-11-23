@@ -142,8 +142,10 @@ describe("replay: matches the original run", () => {
         expect(replayState(seed, survival, log, state.tick, crops)).toEqual(state)
     })
 
-    it("replays a full Timed run that ends, with combos", () => {
+    it("replays a full Timed run that ends, with combos and rush waves", () => {
         const { state, log } = play(7, timed, MODES.timed.runTicks)
+        // Every wave drew from rng.rush, so it has moved off its starting state.
+        expect(state.rng.rush).not.toBe(createGame(7, timed).rng.rush)
         expect(state.status).toBe("ended")
         expect(state.bestCombo).toBeGreaterThan(1)
         expect(state.tick).toBe(MODES.timed.runTicks)

@@ -8,29 +8,29 @@ Whole-game functions. This module coordinates the other modules: it owns `GameSt
 
 Returns a fresh state for a new run.
 
-| Field                                      | Starting value                                                                                                                                                                                             |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mode`                                     | `config.mode`                                                                                                                                                                                              |
-| `status`                                   | `'running'`                                                                                                                                                                                                |
-| `tick`                                     | `0`                                                                                                                                                                                                        |
-| `rng`                                      | `{ orders: seedRNG(seed), upgrades: seedStream(seed, 1), harvest: seedStream(seed, 2), drops: seedStream(seed, 3), events: seedStream(seed, 4), lives: seedStream(seed, 5), shrink: seedStream(seed, 6) }` |
-| `plots`                                    | `START_PLOTS` empty plots, each a separate object                                                                                                                                                          |
-| `inventory`                                | `{}`                                                                                                                                                                                                       |
-| `orders`                                   | `[]`                                                                                                                                                                                                       |
-| `nextOrderId`                              | `0`                                                                                                                                                                                                        |
-| `score`, `ordersCompleted`, `ordersFailed` | `0`                                                                                                                                                                                                        |
-| `lives`                                    | Survival: `MODES.survival.startLives`. Other modes: `0`                                                                                                                                                    |
-| `coins`, `livesBought`                     | `0`                                                                                                                                                                                                        |
-| `upgrades`                                 | `[]`                                                                                                                                                                                                       |
-| `upgradeOffer`                             | `null`                                                                                                                                                                                                     |
-| `offersMade`                               | `0`                                                                                                                                                                                                        |
-| `allowPowerUps`                            | `config.allowPowerUps`                                                                                                                                                                                     |
-| `powerUps`, `activeEffects`                | `[]`                                                                                                                                                                                                       |
-| `allowEvents`                              | `config.allowEvents`                                                                                                                                                                                       |
-| `event`                                    | `null`                                                                                                                                                                                                     |
-| `nextEventAt`                              | `EVENTS.firstEventTicks`                                                                                                                                                                                   |
-| `combo`, `comboEndsAt`, `bestCombo`        | `0`                                                                                                                                                                                                        |
-| `secondWind`                               | `false`                                                                                                                                                                                                    |
+| Field                                      | Starting value                                                                                                                                                                                                                        |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mode`                                     | `config.mode`                                                                                                                                                                                                                         |
+| `status`                                   | `'running'`                                                                                                                                                                                                                           |
+| `tick`                                     | `0`                                                                                                                                                                                                                                   |
+| `rng`                                      | `{ orders: seedRNG(seed), upgrades: seedStream(seed, 1), harvest: seedStream(seed, 2), drops: seedStream(seed, 3), events: seedStream(seed, 4), lives: seedStream(seed, 5), shrink: seedStream(seed, 6), rush: seedStream(seed, 7) }` |
+| `plots`                                    | `START_PLOTS` empty plots, each a separate object                                                                                                                                                                                     |
+| `inventory`                                | `{}`                                                                                                                                                                                                                                  |
+| `orders`                                   | `[]`                                                                                                                                                                                                                                  |
+| `nextOrderId`                              | `0`                                                                                                                                                                                                                                   |
+| `score`, `ordersCompleted`, `ordersFailed` | `0`                                                                                                                                                                                                                                   |
+| `lives`                                    | Survival: `MODES.survival.startLives`. Other modes: `0`                                                                                                                                                                               |
+| `coins`, `livesBought`                     | `0`                                                                                                                                                                                                                                   |
+| `upgrades`                                 | `[]`                                                                                                                                                                                                                                  |
+| `upgradeOffer`                             | `null`                                                                                                                                                                                                                                |
+| `offersMade`                               | `0`                                                                                                                                                                                                                                   |
+| `allowPowerUps`                            | `config.allowPowerUps`                                                                                                                                                                                                                |
+| `powerUps`, `activeEffects`                | `[]`                                                                                                                                                                                                                                  |
+| `allowEvents`                              | `config.allowEvents`                                                                                                                                                                                                                  |
+| `event`                                    | `null`                                                                                                                                                                                                                                |
+| `nextEventAt`                              | `EVENTS.firstEventTicks`                                                                                                                                                                                                              |
+| `combo`, `comboEndsAt`, `bestCombo`        | `0`                                                                                                                                                                                                                                   |
+| `secondWind`                               | `false`                                                                                                                                                                                                                               |
 
 Rules:
 
@@ -168,6 +168,7 @@ Returns a **new** state. The steps run in this order, each one using the result 
     - **Survival:** `lives` is 0. Once ended, `applyAction` refuses every action, including `buyLife`.
     - **Puzzle:** no end condition yet (see Open items).
 7. **New orders:** with `rules = orderRules(state)`, while fewer than `rules.maxOpenOrders` orders are open, create one with `createOrder(nextOrderId, tick, rng.orders, crops, rules)`, add it to the **end** of `orders`, store the returned state in `rng.orders`, and add 1 to `nextOrderId`. **Small order:** with `smallOrderChance` above 0, each new order then draws `randomInt(rng.shrink, 0, 99)`; below the chance, every amount becomes `ceil(amount / 2)`, the value stays, and the order's `small` is set to `true` so the screen can mark it. **Second wind:** while `secondWind` is `true`, the first order made uses `orderTicks = scalePct(rules.orderTicks, secondWindPct)`, and `secondWind` becomes `false`. This also creates the first orders, on tick 1, and refills a slot the tick after an order is delivered or failed. If more orders are open than `maxOpenOrders` allows, none are removed; no new ones are made until the count drops.
+    - **Rush wave (Timed):** before the top-up, if `rushWaveAt(tick)` is not `null`, `MODES.timed.rush.orders` rush orders are added to the end of `orders`, past `maxOpenOrders`. Each is made like a regular order (`createOrder` and the Small order roll, ids from `nextOrderId`) but draws from `rng.rush` instead of `rng.orders`, uses `orderTicks = scalePct(rules.orderTicks, rush.timePct)`, has `value = scalePct(value, rush.valuePct)` and `rush: true`. Second wind is not used. They count toward `maxOpenOrders`, so no regular order arrives until the board drops back below it. A failed rush order breaks the combo like any other.
 8. **Event announcement:** if `allowEvents`, no event is announced or running and `tick >= nextEventAt`, `announceEvent(state)` picks the next event from `rng.events` and stores it in `event`; if nothing is eligible, `nextEventAt = tick + gapTicks(state)`. Skipped when the run ended on this step.
 9. **Upgrade offer (Survival):** if `ordersCompleted >= (offersMade + 1) × ORDERS_PER_UPGRADE`, `rollOffer(state, "survival", crops)` picks the offer from `rng.upgrades`, `upgradeOffer` is set to it (or stays `null` if nothing is eligible), the new state is stored in `rng.upgrades` and `offersMade` goes up by 1.
 
@@ -177,7 +178,7 @@ Returns a **new** state. The steps run in this order, each one using the result 
 - While `upgradeOffer` is not `null`, returns `state` unchanged: time stops until `chooseUpgrade`.
 - Never changes `state` or anything inside it.
 - Never changes `score`, `ordersCompleted`, `coins`, `livesBought`, `bestCombo` or `powerUps`. Those only change through `applyAction`. `combo` only goes back to 0 in `step`; it only climbs through `applyAction`. `inventory` changes in `step` only when Helpful neighbor or Rot starts. `lives` only goes down in `step` (and up through `buyLife` and Extra heart). `activeEffects` gains entries through `usePowerUp` and lasting events; `step` only removes ended ones.
-- `rng.orders` changes only when orders are created (exactly two draws per order). `rng.upgrades` changes only when an upgrade offer is made (exactly two draws per card). `rng.events` changes only when an event is announced (two or three draws), Moles' block roll is made (one draw), or Birds (two per seeded plot) or Emergency order (two) start. `rng.lives` changes only on a failed order with Second chance (one draw each), and `rng.shrink` only on a new order with Small order (one draw each). `step` never touches `rng.harvest` or `rng.drops`. No stream's draws depend on another's, so upgrade picks, harvests, drops, power-up use and events never change which orders come next.
+- `rng.orders` changes only when orders are created (exactly two draws per order). `rng.upgrades` changes only when an upgrade offer is made (exactly two draws per card). `rng.events` changes only when an event is announced (two or three draws), Moles' block roll is made (one draw), or Birds (two per seeded plot) or Emergency order (two) start. `rng.lives` changes only on a failed order with Second chance (one draw each), `rng.shrink` only on a new order with Small order (one draw each), and `rng.rush` only when a rush wave starts (two draws per rush order). `step` never touches `rng.harvest` or `rng.drops`. No stream's draws depend on another's, so upgrade picks, harvests, drops, power-up use and events never change which orders come next.
 - Deterministic: the same arguments always give an equal result, so the same seed and the same actions always give the same run.
 
 ## Tests (`main.test.ts`)
@@ -243,7 +244,7 @@ Returns a **new** state. The steps run in this order, each one using the result 
 **`step`: orders** (run in Timed, where the order rules are the fixed constants)
 
 - In Timed, the first step fills up to `MODES.timed.openOrders` orders, with ids from 0, `expiresAt = tick + ORDER_TICKS`, and `nextOrderId` and `rng.orders` advanced to match `createOrder`.
-- Never opens more than `MODES.timed.openOrders` orders in Timed.
+- Never opens more than `MODES.timed.openOrders` regular orders in Timed (rush waves add past it).
 - `orderRules` is `DEFAULT_ORDER_RULES` with `MODES.timed.openOrders` in Timed, and `DEFAULT_ORDER_RULES` in Puzzle.
 - An order is still open on its `expiresAt` tick and fails on the tick after: it is removed and `ordersFailed` goes up by 1.
 - A failed order is replaced on the same step with a new id, and the remaining orders keep their order.
@@ -286,6 +287,14 @@ Returns a **new** state. The steps run in this order, each one using the result 
 - Bigger bumper, Small order, Sneak peek (`nextOrderPreview`), Early bird, Steady pace, Extra heart, Last stand, Second chance and Second wind each change their rule, and draw only from their own stream.
 - Ready all, Clean slate, Finish one, Finish all, Gold rush and Good omen each fire their effect.
 
+**Timed rush waves**
+
+- `createGame` seeds `rng.rush` with salt 7.
+- On each wave tick, `rush.orders` orders with `rush: true` are added after the regular ones, with `timeLimit = scalePct(ORDER_TICKS, timePct)` and `value = scalePct(createOrder's value, valuePct)`, ids following on, and `rng.rush` advanced two draws per order.
+- No rush orders on the ticks either side of a wave, and none in Survival.
+- A wave leaves `rng.orders` unchanged, and no regular order is made while the board is at or above `openOrders`.
+- A failed rush order breaks the combo.
+
 **Power-ups and effects** (see [powerups.md](powerups.md) and [effects.md](effects.md) for the full lists)
 
 - `createGame` copies `allowPowerUps` from the config and starts with no power-ups or effects.
@@ -315,4 +324,4 @@ Returns a **new** state. The steps run in this order, each one using the result 
 - [x] Survival end condition: the run ends when lives reach 0, and a failed order costs a life.
 - [ ] Puzzle end condition (the level's order filled or failed) once puzzle levels exist.
 - [x] Open more orders at once as Survival difficulty rises (`orderRules`).
-- [ ] Timed rush waves (Day 5), also through `orderRules`.
+- [x] Timed rush waves (Day 5): a wave step before the top-up, from `rng.rush`.

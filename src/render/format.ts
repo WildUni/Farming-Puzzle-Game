@@ -14,7 +14,7 @@ import type {
     UpgradeTarget
 } from "../sim/types"
 import { TICKS_PER_SECOND } from "../sim/game_constants"
-import { MODES, comboPct } from "../sim/modes"
+import { MODES, comboPct, upcomingRushWave } from "../sim/modes"
 import { progress } from "../sim/plot"
 import { timeLeft } from "../sim/orders"
 import { runLevel } from "../sim/difficulty"
@@ -169,9 +169,10 @@ function orderText(order: Order, state: GameState): string {
     return `${orderTitle(order)}\n${lines.join("\n")}`
 }
 
-// First line of an order card. "SMALL" marks an order Small order halved.
+// First line of an order card. "RUSH" marks a rush wave order, "SMALL" one Small order halved.
 function orderTitle(order: Order): string {
-    return order.small ? `Order #${order.id}  SMALL` : `Order #${order.id}`
+    const tags = [order.rush ? "RUSH" : "", order.small ? "SMALL" : ""].filter((t) => t !== "")
+    return tags.length === 0 ? `Order #${order.id}` : `Order #${order.id}  ${tags.join(" ")}`
 }
 
 // Text on the Sneak peek card: the order that comes next, with its crops and value.
@@ -313,6 +314,16 @@ function eventBannerText(state: GameState): string | null {
     return null
 }
 
+// Text on the rush wave banner (Timed): "Rush wave in 3s" during a wave's warning, then
+// "Rush wave! 2 left" while any of its orders are open. null otherwise, and once the run ends.
+function rushBannerText(state: GameState): string | null {
+    if (state.mode !== "timed" || state.status === "ended") return null
+    const upcoming = upcomingRushWave(state.tick)
+    if (upcoming !== null) return `Rush wave in ${secondsUntil(upcoming.startsAt, state.tick)}s`
+    const left = state.orders.filter((o) => o.rush).length
+    return left > 0 ? `Rush wave! ${left} left` : null
+}
+
 // True when the banner's event is a good one, for its colour.
 function eventIsGood(state: GameState): boolean {
     return state.event !== null && EVENTS.events[state.event.id].kind === "good"
@@ -344,5 +355,5 @@ function plotOverlays(state: GameState): PlotOverlay[][] {
 }
 
 export { powerUpButtonText, shownEffects, activeEffectText, ordersFrozen }
-export { eventBannerText, eventIsGood, plotOverlays }
+export { eventBannerText, eventIsGood, rushBannerText, plotOverlays }
 export type { PlotOverlay }

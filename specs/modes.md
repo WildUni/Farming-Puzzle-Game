@@ -12,7 +12,14 @@ Survival's difficulty curve, coins and life prices stay in `difficulty.json` (se
     "timed": {
         "runSeconds": 300,
         "openOrders": 3,
-        "combo": { "stepPct": 25, "capPct": 300, "windowSeconds": 20 }
+        "combo": { "stepPct": 25, "capPct": 300, "windowSeconds": 20 },
+        "rush": {
+            "atSeconds": [75, 160, 245],
+            "warnSeconds": 5,
+            "orders": 3,
+            "timePct": 50,
+            "valuePct": 150
+        }
     }
 }
 ```
@@ -26,8 +33,13 @@ Survival's difficulty curve, coins and life prices stay in `difficulty.json` (se
 | `timed.combo.stepPct`       | Percent the score multiplier climbs for each order filled in a row                        |
 | `timed.combo.capPct`        | Highest multiplier, in percent. Whole number `>= 100`                                     |
 | `timed.combo.windowSeconds` | Time after a fill to fill the next order before the streak breaks                         |
+| `timed.rush.atSeconds`      | Times a rush wave starts, from the run start. Ascending, each `>= 1` and `< runSeconds`   |
+| `timed.rush.warnSeconds`    | Warning shown before each wave. `>= 0`, and shorter than the gap before every wave        |
+| `timed.rush.orders`         | Rush orders a wave adds at once                                                           |
+| `timed.rush.timePct`        | A rush order's time limit, in % of the usual order time (1 to 100)                        |
+| `timed.rush.valuePct`       | A rush order's value, in % of what the same order would be worth normally                 |
 
-The combo numbers are placeholders until a Timed tuning pass.
+The combo and rush numbers are placeholders until a Timed tuning pass.
 
 Lengths in the JSON are in seconds, like `powerups.json` and `events.json`; the loader turns them into ticks.
 
@@ -36,7 +48,14 @@ Lengths in the JSON are in seconds, like `powerups.json` and `events.json`; the 
 ```ts
 type SurvivalMode = { startLives: number; maxLives: number }
 type ComboRules = { stepPct: number; capPct: number; windowTicks: number }
-type TimedMode = { runTicks: number; openOrders: number; combo: ComboRules }
+type RushRules = {
+    atTicks: number[]
+    warnTicks: number
+    orders: number
+    timePct: number
+    valuePct: number
+}
+type TimedMode = { runTicks: number; openOrders: number; combo: ComboRules; rush: RushRules }
 type ModesConfig = { survival: SurvivalMode; timed: TimedMode }
 ```
 
@@ -51,8 +70,9 @@ Checks a parsed JSON value and returns it typed, with `timed.runTicks = runSecon
 - `survival.maxLives` is not a whole number `>= startLives`.
 - `timed.runSeconds` or `timed.openOrders` is not a whole number `>= 1`.
 - `timed.combo` is not an object; `stepPct` or `windowSeconds` is not a whole number `>= 1`; `capPct` is not a whole number `>= 100`.
+- `timed.rush` is not an object; `atSeconds` is not an array of whole numbers, strictly ascending, each `>= 1` and `< runSeconds` (an empty array means no waves); `warnSeconds` is not a whole number `>= 0`, or is not shorter than the first wave's time or the gap between two waves; `orders`, `timePct` or `valuePct` is not a whole number `>= 1`; `timePct` is above 100.
 
-`combo.windowTicks = windowSeconds × TICKS_PER_SECOND`.
+`combo.windowTicks = windowSeconds × TICKS_PER_SECOND`; `rush.atTicks` and `rush.warnTicks` are the seconds times `TICKS_PER_SECOND`.
 
 A bad config is a setup mistake, not a player move, so this throws instead of returning `null`.
 
@@ -64,6 +84,16 @@ A bad config is a setup mistake, not a player move, so this throws instead of re
 
 The score multiplier, in percent, for the next order filled when `combo` orders have already been filled in a row: `min(100 + combo × stepPct, capPct)`. Whole percents keep the score a whole number (`completeOrder` rounds down).
 
+### `rushWaveAt(tick: number, rules: RushRules = MODES.timed.rush): number | null`
+
+The index (in `atTicks`) of the rush wave that starts on `tick`, or `null` when none does.
+
+### `upcomingRushWave(tick: number, rules: RushRules = MODES.timed.rush): { index: number; startsAt: number } | null`
+
+The wave whose warning is showing on `tick`: the first wave with `startsAt - warnTicks <= tick < startsAt`. `null` outside every warning (and always with `warnTicks` 0). The screen uses it for the warning banner.
+
+Both work from `tick` alone, so `GameState` stores nothing about waves.
+
 ## Where it is read
 
 - `createGame`: `lives` starts at `MODES.survival.startLives` in Survival, `0` otherwise.
@@ -71,7 +101,8 @@ The score multiplier, in percent, for the next order filled when `combo` orders 
 - `isRunOver` (in `step`): Timed ends on tick `MODES.timed.runTicks`.
 - `orderRules`: Timed keeps `MODES.timed.openOrders` orders open.
 - `completeOrder` and `step`: the Timed combo (see [main.md](main.md)).
-- The screen: the Timed countdown and the mode button text.
+- `step`: Timed rush waves (`rushWaveAt`, see [main.md](main.md)).
+- The screen: the Timed countdown, the mode button text and the rush wave banner (`upcomingRushWave`).
 
 ## Rules
 
@@ -85,11 +116,15 @@ The score multiplier, in percent, for the next order filled when `combo` orders 
 - Accepts a valid config.
 - Throws for each bad field listed above.
 - `comboPct` (in `main.test.ts`): 100 with no streak, climbs by `stepPct`, stops at `capPct`.
+- Ships rush waves inside the run, and accepts an empty `atSeconds`.
+- `rushWaveAt`: the wave's index on each start tick, `null` on the ticks either side.
+- `upcomingRushWave`: `null` before the warning, the wave from `startsAt - warnTicks` to `startsAt - 1`, `null` on `startsAt`; never with `warnTicks` 0.
 
 ## Open items
 
 - [ ] Life price rule per mode (Day 6): rises per life bought, or scales with elapsed time.
 - [x] Timed combo numbers (placeholders: +25% per fill, up to ×3, 20 s window).
-- [ ] Rush wave numbers (Day 5).
+- [x] Rush wave numbers (placeholders: 3 waves at 75 s, 160 s and 245 s, 5 s warning, 3 orders each at half time and 150% value).
+- [ ] Rush pay (Timed upgrade): a modifier added to `rush.valuePct`.
 - [ ] Combo freeze (Day 9): a lasting effect that pushes `comboEndsAt` back each tick, like Order freeze. Combo keeper, Combo builder and Head start become modifiers on these numbers.
 - [ ] Puzzle's entry once it has an end rule.

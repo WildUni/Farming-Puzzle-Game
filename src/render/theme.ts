@@ -31,6 +31,8 @@ const COLORS = {
     slotEmpty: 0x5f6b52, // a slot with no power-up in it
     eventGood: 0x2e8b3a, // event banner for a good event
     eventBad: 0xb3362c, // event banner for a bad event
+    rush: 0xe07b12, // rush wave banner
+    rushCard: 0xffd8a8, // order card of a rush wave order
     eventTarget: 0xff3b30, // outline on the plot a plot event will hit
     frozenTint: 0x9fd8ff, // plot under a slowing or stopping effect
     sunnyTint: 0xffd54a, // plot under a speeding-up effect

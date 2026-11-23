@@ -42,7 +42,7 @@ Rules:
 3. **Amount:** a whole number from `rules.minAmount` to `rules.maxAmount` inclusive, using the second random draw: `randomInt(state, rules.minAmount, rules.maxAmount)`.
 4. **Exactly two draws.** The returned state is the input state advanced twice with `nextValue`, whatever the rules.
 5. **Value:** `amount × crop.value`.
-6. **Expiry:** `expiresAt = now + rules.orderTicks`, and `timeLimit = rules.orderTicks`. `rules.maxOpenOrders` is not used here.
+6. **Expiry:** `expiresAt = now + rules.orderTicks`, and `timeLimit = rules.orderTicks`. `rules.maxOpenOrders` is not used here. `small` and `rush` are `false`; `main.ts` sets them for Small order and rush waves.
 7. **Deterministic:** the same arguments always give an equal result.
 8. **Empty crop table:** throws an `Error`. This is a setup mistake, not a player move, so it doesn't return `null`.
 
