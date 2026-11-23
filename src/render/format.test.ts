@@ -707,6 +707,7 @@ describe("barn panel and reroll text", () => {
         expect(makeFertilizerText(crops.garlic)).toBe(
             `Make fertilizer\nuses ${crops.garlic.fertilizerCost} garlic`
         )
+        expect(makeFertilizerText(crops.garlic, false)).toBe("Make fertilizer\nneeds Compost")
         expect(fertilizeText(s)).toBe("Fertilize\n2 held")
         expect(rerollText({ ...s, rerollsThisOffer: 2 })).toBe(`Reroll\n${rerollPrice(2)} coins`)
     })

@@ -564,6 +564,21 @@
             ]
         },
         {
+            "id": "compost",
+            "name": "Compost",
+            "text": "Turn crops into fertilizer, and use it to speed up a growing crop",
+            "pools": ["survival", "timed"],
+            "tier": "epic",
+            "maxCopies": 1,
+            "sellable": false,
+            "effects": [
+                {
+                    "stat": "fertilizerUnlocked",
+                    "amount": 1
+                }
+            ]
+        },
+        {
             "id": "pestControl",
             "name": "Pest control",
             "text": "Crows never come again this run",

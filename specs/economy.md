@@ -13,7 +13,7 @@ The numbers live in three places, so tuning never needs a code change:
 ```json
 {
     "sellPricePct": 25,
-    "fertilizer": { "unlock": "basic", "cutPct": 50 },
+    "fertilizer": { "unlock": "upgrade", "cutPct": 50 },
     "reroll": { "base": 5, "growth": 1.5 }
 }
 ```
@@ -43,7 +43,7 @@ Changes elsewhere:
 - `Crop` gets `fertilizerCost: number`: crops of this kind used up to make one fertilizer. Whole number `>= 1`, checked by `buildCropTable`.
 - The `growing` plot gets `fertilized?: true`, set when fertilizer is used and absent before.
 - `GameState` gets `fertilizer: number` (held, starts at 0) and `rerollsThisOffer: number` (starts at 0).
-- `Modifiers` gets `storageBonus` (Bigger barn, base 0) and `fertilizerUnlocked` (base 0). No upgrade uses them yet.
+- `Modifiers` gets `storageBonus` (Bigger barn, base 0; no upgrade uses it yet) and `fertilizerUnlocked` (base 0, max 1; set by Compost).
 - `Action` gets `sellCrop { cropId, amount }`, `makeFertilizer { cropId }`, `useFertilizer { plot }` and `rerollOffer`.
 
 ## Exports
@@ -54,7 +54,7 @@ Checks a parsed JSON value and returns it typed. Throws an `Error` naming the ba
 
 ### `ECONOMY: EconomyConfig`
 
-`src/data/economy.json` passed through `validateEconomy` once, when the module loads. Every function below takes an optional last `config: EconomyConfig = ECONOMY`.
+`src/data/economy.json` passed through `validateEconomy` once, when the module loads. Both live in `economy_config.ts`, with `fertilizerLocked(config?)` (true with `unlock: "upgrade"`), and `economy.ts` re-exports them. The split lets `upgrades.ts` read the config without importing `economy.ts`, which imports `upgrades.ts`. Every function below takes an optional last `config: EconomyConfig = ECONOMY`.
 
 ### `storageCap(state): number`
 
@@ -71,6 +71,10 @@ The total of every crop in `inventory`, and `max(0, cap − used)`. Held fertili
 ### `fertilizerAllowed(state, config?): boolean`
 
 True with `unlock: "basic"`, or with `"upgrade"` and `fertilizerUnlocked > 0`.
+
+### Compost
+
+The upgrade that unlocks fertilizer (`compost` in `upgrades.json`): both pools, `epic` (not tiered), `maxCopies` 1, not sellable, effect `fertilizerUnlocked` +1. The shipped config locks fertilizer behind it. With `unlock: "basic"` it would do nothing, so `eligibleUpgrades` skips it (`unlocksNothing` in `upgrades.ts`: every effect is `fertilizerUnlocked` and fertilizer isn't locked).
 
 ### `fertilizedReadyAt(plot, now, config?): number`
 
@@ -133,7 +137,8 @@ No action here reads the clock or moves the tick, so replays work as before: a r
 
 - `makeFertilizer` uses `fertilizerCost` crops, frees that much storage and adds 1 fertilizer; refused with too few crops.
 - `useFertilizer` cuts the remaining growth by `cutPct` and uses 1 fertilizer; refused on an empty, ready or already fertilized plot, and with none held.
-- With `unlock: "upgrade"`, both are refused until `fertilizerUnlocked` is above 0.
+- With the shipped `unlock: "upgrade"`, both are refused without Compost and work with it.
+- Compost is epic, in both pools, offered while fertilizer is locked and not once owned; `unlocksNothing` is true for it only with `unlock: "basic"` (in `upgrades.test.ts`).
 - Held fertilizer does not count toward storage.
 
 **Screen text** (in `format.test.ts`)
@@ -151,7 +156,7 @@ No action here reads the clock or moves the tick, so replays work as before: a r
 
 **Replay** (in `verification.test.ts`)
 
-- A scripted Survival run with sells, fertilizer and rerolls replays equal (4 seeds), and its log has each of the four actions.
+- A scripted Survival run with sells, fertilizer and rerolls replays equal (4 seeds), and its log has each of the four actions. These runs mock `economy_config` so fertilizer is a basic action, since a scripted player can't count on being offered Compost.
 - In a scripted run, storage fills, empties again, and never passes the cap.
 
 ## Open items
@@ -161,7 +166,8 @@ No action here reads the clock or moves the tick, so replays work as before: a r
 - [ ] Fertilizer cuts a % of the remaining growth time. Is a percentage the right rule?
 - [ ] Fertilizer works once per plot per planting for now. Should it stack?
 - [ ] Held fertilizer does not count toward storage for now, and has no limit. Should it count, or have a cap?
-- [ ] Making fertilizer as a basic action or behind an upgrade (`fertilizer.unlock`); no upgrade sets `fertilizerUnlocked` yet.
+- [x] Making fertilizer as a basic action or behind an upgrade (`fertilizer.unlock`): behind Compost (epic).
+- [ ] Compost is not sellable for now, so held fertilizer never becomes useless. Revisit when the shop buys upgrades back (Day 8).
 - [ ] Life price that scales with elapsed time (as well as, or instead of, per life bought). Likely to be dropped; not planned.
 - [ ] Should a reroll avoid repeating the cards it replaces? Should rerolls roll better tiers (see [upgrades.md](upgrades.md))?
 - [ ] Timed orders pay no coins, so in Timed coins come only from selling until the shop (Day 8).

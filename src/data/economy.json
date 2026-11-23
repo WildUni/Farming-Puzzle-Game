@@ -1,5 +1,5 @@
 {
     "sellPricePct": 25,
-    "fertilizer": { "unlock": "basic", "cutPct": 50 },
+    "fertilizer": { "unlock": "upgrade", "cutPct": 50 },
     "reroll": { "base": 5, "growth": 1.5 }
 }

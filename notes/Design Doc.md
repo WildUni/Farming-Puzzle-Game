@@ -27,7 +27,7 @@ The game has three modes built on the same loop, plus shared systems for events,
 - **Power-ups:** available in both Survival and Timed. Dropped randomly from harvests or bought with coins. Possibly pre-loaded before a run using currency earned from finished runs (TBD).
 - **Currencies:** in-run coins have three uses during a run: the shop, rerolling the free upgrade pick, and lives (Survival only). They reset when the run ends. Meta currency (earned from finished runs) and paid coins (bought with real money) carry over between runs.
 - **Plots:** limited, so players must choose what to plant.
-- **Storage:** a limit on how many harvested crops the player can hold. Storage upgrades raise it. When storage is full, the player can't harvest until they free up space: sell crops for coins, turn some crops into fertilizer, or raise their storage. Fertilizer speeds up growth for one crop on one plot. Each crop has its own fertilizer rate: how many of that crop make one fertilizer, so a pumpkin is worth more fertilizer than a garlic. Making fertilizer may be an upgrade rather than a basic action (TBD). Each mode has its own storage limit.
+- **Storage:** a limit on how many harvested crops the player can hold. Storage upgrades raise it. When storage is full, the player can't harvest until they free up space: sell crops for coins, turn some crops into fertilizer, or raise their storage. Fertilizer speeds up growth for one crop on one plot. Each crop has its own fertilizer rate: how many of that crop make one fertilizer, so a pumpkin is worth more fertilizer than a garlic. Making and using fertilizer needs the Compost upgrade (epic, not tiered); a config switch can make it a basic action instead. Each mode has its own storage limit.
 - **Events:** bad events (hindrances such as weeds, crows, picky customers and blocked plots) and good events. Every event gives a warning before it hits; some are announced by a news broadcast or newspaper. See Events (draft) below. Events with tradeoffs are planned (TBD).
 - **Crops:** players earn points to unlock new crops with different tradeoffs. Before a run, players pick which crops to bring, and orders only ask for those crops.
 - **Daily Challenge:** fixed modifiers (starting upgrades, boosts, selected crops), no power-ups, and a shared random seed so every player gets the same run. Has its own leaderboard.
@@ -60,6 +60,7 @@ Once a stat reaches its cap, upgrades for it stop being offered, in both the fre
 | Calm skies | Bad events happen less often | Bad event chance cut | Both modes |
 | Premium produce | Crops sell for more | Sell price bonus | Both modes |
 | Sneak peek | See the next order before it arrives | Not tiered (one tier, TBD) | Both modes |
+| Compost | Lets the player turn crops into fertilizer and use it to speed up a growing crop | Not tiered (epic) | Both modes |
 | Pest control | Certain bad events never happen again this run (candidates: Drought, Birds, Crows) | Not tiered (one tier, TBD) | Both modes |
 | Miracle grow | A button that instantly finishes one plot, then recharges | Shorter recharge | Both modes |
 | Early bird | Filling an order with lots of time left pays a bonus | Bonus size | Both modes |
@@ -244,5 +245,6 @@ Paid coins, bought with real money, carry over between runs and are separate fro
 - [ ] Storage overflow: for now a harvest that doesn't fit adds what fits and the rest is lost. Should it be refused instead? (Helpful neighbor does nothing when its harvest would overflow.)
 - [ ] Sell price: for now every crop sells for 25% of its order value. Should each crop have its own sell price?
 - [ ] Fertilizer: for now it cuts a share of the crop's remaining growth time, works once per plot per planting, has no holding limit and doesn't count toward storage. Which of these should change?
+- [ ] Compost: for now it can't be sold, so fertilizer the player holds never becomes useless. Should it be sellable once the shop buys upgrades back?
 - [ ] Life price that scales with elapsed time instead of (or as well as) per life bought. Likely to be dropped.
 - [ ] Should Timed orders pay coins? For now they don't, so selling crops is Timed's only coin source until the shop.

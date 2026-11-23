@@ -78,7 +78,7 @@ A panel under the power-up bar for storage, selling and fertilizer (see [economy
 - **Crop buttons**, one per crop in id order, each showing the crop and how many are held (`barnCropText`). Clicking one selects it (white outline) and resets the amount to 1.
 - **Amount box** (an HTML input) with **-** and **+** buttons on either side. `sellAmount` reads it as a whole number from 1 to the amount held. Keys typed in it don't reach the game's shortcuts.
 - **Sell** (`sellButtonText`: `Sell 3` and the coins it pays) sends `sellCrop` with the amount. **Sell all** sends `sellCrop` with everything held of the selected crop.
-- **Make fertilizer** (`makeFertilizerText`: what one costs in the selected crop) sends `makeFertilizer`. Disabled with too few crops, or when fertilizer is locked behind an upgrade.
+- **Make fertilizer** (`makeFertilizerText`: what one costs in the selected crop, or `needs Compost` while fertilizer is locked) sends `makeFertilizer`. Disabled with too few crops, or without Compost.
 - **Fertilize** (`fertilizeText`: how many are held) starts choosing a plot: the plots in `fertilizerTargets` are outlined and the rest dimmed, as for a plot power-up, and the button says `Cancel`. Clicking a highlighted plot sends `useFertilizer`; clicking anything else, Esc, or starting a power-up cancels. Disabled with no fertilizer or nothing to fertilize.
 - A fertilized crop shows `FERT` along the top of its plot (`plotOverlays`).
 - Every button is greyed out when its action would be refused. The whole panel is off (and the amount box hidden, since HTML sits above the canvas) while paused, while the plant picker or an upgrade offer is open, and after the run ends.

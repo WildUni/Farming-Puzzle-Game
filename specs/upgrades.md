@@ -157,6 +157,7 @@ Every upgrade from the design doc that works with the systems that exist now (or
 | `secondWind`    | Second wind    | survival        | tiered | 3         | `secondWindPct` +10, +15, +25, +35, +50    | –      | yes      |
 | `wormFarm`      | Worm farm      | survival, timed | tiered | 3         | `wormBonusPct` +50, +100, +100, +150, +200 | events | yes      |
 | `goodNeighbors` | Good neighbors | survival, timed | rare   | 1         | `neighborReplant` +1                       | events | yes      |
+| `compost`       | Compost        | survival, timed | epic   | 1         | `fertilizerUnlocked` +1                    | –      | no       |
 | `birdNet`       | Bird net       | survival, timed | tiered | 3         | `birdPlotsPct` −10, −15, −20, −25, −33     | events | yes      |
 | `rootCellar`    | Root cellar    | survival, timed | tiered | 3         | `rotPct` −10, −15, −25, −35, −50           | events | yes      |
 | `lantern`       | Lantern        | survival, timed | tiered | 3         | `fogDurationPct` −10, −15, −25, −35, −50   | events | yes      |
@@ -164,24 +165,26 @@ Every upgrade from the design doc that works with the systems that exist now (or
 
 Bigger bumper has `"requires": ["bumperHarvest"]`. Early bird is Survival only because only Survival earns coins; Steady pace, Extra heart, Last stand, Second chance and Second wind are Survival only by design. Extra heart is not sellable because it adds lives, like Extra plot adds plots.
 
-| Stat                 | base | min | max | Meaning                                                                                     |
-| -------------------- | ---- | --- | --- | ------------------------------------------------------------------------------------------- |
-| `bumperExtra`        | 1    | 1   | 4   | Crops a Bumper harvest hit adds                                                             |
-| `smallOrderChance`   | 0    | 0   | 50  | % chance a new order asks for half as much                                                  |
-| `sneakPeek`          | 0    | 0   | 1   | 1: the next order is shown before it arrives                                                |
-| `crowBan`            | 0    | 0   | 1   | 1: Crows are never announced (Crows' `banStat`)                                             |
-| `earlyBirdCoins`     | 0    | 0   | 15  | Coins for filling an order with at least half its time left                                 |
-| `levelPacePct`       | 100  | 100 | 200 | % of filled orders a Survival level takes                                                   |
-| `extraLives`         | 0    | 0   | 2   | Added to the lives cap (`MODES.survival.maxLives`); each rise also adds a life              |
-| `lastStandGrowthPct` | 100  | 50  | 100 | % of growth time for crops planted on the last life                                         |
-| `secondChance`       | 0    | 0   | 50  | % chance a failed order costs no life                                                       |
-| `secondWindPct`      | 100  | 100 | 200 | % of the time limit of the first new order after a lost life                                |
-| `wormBonusPct`       | 100  | 100 | 300 | Worms' `amountStat`                                                                         |
-| `neighborReplant`    | 0    | 0   | 1   | 1: Helpful neighbor replants what they harvest                                              |
-| `birdPlotsPct`       | 100  | 34  | 100 | Birds' `amountStat` (3 plots: 34% is 1 plot)                                                |
-| `rotPct`             | 100  | 25  | 100 | Rot's `amountStat`                                                                          |
-| `fogDurationPct`     | 100  | 25  | 100 | Fog's `durationStat`                                                                        |
-| `emergencyTimePct`   | 100  | 100 | 200 | Emergency order's `amountStat` (its share of the usual time, capped at 100% by events.json) |
+| Stat                 | base | min | max | Meaning                                                                                        |
+| -------------------- | ---- | --- | --- | ---------------------------------------------------------------------------------------------- |
+| `bumperExtra`        | 1    | 1   | 4   | Crops a Bumper harvest hit adds                                                                |
+| `smallOrderChance`   | 0    | 0   | 50  | % chance a new order asks for half as much                                                     |
+| `sneakPeek`          | 0    | 0   | 1   | 1: the next order is shown before it arrives                                                   |
+| `crowBan`            | 0    | 0   | 1   | 1: Crows are never announced (Crows' `banStat`)                                                |
+| `earlyBirdCoins`     | 0    | 0   | 15  | Coins for filling an order with at least half its time left                                    |
+| `levelPacePct`       | 100  | 100 | 200 | % of filled orders a Survival level takes                                                      |
+| `extraLives`         | 0    | 0   | 2   | Added to the lives cap (`MODES.survival.maxLives`); each rise also adds a life                 |
+| `lastStandGrowthPct` | 100  | 50  | 100 | % of growth time for crops planted on the last life                                            |
+| `secondChance`       | 0    | 0   | 50  | % chance a failed order costs no life                                                          |
+| `secondWindPct`      | 100  | 100 | 200 | % of the time limit of the first new order after a lost life                                   |
+| `wormBonusPct`       | 100  | 100 | 300 | Worms' `amountStat`                                                                            |
+| `neighborReplant`    | 0    | 0   | 1   | 1: Helpful neighbor replants what they harvest                                                 |
+| `fertilizerUnlocked` | 0    | 0   | 1   | 1: fertilizer can be made and used when `economy.json` locks it (see [economy.md](economy.md)) |
+| `storageBonus`       | 0    | 0   | 30  | Crops storage holds on top of the mode's cap (Bigger barn, not offered yet)                    |
+| `birdPlotsPct`       | 100  | 34  | 100 | Birds' `amountStat` (3 plots: 34% is 1 plot)                                                   |
+| `rotPct`             | 100  | 25  | 100 | Rot's `amountStat`                                                                             |
+| `fogDurationPct`     | 100  | 25  | 100 | Fog's `durationStat`                                                                           |
+| `emergencyTimePct`   | 100  | 100 | 200 | Emergency order's `amountStat` (its share of the usual time, capped at 100% by events.json)    |
 
 Changes from the old six: `bigHarvest` (flat +1 yield) is replaced by `bumperHarvest`, a chance of 1 extra crop per harvest (see [The harvest roll](#the-harvest-roll)). `haggler` becomes `lifeDiscount` (the new Haggler belongs to the Bulk buyer event). `tips` becomes `bigTips`. `extraPlot` is shop-only, so it is not offered until the shop exists. `"timed"` is already listed in the pools so that turning Timed offers on later is a code change only.
 
@@ -342,6 +345,7 @@ Ids that can be offered from `pool`, sorted. An id is eligible when all of these
 3. Every id in `requires` has at least one owned copy.
 4. `validTargets` is not empty.
 5. Every system in `needs` is on in this run: `"powerUps"` means `state.allowPowerUps`, `"events"` means `state.allowEvents`.
+6. It isn't an upgrade that would do nothing (`unlocksNothing`): Compost is skipped while fertilizer is a basic action (see [economy.md](economy.md)).
 
 ### `rollOffer(state: GameState, pool: Pool, crops: CropTable, config?): [OfferCard[], RNGState]`
 

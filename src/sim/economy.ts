@@ -3,55 +3,8 @@
 import type { Crop, GameState, Plot } from "./types"
 import { MODES } from "./modes"
 import { modifiersFor } from "./upgrades"
-import rawEconomy from "../data/economy.json"
-
-type FertilizerUnlock = "basic" | "upgrade"
-
-type EconomyConfig = {
-    sellPricePct: number // a crop sells for this % of its value
-    fertilizer: { unlock: FertilizerUnlock; cutPct: number } // cutPct: % of remaining growth removed
-    reroll: { base: number; growth: number } // price of an offer's nth reroll: base x growth^n
-}
-
-function isObject(v: unknown): v is Record<string, unknown> {
-    return typeof v === "object" && v !== null && !Array.isArray(v)
-}
-
-function fail(field: string, rule: string): never {
-    throw new Error(`economy config: ${field} must be ${rule}`)
-}
-
-function wholeBetween(v: unknown, min: number, max: number, field: string): number {
-    if (typeof v !== "number" || !Number.isInteger(v) || v < min || v > max) {
-        fail(field, max === Infinity ? `a whole number >= ${min}` : `a whole number ${min}-${max}`)
-    }
-    return v
-}
-
-// Checks a parsed JSON value and returns it typed. Throws naming the bad field.
-function validateEconomy(raw: unknown): EconomyConfig {
-    if (!isObject(raw)) fail("config", "an object")
-    const sellPricePct = wholeBetween(raw.sellPricePct, 1, 100, "sellPricePct")
-
-    const fertilizer = raw.fertilizer
-    if (!isObject(fertilizer)) fail("fertilizer", "an object")
-    const unlock = fertilizer.unlock
-    if (unlock !== "basic" && unlock !== "upgrade")
-        fail("fertilizer.unlock", '"basic" or "upgrade"')
-    const cutPct = wholeBetween(fertilizer.cutPct, 1, 100, "fertilizer.cutPct")
-
-    const reroll = raw.reroll
-    if (!isObject(reroll)) fail("reroll", "an object")
-    const base = wholeBetween(reroll.base, 1, Infinity, "reroll.base")
-    const growth = reroll.growth
-    if (typeof growth !== "number" || !Number.isFinite(growth) || growth < 1) {
-        fail("reroll.growth", "a number >= 1")
-    }
-
-    return { sellPricePct, fertilizer: { unlock, cutPct }, reroll: { base, growth } }
-}
-
-const ECONOMY: EconomyConfig = validateEconomy(rawEconomy)
+import { ECONOMY, fertilizerLocked, validateEconomy } from "./economy_config"
+import type { EconomyConfig } from "./economy_config"
 
 // Most crops the run can hold: the mode's cap plus Bigger barn. Puzzle has no cap yet.
 function storageCap(state: GameState): number {
@@ -83,7 +36,7 @@ function sellValue(crop: Crop, amount: number, config: EconomyConfig = ECONOMY):
 
 // True when fertilizer can be made and used in this run.
 function fertilizerAllowed(state: GameState, config: EconomyConfig = ECONOMY): boolean {
-    if (config.fertilizer.unlock === "basic") return true
+    if (!fertilizerLocked(config)) return true
     return modifiersFor(state.upgrades).fertilizerUnlocked > 0
 }
 
@@ -113,6 +66,7 @@ function rerollPrice(rerolls: number, config: EconomyConfig = ECONOMY): number {
 export {
     validateEconomy,
     ECONOMY,
+    fertilizerLocked,
     storageCap,
     storageUsed,
     storageFree,
@@ -122,4 +76,4 @@ export {
     fertilizerTargets,
     rerollPrice
 }
-export type { EconomyConfig, FertilizerUnlock }
+export type { EconomyConfig, FertilizerUnlock } from "./economy_config"

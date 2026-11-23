@@ -59,4 +59,7 @@
 ## 11/23
 * changed existing crow event to block plots until they are tapped off instead of fixed timer
 * crows only land on plots with crop, if all plots are empty, the event does nothing
+* added storage system
+* players can now sell crops for money and clear up storage
+* upgrades now come every 5 order instead of 10
 * 

@@ -1,4 +1,12 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
+
+// These scripted runs make and use fertilizer from the start, so fertilizer is a basic action
+// here instead of waiting for the Compost upgrade, as the shipped economy.json has it.
+vi.mock("./economy_config", async (importOriginal) => {
+    const real = await importOriginal<typeof import("./economy_config")>()
+    const ECONOMY = { ...real.ECONOMY, fertilizer: { ...real.ECONOMY.fertilizer, unlock: "basic" } }
+    return { ...real, ECONOMY, fertilizerLocked: () => false }
+})
 import { replay } from "./verification"
 import { createGame, applyAction, step, canReroll } from "./main"
 import { storageFree, storageUsed, storageCap } from "./economy"

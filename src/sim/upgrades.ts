@@ -20,6 +20,8 @@ import type {
 } from "./types"
 import { TIERS, UPGRADE_CHOICES } from "./game_constants"
 import { pick, randomInt } from "./mulberry"
+import { ECONOMY, fertilizerLocked } from "./economy_config"
+import type { EconomyConfig } from "./economy_config"
 import rawUpgrades from "../data/upgrades.json"
 
 // Every Modifiers field. upgrades.json's `stats` must list exactly these.
@@ -440,6 +442,12 @@ function systemsOn(def: UpgradeDef, state: GameState): boolean {
     return def.needs.every((n) => (n === "powerUps" ? state.allowPowerUps : state.allowEvents))
 }
 
+// True for an upgrade that only unlocks fertilizer (Compost) while economy.json makes fertilizer
+// a basic action, so it would do nothing.
+function unlocksNothing(def: UpgradeDef, economy: EconomyConfig = ECONOMY): boolean {
+    return !fertilizerLocked(economy) && def.effects.every((e) => e.stat === "fertilizerUnlocked")
+}
+
 // Ids that can be offered from `pool`, sorted so the list doesn't depend on the JSON's order.
 function eligibleUpgrades(
     state: GameState,
@@ -455,6 +463,7 @@ function eligibleUpgrades(
                 copyCount(upgrades, def.id) < def.maxCopies &&
                 def.requires.every((r) => copyCount(upgrades, r) > 0) &&
                 systemsOn(def, state) &&
+                !unlocksNothing(def) &&
                 validTargets(upgrades, def.id, state.plots.length, crops, config).length > 0
         )
         .map((def) => def.id)
@@ -518,5 +527,6 @@ export {
     copyCount,
     validTargets,
     eligibleUpgrades,
+    unlocksNothing,
     rollOffer
 }

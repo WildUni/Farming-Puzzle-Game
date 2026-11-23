@@ -417,8 +417,10 @@ function sellButtonText(crop: Crop, amount: number): string {
     return `Sell ${amount}\n+${sellValue(crop, amount)} coins`
 }
 
-// Label on the Make fertilizer button: what one fertilizer costs in the selected crop.
-function makeFertilizerText(crop: Crop): string {
+// Label on the Make fertilizer button: what one fertilizer costs in the selected crop, or that
+// the Compost upgrade is needed first.
+function makeFertilizerText(crop: Crop, allowed = true): string {
+    if (!allowed) return "Make fertilizer\nneeds Compost"
     return `Make fertilizer\nuses ${crop.fertilizerCost} ${crop.id}`
 }
 

@@ -1769,19 +1769,36 @@ describe("sellCrop", () => {
 
 describe("fertilizer", () => {
     const growing: Plot = { state: "growing", cropId: "pumpkin", plantedAt: 0, readyAt: 250 }
+    // The shipped economy.json locks fertilizer behind Compost.
+    const compost = [own("compost", "epic")]
+
+    it("is refused without Compost, and works with it", () => {
+        expect(ECONOMY.fertilizer.unlock).toBe("upgrade")
+        const make: Action = { type: "makeFertilizer", cropId: "pumpkin" }
+        const use: Action = { type: "useFertilizer", plot: 0 }
+        const without = makeState({ inventory: { pumpkin: 3 }, plots: [growing], fertilizer: 1 })
+        expect(applyAction(without, make, crops)).toBeNull()
+        expect(applyAction(without, use, crops)).toBeNull()
+        const withIt = { ...without, upgrades: compost }
+        expect(applyAction(withIt, make, crops)!.fertilizer).toBe(2)
+        expect(applyAction(withIt, use, crops)!.fertilizer).toBe(0)
+    })
 
     it("makeFertilizer uses fertilizerCost crops, freeing storage, and adds 1 fertilizer", () => {
-        const s = makeState({ inventory: { garlic: 5 } })
+        const s = makeState({ inventory: { garlic: 5 }, upgrades: compost })
         const next = applyAction(s, { type: "makeFertilizer", cropId: "garlic" }, crops)!
         expect(next.inventory).toEqual({ garlic: 5 - crops.garlic.fertilizerCost })
         expect(next.fertilizer).toBe(1)
-        const short = makeState({ inventory: { garlic: crops.garlic.fertilizerCost - 1 } })
+        const short = makeState({
+            inventory: { garlic: crops.garlic.fertilizerCost - 1 },
+            upgrades: compost
+        })
         expect(applyAction(short, { type: "makeFertilizer", cropId: "garlic" }, crops)).toBeNull()
         expect(applyAction(s, { type: "makeFertilizer", cropId: "melon" }, crops)).toBeNull()
     })
 
     it("useFertilizer cuts the remaining growth by cutPct, once per planting", () => {
-        const s = makeState({ tick: 50, plots: [growing], fertilizer: 2 })
+        const s = makeState({ tick: 50, plots: [growing], fertilizer: 2, upgrades: compost })
         const next = applyAction(s, { type: "useFertilizer", plot: 0 }, crops)!
         expect(next.plots[0]).toEqual({
             ...growing,
@@ -1800,13 +1817,13 @@ describe("fertilizer", () => {
         ["a ready plot", { plots: [{ state: "ready", cropId: "garlic" }], fertilizer: 1 }],
         ["a plot with none held", { plots: [growing], fertilizer: 0 }]
     ])("useFertilizer is refused on %s", (_, overrides) => {
-        const s = makeState(overrides)
+        const s = makeState({ ...overrides, upgrades: compost })
         expect(applyAction(s, { type: "useFertilizer", plot: 0 }, crops)).toBeNull()
     })
 
     it("a fully cut crop turns ready on the next step", () => {
         const almost: Plot = { ...growing, readyAt: 51 }
-        const s = makeState({ tick: 50, plots: [almost], fertilizer: 1 })
+        const s = makeState({ tick: 50, plots: [almost], fertilizer: 1, upgrades: compost })
         const used = applyAction(s, { type: "useFertilizer", plot: 0 }, crops)!
         expect(step(used, crops).plots[0].state).toBe("ready")
     })

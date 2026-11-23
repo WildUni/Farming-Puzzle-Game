@@ -11,8 +11,10 @@ import {
     copyCount,
     validTargets,
     eligibleUpgrades,
+    unlocksNothing,
     rollOffer
 } from "./upgrades"
+import { ECONOMY } from "./economy_config"
 import { TIERS, UPGRADE_CHOICES } from "./game_constants"
 import { createGame } from "./main"
 import { buildCropTable } from "./plot"
@@ -480,6 +482,27 @@ describe("eligibleUpgrades", () => {
         ])
         expect(eligibleUpgrades(survival(), "timed", crops, config)).toEqual(["coins"])
         expect(eligibleUpgrades(survival(), "shop", crops, config)).toEqual(["plot"])
+    })
+
+    it("offers Compost only while fertilizer is locked behind it", () => {
+        const compost = UPGRADES.upgrades.compost
+        expect(compost.tier).toBe("epic")
+        expect(compost.pools).toEqual(["survival", "timed"])
+        const locked = {
+            ...ECONOMY,
+            fertilizer: { ...ECONOMY.fertilizer, unlock: "upgrade" as const }
+        }
+        const basic = {
+            ...ECONOMY,
+            fertilizer: { ...ECONOMY.fertilizer, unlock: "basic" as const }
+        }
+        expect(unlocksNothing(compost, locked)).toBe(false)
+        expect(unlocksNothing(compost, basic)).toBe(true)
+        expect(unlocksNothing(UPGRADES.upgrades.sneakPeek, basic)).toBe(false)
+        // The shipped economy.json locks it, so it is offered until owned.
+        expect(eligibleUpgrades(survival(), "survival", crops)).toContain("compost")
+        const owned = survival({ upgrades: [own("compost", "epic")] })
+        expect(eligibleUpgrades(owned, "survival", crops)).not.toContain("compost")
     })
 
     it("drops an id at maxCopies, counting copies of every tier", () => {

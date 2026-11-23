@@ -14,7 +14,7 @@ const ORDER_MAX_AMOUNT = 6
 const MAX_OPEN_ORDERS = 2 //step keeps this many orders open
 
 //Upgrades
-const ORDERS_PER_UPGRADE = 10 //an upgrade offer comes after every this many filled orders
+const ORDERS_PER_UPGRADE = 5 //an upgrade offer comes after every this many filled orders
 const UPGRADE_CHOICES = 3 //upgrades shown on one offer
 // Upgrade tiers, weakest first. Tiered upgrades list one amount per tier in this order.
 const TIERS: readonly Tier[] = ["common", "uncommon", "rare", "epic", "legendary"]

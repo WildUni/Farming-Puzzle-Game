@@ -173,7 +173,7 @@ export class BarnView {
         this.sellButton.label.setText(sellButtonText(crop, amount))
         this.sellButton.enabled = usable && held >= amount && held > 0
         this.sellAllButton.enabled = usable && held > 0
-        this.makeButton.label.setText(makeFertilizerText(crop))
+        this.makeButton.label.setText(makeFertilizerText(crop, fertilizer))
         this.makeButton.enabled = usable && fertilizer && held >= crop.fertilizerCost
         this.fertilizeButton.label.setText(fertilizing ? "Cancel" : fertilizeText(state))
         this.fertilizeButton.enabled =
