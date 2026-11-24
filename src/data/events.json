@@ -10,7 +10,8 @@
             "weight": 30,
             "warnSeconds": 3,
             "effect": { "kind": "cutGrowth", "ticks": 50 },
-            "amountStat": "rainCutPct"
+            "amountStat": "rainCutPct",
+            "news": { "seconds": 10, "headline": "Rain in the forecast" }
         },
         {
             "id": "sunnySpell",
@@ -21,7 +22,8 @@
             "warnSeconds": 3,
             "seconds": 15,
             "effect": { "kind": "growthRate", "pct": 150 },
-            "durationStat": "sunnyDurationPct"
+            "durationStat": "sunnyDurationPct",
+            "news": { "seconds": 10, "headline": "Sunny skies ahead" }
         },
         {
             "id": "generousCustomer",
@@ -42,7 +44,8 @@
             "warnSeconds": 5,
             "seconds": 8,
             "effect": { "kind": "growthRate", "pct": 0 },
-            "durationStat": "frostDurationPct"
+            "durationStat": "frostDurationPct",
+            "news": { "seconds": 10, "headline": "Cold snap on the way" }
         },
         {
             "id": "crows",
@@ -54,7 +57,8 @@
             "seconds": 6,
             "effect": { "kind": "blockHarvest", "plots": 2 },
             "durationStat": "crowDurationPct",
-            "banStat": "crowBan"
+            "banStat": "crowBan",
+            "scaredOff": true
         },
         {
             "id": "moles",
@@ -105,7 +109,8 @@
             "weight": 20,
             "warnSeconds": 5,
             "effect": { "kind": "seedPlots", "plots": 3 },
-            "amountStat": "birdPlotsPct"
+            "amountStat": "birdPlotsPct",
+            "scaredOff": true
         },
         {
             "id": "emergencyOrder",
@@ -136,7 +141,26 @@
             "warnSeconds": 3,
             "seconds": 10,
             "effect": { "kind": "fog" },
-            "durationStat": "fogDurationPct"
+            "durationStat": "fogDurationPct",
+            "news": { "seconds": 10, "headline": "Fog rolling in" }
+        },
+        {
+            "id": "luckyClover",
+            "name": "Lucky clover",
+            "kind": "good",
+            "modes": ["survival", "timed"],
+            "weight": 15,
+            "warnSeconds": 5,
+            "effect": { "kind": "luckyClover", "plots": 1 }
+        },
+        {
+            "id": "scarecrow",
+            "name": "Scarecrow",
+            "kind": "good",
+            "modes": ["survival", "timed"],
+            "weight": 15,
+            "warnSeconds": 3,
+            "effect": { "kind": "scarecrow", "seconds": 60 }
         }
     ]
 }

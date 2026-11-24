@@ -52,7 +52,9 @@ const AMOUNT_KINDS: readonly string[] = [
     "blockHarvest",
     "addOrder",
     "rotStorage",
-    "tipOrder"
+    "tipOrder",
+    "luckyClover",
+    "scarecrow"
 ]
 
 // ---------------------------------------------------------------------------------------------
@@ -123,6 +125,13 @@ function validateEffect(raw: unknown, at: string): Effect {
             return { kind: "rotStorage", pct: wholeBetween(raw.pct, 1, 100, `${at}.pct`) }
         case "tipOrder":
             return { kind: "tipOrder", coins: wholeAtLeast(raw.coins, 1, `${at}.coins`) }
+        case "luckyClover":
+            return { kind: "luckyClover", plots: wholeAtLeast(raw.plots, 1, `${at}.plots`) }
+        case "scarecrow":
+            return {
+                kind: "scarecrow",
+                seconds: wholeAtLeast(raw.seconds, 1, `${at}.seconds`)
+            }
         default:
             return fail(`${at}.kind`, "an effect kind events can use")
     }
@@ -192,6 +201,22 @@ function validateEvent(entry: unknown, at: string): EventDef {
         fail(`${at}.amountStat`, "left out for an effect with no amount")
     }
 
+    let news: { leadTicks: number; headline: string } | null = null
+    if (has(entry, "news")) {
+        const raw = entry.news
+        if (!isObject(raw)) fail(`${at}.news`, "an object")
+        news = {
+            leadTicks: wholeAtLeast(raw.seconds, 1, `${at}.news.seconds`) * TICKS_PER_SECOND,
+            headline: nonEmptyString(raw, "headline", `${at}.news`)
+        }
+    }
+    let scaredOff = false
+    if (has(entry, "scaredOff")) {
+        if (typeof entry.scaredOff !== "boolean") fail(`${at}.scaredOff`, "true or false")
+        if (entry.scaredOff && kind !== "bad") fail(`${at}.scaredOff`, "left out on a good event")
+        scaredOff = entry.scaredOff
+    }
+
     return {
         id,
         name,
@@ -205,7 +230,9 @@ function validateEvent(entry: unknown, at: string): EventDef {
         durationStat,
         amountStat,
         blockStat,
-        banStat
+        banStat,
+        news,
+        scaredOff
     }
 }
 
@@ -254,6 +281,10 @@ function baseAmount(effect: Effect): number | null {
             return effect.pct
         case "tipOrder":
             return effect.coins
+        case "luckyClover":
+            return effect.plots
+        case "scarecrow":
+            return effect.seconds
         default:
             return null
     }
@@ -280,7 +311,7 @@ function eventTargets(state: GameState, def: EventDef): number[] {
 }
 
 // Ids of `kind` that can be announced now, sorted: in the run's mode, not banned (Pest control),
-// and with a target if they need one.
+// not kept away by a running Scarecrow, and with a target if they need one.
 function eligibleEvents(state: GameState, kind: EventKind, config: EventConfig = EVENTS): string[] {
     const m = modifiersFor(state.upgrades)
     return Object.values(config.events)
@@ -289,6 +320,7 @@ function eligibleEvents(state: GameState, kind: EventKind, config: EventConfig =
                 def.kind === kind &&
                 def.modes.includes(state.mode) &&
                 (def.banStat === null || m[def.banStat] <= 0) &&
+                !(def.scaredOff && state.tick < state.scarecrowUntil) &&
                 (def.target === null || eventTargets(state, def).length > 0)
         )
         .map((def) => def.id)
@@ -344,37 +376,45 @@ function announceEvent(
     return [buildEvent(state, def, plot), rng]
 }
 
-// The RunEvent for `def` announced now on `plot`: warning, length and amount with the run's
-// modifiers applied. announceEvent and the debug menu both use it.
+// The RunEvent for `def` announced now on `plot`: news lead, warning, length and amount with the
+// run's modifiers applied. announceEvent and the debug menu both use it.
 function buildEvent(state: GameState, def: EventDef, plot: number | null): RunEvent {
     const m = modifiersFor(state.upgrades)
-    const startsAt = state.tick + def.warnTicks + m.warnBonusSeconds * TICKS_PER_SECOND
+    const warnAt = state.tick + (def.news === null ? 0 : def.news.leadTicks)
+    const startsAt = warnAt + def.warnTicks + m.warnBonusSeconds * TICKS_PER_SECOND
     const length =
         def.durationTicks === null ? 0 : scalePct(def.durationTicks, pctOf(m, def.durationStat))
-    const amount = baseAmount(def.effect)
+    const base = baseAmount(def.effect)
+    let amount = base === null ? null : scalePct(base, pctOf(m, def.amountStat))
+    // Four-leaf: Lucky clover marks more plots.
+    if (amount !== null && def.effect.kind === "luckyClover") amount += m.cloverExtraPlots
     return {
         id: def.id,
         announcedAt: state.tick,
+        warnAt,
         startsAt,
         endsAt: startsAt + length,
         plot,
-        amount: amount === null ? null : scalePct(amount, pctOf(m, def.amountStat))
+        amount
     }
 }
 
 // ---------------------------------------------------------------------------------------------
 // Starting
 
-// Helpful neighbor: every ready crop is harvested into storage (yield + yieldBonus, no bumper
-// roll or drop), and with Good neighbors replanted with the same crop. If the whole harvest
-// doesn't fit in storage, nothing happens.
+// Helpful neighbor: every ready crop is harvested into storage (yield + yieldBonus, doubled on a
+// Lucky clover plot, no bumper roll or drop), and with Good neighbors replanted with the same
+// crop. If the whole harvest doesn't fit in storage, nothing happens.
 function harvestAll(state: GameState, crops: CropTable): GameState {
     const replant = modifiersFor(state.upgrades).neighborReplant > 0
-    const total = state.plots.reduce((sum, p, plot) => {
-        if (p.state !== "ready") return sum
-        const { yieldBonus } = modifiersAt(state.upgrades, { plot, cropId: p.cropId })
-        return sum + crops[p.cropId].yield + yieldBonus
-    }, 0)
+    const crop = (plot: number, cropId: string) => {
+        const { yieldBonus } = modifiersAt(state.upgrades, { plot, cropId })
+        return (crops[cropId].yield + yieldBonus) * (state.cloverPlots.includes(plot) ? 2 : 1)
+    }
+    const total = state.plots.reduce(
+        (sum, p, plot) => (p.state === "ready" ? sum + crop(plot, p.cropId) : sum),
+        0
+    )
     if (total > storageFree(state)) return state
     const inventory: Inventory = { ...state.inventory }
     let changed = false
@@ -382,15 +422,16 @@ function harvestAll(state: GameState, crops: CropTable): GameState {
         if (p.state !== "ready") return p
         changed = true
         const { cropId } = p
-        const { yieldBonus } = modifiersAt(state.upgrades, { plot, cropId })
-        inventory[cropId] = (inventory[cropId] ?? 0) + crops[cropId].yield + yieldBonus
+        inventory[cropId] = (inventory[cropId] ?? 0) + crop(plot, cropId)
         const empty: Plot = { state: "empty" }
         if (!replant) return empty
         const pct = plantGrowthPct(state, plot, cropId)
         const cut = plantCutTicks(state, plot, cropId)
         return plant(empty, cropId, state.tick, crops, pct, cut) ?? empty
     })
-    return changed ? { ...state, plots, inventory } : state
+    if (!changed) return state
+    const cloverPlots = state.cloverPlots.filter((i) => state.plots[i].state !== "ready")
+    return { ...state, plots, inventory, cloverPlots }
 }
 
 // Birds: up to `count` empty, unshielded plots get a random crop planted. Two draws per seeded
@@ -453,6 +494,25 @@ function landCrows(
             chosen
         )
     }
+}
+
+// Lucky clover: up to `count` plots holding a crop and not yet marked are marked, one pick each
+// from rng.events. With no such plot nothing happens and nothing is drawn.
+function markClover(state: GameState, count: number): GameState {
+    let free = state.plots.flatMap((p, i) =>
+        p.state !== "empty" && !state.cloverPlots.includes(i) ? [i] : []
+    )
+    if (free.length === 0) return state
+    let rng = state.rng.events
+    const marked = [...state.cloverPlots]
+    for (let n = 0; n < count && free.length > 0; n++) {
+        const [plot, next] = pick(rng, free)
+        rng = next
+        marked.push(plot)
+        free = free.filter((i) => i !== plot)
+    }
+    marked.sort((a, b) => a - b)
+    return { ...state, cloverPlots: marked, rng: { ...state.rng, events: rng } }
 }
 
 // Emergency order: one extra order with `timePct`% of the usual time, from rng.events (two
@@ -560,6 +620,16 @@ function startEvent(
             return { ...next, inventory: rotStorage(next.inventory, event.amount!) }
         case "tipOrder":
             return tipOrder(next, event.amount!)
+        case "luckyClover":
+            return markClover(next, event.amount!)
+        case "scarecrow":
+            return {
+                ...next,
+                scarecrowUntil: Math.max(
+                    next.scarecrowUntil,
+                    now + event.amount! * TICKS_PER_SECOND
+                )
+            }
         case "deliverBonus":
             return {
                 ...next,

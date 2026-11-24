@@ -156,6 +156,7 @@ Every upgrade from the design doc that works with the systems that exist now (or
 | `secondWind`    | Second wind    | survival        | tiered | 3         | `secondWindPct` +10, +15, +25, +35, +50    | –      | yes      |
 | `wormFarm`      | Worm farm      | survival, timed | tiered | 3         | `wormBonusPct` +50, +100, +100, +150, +200 | events | yes      |
 | `goodNeighbors` | Good neighbors | survival, timed | rare   | 1         | `neighborReplant` +1                       | events | yes      |
+| `fourLeaf`      | Four-leaf      | survival, timed | rare   | 2         | `cloverExtraPlots` +1                      | events | yes      |
 | `compost`       | Compost        | survival, timed | epic   | 1         | `fertilizerUnlocked` +1                    | –      | no       |
 | `birdNet`       | Bird net       | survival, timed | tiered | 3         | `birdPlotsPct` −10, −15, −20, −25, −33     | events | yes      |
 | `rootCellar`    | Root cellar    | survival, timed | tiered | 3         | `rotPct` −10, −15, −25, −35, −50           | events | yes      |
@@ -178,6 +179,7 @@ Bigger bumper has `"requires": ["bumperHarvest"]`. Early bird is in both pools, 
 | `secondWindPct`          | 100  | 100 | 200 | % of the time limit of the first new order after a lost life                                   |
 | `wormBonusPct`           | 100  | 100 | 300 | Worms' `amountStat`                                                                            |
 | `neighborReplant`        | 0    | 0   | 1   | 1: Helpful neighbor replants what they harvest                                                 |
+| `cloverExtraPlots`       | 0    | 0   | 2   | More plots Lucky clover marks (Four-leaf)                                                      |
 | `fertilizerUnlocked`     | 0    | 0   | 1   | 1: fertilizer can be made and used when `economy.json` locks it (see [economy.md](economy.md)) |
 | `storageBonus`           | 0    | 0   | 30  | Crops storage holds on top of the mode's cap (Bigger barn)                                     |
 | `sellPricePct`           | 100  | 100 | 200 | % of the usual sell price (Premium produce)                                                    |

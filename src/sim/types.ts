@@ -84,6 +84,8 @@ type GameState = {
     allowEvents: boolean // copied from GameConfig so the rules can read it
     event: RunEvent | null // the announced or running event
     nextEventAt: number // first tick a new event may be announced on
+    cloverPlots: number[] // plots Lucky clover marked for a double harvest, ascending
+    scarecrowUntil: number // first tick Scarecrow no longer keeps scaredOff events away
     secondWind: boolean // Survival: a life was lost, so the next new order gets Second wind time
     combo: number // Timed: orders filled in a row; sets the score multiplier (comboPct)
     comboEndsAt: number // Timed: last tick the streak survives without another fill (0 with no streak)
@@ -132,6 +134,7 @@ type Modifiers = {
     secondWindPct: number // % of the time limit of the first new order after a lost life
     wormBonusPct: number // % of Worms' extra crops
     neighborReplant: number // 1: Helpful neighbor replants what they harvest
+    cloverExtraPlots: number // more plots Lucky clover marks (Four-leaf)
     birdPlotsPct: number // % of the plots Birds seed
     rotPct: number // % of Rot's share of storage
     fogDurationPct: number // % of Fog's length
@@ -271,6 +274,8 @@ type InstantEffect =
     | { kind: "tipOrder"; coins: number } // one random open order pays this many more coins
     | { kind: "grantRestock" } // one free shop restock, up to the bank cap
     | { kind: "giantOrder"; coinsPct: number; timePct: number } // open orders merge into one
+    | { kind: "luckyClover"; plots: number } // up to this many crop plots harvest double next
+    | { kind: "scarecrow"; seconds: number } // scaredOff events stay away this long
 
 type Effect = LastingEffect | InstantEffect
 
@@ -316,6 +321,8 @@ type EventDef = {
     amountStat: ModifierStat | null // a ...Pct stat scaling the effect's amount
     blockStat: ModifierStat | null // a ...Chance stat: % chance the event does nothing
     banStat: ModifierStat | null // a ...Ban stat: above 0, the event is never announced
+    news: { leadTicks: number; headline: string } | null // announced this much earlier
+    scaredOff: boolean // a running Scarecrow keeps it away (bad events only)
 }
 
 type EventConfig = {
@@ -328,6 +335,7 @@ type EventConfig = {
 type RunEvent = {
     id: string
     announcedAt: number
+    warnAt: number // the tick the news ends and the warning starts
     startsAt: number // the tick it fires on
     endsAt: number // startsAt + length; equals startsAt for instant events
     plot: number | null // the target, for plot events

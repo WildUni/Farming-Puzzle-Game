@@ -119,6 +119,8 @@ function createGame(seed: RNGSeed, config: GameConfig): GameState {
         allowEvents: config.allowEvents,
         event: null,
         nextEventAt: EVENTS.firstEventTicks,
+        cloverPlots: [],
+        scarecrowUntil: 0,
         secondWind: false,
         combo: 0,
         comboEndsAt: 0,
@@ -271,8 +273,11 @@ function harvestPlot(state: GameState, index: number, crops: CropTable): GameSta
     }
     // Worms add their crops while they work.
     const worms = harvestBonusAt(state.activeEffects, index, state.tick)
+    // Lucky clover doubles the plot's usual crops once, then its mark is gone.
+    const clover = state.cloverPlots.includes(index)
+    const base = (crops[cropId].yield + yieldBonus) * (clover ? 2 : 1)
     // Only what fits is stored; the rest is lost.
-    const amount = Math.min(free, crops[cropId].yield + yieldBonus + bumper + worms)
+    const amount = Math.min(free, base + bumper + worms)
     // Power-up drop: rolled from rng.drops whether or not a slot is free.
     const [drop, dropsRng] = rollDrop(state)
     rng = { ...rng, drops: dropsRng }
@@ -281,6 +286,7 @@ function harvestPlot(state: GameState, index: number, crops: CropTable): GameSta
         ...state,
         rng,
         plots: replacePlot(state.plots, index, plot),
+        cloverPlots: clover ? state.cloverPlots.filter((i) => i !== index) : state.cloverPlots,
         inventory: {
             ...state.inventory,
             [cropId]: (state.inventory[cropId] ?? 0) + amount

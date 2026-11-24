@@ -91,6 +91,7 @@ A panel along the bottom of the play screen that never pauses the clock. It star
 - **Storage bar** across the screen: `Storage 12 / 25` (`storageText`), filled by `storageFill`. It turns red and the label adds `FULL` when `isStorageFull`. Shown folded or open.
 - **Fertilize** (`fertilizeText`: how many are held) starts choosing a plot: the plots in `fertilizerTargets` are outlined and the rest dimmed, as for a plot power-up, and the button says `Cancel`. Clicking a highlighted plot sends `useFertilizer`; clicking anything else, Esc, or starting a power-up cancels. Disabled with no fertilizer or nothing to fertilize.
 - A fertilized crop shows `FERT` along the top of its plot (`plotOverlays`).
+- A plot Lucky clover marked shows `CLOVER` until its next harvest (`plotOverlays`).
 - The drawer is off while paused, while an upgrade offer or the shop page is open, and after the run ends.
 
 ## Miracle grow (MiracleGrowView)
@@ -115,13 +116,14 @@ A row of slot buttons under the plots, in both modes. Hidden when `allowPowerUps
 
 ### Active effects
 
-A line under the slot buttons lists each lasting effect **started by a power-up** with `endsAt > tick` and the seconds left (`activeEffectText`), e.g. `Order freeze 7s`. Seconds left are `ceil((endsAt − tick) / TICKS_PER_SECOND)`, so it never shows `0s` while the effect still has ticks to run. An effect on its `endsAt` tick has done its last tick and is not listed. While an Order freeze is active, order countdown bars are drawn in a frozen colour. Event effects are shown by the event banner instead, so they are not listed twice.
+A line under the slot buttons lists each lasting effect **started by a power-up** with `endsAt > tick` and the seconds left (`activeEffectText`), e.g. `Order freeze 7s`. Seconds left are `ceil((endsAt − tick) / TICKS_PER_SECOND)`, so it never shows `0s` while the effect still has ticks to run. An effect on its `endsAt` tick has done its last tick and is not listed. While an Order freeze is active, order countdown bars are drawn in a frozen colour. Event effects are shown by the event banner instead, so they are not listed twice. The one exception is Scarecrow, whose guard outlasts its event: while `tick < scarecrowUntil` the line ends with `Scarecrow 45s` (`scarecrowText`). The line shows whenever it has something to list, even with power-ups off.
 
 ## Events (EventBanner)
 
 A banner across the top of the board, above the plots, shown while `state.event` is not `null`. Hidden when `allowEvents` is off. It never blocks clicks.
 
-- **Warning** (`tick < startsAt`): `eventBannerText` gives `Frost in 4s`, with the seconds until `startsAt` rounded up. A plot event adds its plot: `Moles → Plot 2 in 4s`.
+- **News** (`tick < warnAt`, events with `news` only): the banner is the news ticker: a dark strip with `NEWS  Cold snap on the way` (`newsText`). `eventBannerText` is `null` then. The rush banner stacks above it as it does above an event banner.
+- **Warning** (`warnAt <= tick < startsAt`): `eventBannerText` gives `Frost in 4s`, with the seconds until `startsAt` rounded up. A plot event adds its plot: `Moles → Plot 2 in 4s`.
 - **Running** (lasting events, `startsAt <= tick < endsAt`): `Frost 6s`, with the seconds until `endsAt` rounded up.
 - Instant events show their warning only; on the tick they start the banner is gone.
 - The banner is green for good events and red for bad ones.
@@ -238,6 +240,7 @@ Three sections, top to bottom:
 - `buyLifeText` shows the price with the `lifePricePct` modifier applied.
 - `powerUpButtonText` gives the name, then the text with `{seconds}` filled from `durationFor`, with and without Long-lasting.
 - `shownEffects` and `ordersFrozen` leave out an effect on its `endsAt` tick; `shownEffects` lists only power-up effects.
+- `newsText` gives the headline from announcement to `warnAt` and `null` after, and for events without news; `eventBannerText` is `null` during the news. `scarecrowText` counts down to `scarecrowUntil`. `plotOverlays` marks `cloverPlots`.
 - `eventBannerText` for the warning of an untargeted and a plot event, for a running lasting event, rounding seconds up, and `null` with no event.
 - `plotOverlays` for each row of the overlay table, including a shielded plot left out of Frost and Crows.
 - `activeEffectText` shows the name and seconds left, rounding up: `1s` with one tick left, `10s` with 100.

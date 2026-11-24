@@ -58,6 +58,7 @@ const MODIFIER_STATS: readonly ModifierStat[] = [
     "secondWindPct",
     "wormBonusPct",
     "neighborReplant",
+    "cloverExtraPlots",
     "birdPlotsPct",
     "rotPct",
     "fogDurationPct",

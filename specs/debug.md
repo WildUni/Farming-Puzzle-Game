@@ -16,7 +16,7 @@ Announces event `id` now, in place of whatever event is announced or running. La
 
 - Returns `null` when the run has ended, events are off (`allowEvents`), `id` is not an event, the event doesn't happen in the run's mode, or the plot is wrong: a plot event needs `plot` in `eventTargets(state, def)`, and other events need `plot` to be `null`.
 - The event is built exactly as `announceEvent` builds it (warning, length and amount with the run's modifiers; see [events.md](events.md)), with `announcedAt = tick`. `events.ts` exports that part as `buildEvent(state, def, plot)` so the two can't differ.
-- `skipWarning: true` moves it to start on the next step: `startsAt = tick + 1`, and `endsAt` moves by the same amount.
+- `skipWarning: true` moves it to start on the next step: `startsAt = tick + 1`, and `endsAt` moves by the same amount, and `warnAt = tick` (no news).
 - Doesn't change `nextEventAt`; when the event ends, the next one is scheduled a gap later as usual.
 
 ### `debugUpgrade(state, id, tier, target, crops): GameState | null`

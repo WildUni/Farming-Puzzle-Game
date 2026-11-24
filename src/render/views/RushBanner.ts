@@ -3,7 +3,7 @@
 // Never takes clicks.
 import { GameObjects, Scene } from "phaser"
 import type { GameState } from "../../sim/types"
-import { eventBannerText, rushBannerText } from "../format"
+import { eventBannerText, rushBannerText, newsText } from "../format"
 import { COLORS, TEXT } from "../theme"
 
 const WIDTH = 420
@@ -30,7 +30,8 @@ export class RushBanner {
         this.label.setVisible(visible)
         if (!visible) return
         this.label.setText(text)
-        const event = state.allowEvents && eventBannerText(state) !== null
+        const event =
+            state.allowEvents && (eventBannerText(state) !== null || newsText(state) !== null)
         const y = event ? STACKED_Y : CENTER_Y
         this.box.setY(y)
         this.label.setY(y)

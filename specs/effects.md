@@ -45,6 +45,8 @@ type InstantEffect =
     | { kind: "rotStorage"; pct: number } // this % of each stored crop is lost, rounded down (Rot)
     | { kind: "tipOrder"; coins: number } // one random open order pays this many more coins when filled (Generous customer)
     | { kind: "grantRestock" } // one free shop restock, up to the bank cap (Merchant call)
+    | { kind: "luckyClover"; plots: number } // up to this many crop plots give double on their next harvest (Lucky clover)
+    | { kind: "scarecrow"; seconds: number } // events marked scaredOff stay away this long (Scarecrow)
     | { kind: "giantOrder"; coinsPct: number; timePct: number } // every open order merges into one giant order (Giant order)
 
 type Effect = LastingEffect | InstantEffect
@@ -59,9 +61,9 @@ type ActiveEffect = {
 }
 ```
 
-`pct`, `ticks`, `amount`, `coins`, `crops`, `plots` and `timePct` are whole numbers. A rate's `pct >= 0` and `pct !== 100`; `ticks`, `amount`, `coins`, `crops` and `plots` (both `seedPlots`' and `blockHarvest`'s) are `>= 1`; `addOrder`'s `timePct` and `rotStorage`'s `pct` are from 1 to 100; `giantOrder`'s `coinsPct` and `timePct` are `>= 1` (above 100 is the usual case). The files that use effects (`powerups.json`, `events.json`) check this when they load, and each says which kinds it allows.
+`pct`, `ticks`, `amount`, `coins`, `crops`, `plots` and `timePct` are whole numbers. A rate's `pct >= 0` and `pct !== 100`; `ticks`, `amount`, `coins`, `crops` and `plots` (both `seedPlots`' and `blockHarvest`'s) are `>= 1`; `addOrder`'s `timePct` and `rotStorage`'s `pct` are from 1 to 100; `giantOrder`'s `coinsPct` and `timePct` are `>= 1` (above 100 is the usual case); `luckyClover`'s `plots` and `scarecrow`'s `seconds` are `>= 1`. The files that use effects (`powerups.json`, `events.json`) check this when they load, and each says which kinds it allows.
 
-`growthRate`, `orderRate` and `comboRate` are **rate effects**; `blockHarvest`, `deliverBonus`, `harvestBonus`, `fog` and `autoHarvest` are **action effects**. `comboRate` moves no plot or order: `tickEffects` leaves it alone and `step` reads its shift through `comboShiftAt`. The instant kinds that need the whole game state (`fillOrder`, `fillAllOrders`, `goodEvent`, `harvestAll`, `seedPlots`, `addOrder`, `rotStorage`, `tipOrder`, `grantRestock`, `giantOrder`) are carried out in `main.ts` or `events.ts`; `effects.ts` has helpers only for the ones that work on plots or effect lists alone.
+`growthRate`, `orderRate` and `comboRate` are **rate effects**; `blockHarvest`, `deliverBonus`, `harvestBonus`, `fog` and `autoHarvest` are **action effects**. `comboRate` moves no plot or order: `tickEffects` leaves it alone and `step` reads its shift through `comboShiftAt`. The instant kinds that need the whole game state (`fillOrder`, `fillAllOrders`, `goodEvent`, `harvestAll`, `seedPlots`, `addOrder`, `rotStorage`, `tipOrder`, `grantRestock`, `giantOrder`, `luckyClover`, `scarecrow`) are carried out in `main.ts` or `events.ts`; `effects.ts` has helpers only for the ones that work on plots or effect lists alone.
 
 ## The rate rule
 

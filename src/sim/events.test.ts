@@ -7,6 +7,7 @@ import {
     eventTargets,
     eligibleEvents,
     announceEvent,
+    buildEvent,
     rotStorage
 } from "./events"
 import { debugEvent } from "./debug"
@@ -18,7 +19,8 @@ import { nextValue } from "./mulberry"
 import { TICKS_PER_SECOND } from "./game_constants"
 import { DIFFICULTY } from "./difficulty"
 import { MODES } from "./modes"
-import { UPGRADES, scalePct } from "./upgrades"
+import { UPGRADES, modifiersFor, scalePct } from "./upgrades"
+import { storageCap } from "./economy"
 import rawEvents from "../data/events.json"
 import type {
     EventConfig,
@@ -70,6 +72,7 @@ function startsNext(state: GameState, id: string, extra: Partial<RunEvent> = {})
     const event: RunEvent = {
         id,
         announcedAt: state.tick,
+        warnAt: state.tick,
         startsAt,
         endsAt: startsAt + (def.durationTicks ?? 0),
         plot: null,
@@ -147,9 +150,11 @@ describe("validateEvents", () => {
             "frost",
             "generousCustomer",
             "helpfulNeighbor",
+            "luckyClover",
             "moles",
             "rainShower",
             "rot",
+            "scarecrow",
             "slowDay",
             "sunnySpell",
             "worms"
@@ -806,5 +811,208 @@ describe("new events in step", () => {
         expect(s.activeEffects[0].endsAt - s.tick).toBe(length)
         const lit = step(builtNext(game({ upgrades: [own("lantern", "legendary")] }), "fog"), crops)
         expect(lit.activeEffects[0].endsAt - lit.tick).toBe(scalePct(length, 50))
+    })
+})
+
+describe("news, Lucky clover and Scarecrow (Day 10)", () => {
+    describe("validateEvents", () => {
+        type Raw = { events: Record<string, unknown>[] }
+        const withChange = (change: (r: Raw) => void): Raw => {
+            const raw = rawConfig() as Raw
+            change(raw)
+            return raw
+        }
+
+        it("reads news and scaredOff, and leaves them null and false when missing", () => {
+            const read = validateEvents(
+                withChange((r) => {
+                    r.events[1].news = { seconds: 4, headline: "Cold tonight" }
+                    r.events[2].scaredOff = true
+                })
+            )
+            expect(read.events.frost.news).toEqual({
+                leadTicks: 4 * TICKS_PER_SECOND,
+                headline: "Cold tonight"
+            })
+            expect(read.events.moles.scaredOff).toBe(true)
+            expect(config.events.rain.news).toBeNull()
+            expect(config.events.rain.scaredOff).toBe(false)
+        })
+
+        it("accepts luckyClover and scarecrow effects", () => {
+            const read = validateEvents(
+                withChange((r) => {
+                    r.events[0].effect = { kind: "luckyClover", plots: 2 }
+                    delete r.events[0].amountStat
+                })
+            )
+            expect(read.events.rain.effect).toEqual({ kind: "luckyClover", plots: 2 })
+            const crow = validateEvents(
+                withChange((r) => {
+                    r.events[0].effect = { kind: "scarecrow", seconds: 30 }
+                    delete r.events[0].amountStat
+                })
+            )
+            expect(crow.events.rain.effect).toEqual({ kind: "scarecrow", seconds: 30 })
+        })
+
+        const bad: [string, (r: Raw) => void][] = [
+            ["news with 0 seconds", (r) => (r.events[1].news = { seconds: 0, headline: "x" })],
+            [
+                "news with an empty headline",
+                (r) => (r.events[1].news = { seconds: 2, headline: "" })
+            ],
+            ["news that isn't an object", (r) => (r.events[1].news = "soon")],
+            ["scaredOff that isn't a boolean", (r) => (r.events[1].scaredOff = 1)],
+            ["scaredOff on a good event", (r) => (r.events[0].scaredOff = true)],
+            [
+                "Lucky clover with 0 plots",
+                (r) => (r.events[0].effect = { kind: "luckyClover", plots: 0 })
+            ],
+            [
+                "Scarecrow with 0 seconds",
+                (r) => (r.events[0].effect = { kind: "scarecrow", seconds: 0 })
+            ]
+        ]
+        for (const [name, change] of bad) {
+            it(`throws for ${name}`, () => {
+                expect(() => validateEvents(withChange(change))).toThrow()
+            })
+        }
+
+        it("ships news on the weather, and Crows and Birds scared off", () => {
+            for (const id of ["frost", "fog", "rainShower", "sunnySpell"]) {
+                expect(EVENTS.events[id].news).not.toBeNull()
+            }
+            expect(EVENTS.events.moles.news).toBeNull()
+            const scared = Object.values(EVENTS.events).filter((d) => d.scaredOff)
+            expect(scared.map((d) => d.id).sort()).toEqual(["birds", "crows"])
+        })
+    })
+
+    describe("news", () => {
+        it("announces an event with news its lead before the warning", () => {
+            const def = EVENTS.events.frost
+            const s = game({ tick: 100 })
+            const event = buildEvent(s, def, null)
+            expect(event.announcedAt).toBe(100)
+            expect(event.warnAt).toBe(100 + def.news!.leadTicks)
+            expect(event.startsAt).toBe(event.warnAt + def.warnTicks)
+        })
+
+        it("gives an event without news warnAt = announcedAt", () => {
+            const event = buildEvent(game({ tick: 100 }), EVENTS.events.moles, 0)
+            expect(event.warnAt).toBe(100)
+        })
+
+        it("Early warning moves the start later and keeps warnAt, so both come sooner", () => {
+            const def = EVENTS.events.frost
+            const plain = buildEvent(game({ tick: 100 }), def, null)
+            const early = buildEvent(
+                game({ tick: 100, upgrades: [own("earlyWarning", "rare")] }),
+                def,
+                null
+            )
+            expect(early.warnAt).toBe(plain.warnAt)
+            expect(early.startsAt - plain.startsAt).toBe(
+                modifiersFor([own("earlyWarning", "rare")]).warnBonusSeconds * TICKS_PER_SECOND
+            )
+        })
+
+        it("still draws two numbers per announcement", () => {
+            const s = game({ tick: 100 })
+            const [event, rng] = announceEvent(s, EVENTS, "bad")
+            expect(event).not.toBeNull()
+            // A forced kind draws one number, plus one for a plot event.
+            const draws = EVENTS.events[event!.id].target === "plot" ? 2 : 1
+            expect(rng).toBe(advance(s.rng.events, draws))
+        })
+    })
+
+    describe("Lucky clover", () => {
+        const field = [growing(500), ready, empty, growing(500)]
+
+        it("marks one crop plot from rng.events, never an empty or marked one", () => {
+            const s = startsNext(game({ plots: field }), "luckyClover", { amount: 1 })
+            const next = step(s, crops)
+            expect(next.cloverPlots).toHaveLength(1)
+            expect([0, 1, 3]).toContain(next.cloverPlots[0])
+            expect(next.rng.events).toBe(advance(s.rng.events, 1))
+
+            const marked = startsNext(game({ plots: field, cloverPlots: [0, 1] }), "luckyClover", {
+                amount: 1
+            })
+            expect(step(marked, crops).cloverPlots).toEqual([0, 1, 3])
+        })
+
+        it("marks more plots with Four-leaf", () => {
+            const fourLeaf = [own("fourLeaf", "rare"), own("fourLeaf", "rare")]
+            const s = game({ plots: field, upgrades: fourLeaf })
+            const event = buildEvent(s, EVENTS.events.luckyClover, null)
+            expect(event.amount).toBe(3)
+            const next = step(startsNext(s, "luckyClover", { amount: event.amount }), crops)
+            expect(next.cloverPlots).toEqual([0, 1, 3])
+        })
+
+        it("does nothing and draws nothing with no crop on the field", () => {
+            const s = startsNext(game({ plots: [empty, empty] }), "luckyClover", { amount: 1 })
+            const next = step(s, crops)
+            expect(next.cloverPlots).toEqual([])
+            expect(next.rng.events).toBe(s.rng.events)
+        })
+
+        it("doubles the next harvest of a marked plot and clears only its mark", () => {
+            const s = game({ plots: [ready, ready], cloverPlots: [0, 1], nextEventAt: 1e9 })
+            const next = applyAction(s, { type: "harvest", plot: 0 }, crops)!
+            expect(next.inventory).toEqual({ garlic: 4 })
+            expect(next.cloverPlots).toEqual([1])
+            const again = applyAction(
+                { ...next, plots: [ready, ready] },
+                { type: "harvest", plot: 0 },
+                crops
+            )!
+            expect(again.inventory).toEqual({ garlic: 6 })
+        })
+
+        it("keeps the mark when full storage refuses the harvest", () => {
+            const s = game({ plots: [ready], cloverPlots: [0] })
+            const full = { ...s, inventory: { garlic: storageCap(s) } }
+            expect(applyAction(full, { type: "harvest", plot: 0 }, crops)).toBeNull()
+        })
+
+        it("Helpful neighbor's harvest doubles a marked plot and clears its mark", () => {
+            const s = startsNext(
+                game({ plots: [ready, ready, growing(500)], cloverPlots: [0, 2] }),
+                "helpfulNeighbor"
+            )
+            const next = step(s, crops)
+            expect(next.inventory).toEqual({ garlic: 6 })
+            expect(next.cloverPlots).toEqual([2])
+        })
+    })
+
+    describe("Scarecrow", () => {
+        const SECONDS = 60
+
+        it("guards for its seconds, and a second one never shortens the guard", () => {
+            const s = startsNext(game(), "scarecrow", { amount: SECONDS })
+            const next = step(s, crops)
+            expect(next.scarecrowUntil).toBe(next.tick + SECONDS * TICKS_PER_SECOND)
+            const longer = { ...next, scarecrowUntil: next.tick + 10_000 }
+            const again = step(startsNext(longer, "scarecrow", { amount: SECONDS }), crops)
+            expect(again.scarecrowUntil).toBe(longer.scarecrowUntil)
+        })
+
+        it("keeps Crows and Birds away while it guards, and lets other bad events come", () => {
+            const field = { plots: [growing(500), ready, empty, empty] }
+            const guarded = game({ ...field, tick: 100, scarecrowUntil: 101 })
+            const bad = eligibleEvents(guarded, "bad")
+            expect(bad).not.toContain("crows")
+            expect(bad).not.toContain("birds")
+            expect(bad).toContain("frost")
+            const after = game({ ...field, tick: 101, scarecrowUntil: 101 })
+            expect(eligibleEvents(after, "bad")).toContain("crows")
+            expect(eligibleEvents(after, "bad")).toContain("birds")
+        })
     })
 })

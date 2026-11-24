@@ -400,6 +400,7 @@ describe("power-ups: second batch rules", () => {
         const event = {
             id: "frost",
             announcedAt: 0,
+            warnAt: 0,
             startsAt: 5,
             endsAt: 9,
             plot: null,

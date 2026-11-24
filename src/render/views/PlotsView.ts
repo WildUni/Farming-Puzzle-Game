@@ -127,6 +127,8 @@ function markText(mark: PlotOverlay): string {
             return "SAFE"
         case "fertilized":
             return "FERT"
+        case "clover":
+            return "CLOVER"
         case "target":
             return ""
     }

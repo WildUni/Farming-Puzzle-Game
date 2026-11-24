@@ -63,6 +63,7 @@ function rawConfig(): Record<string, unknown> {
             secondWindPct: { base: 100, min: 100, max: 200 },
             wormBonusPct: { base: 100, min: 100, max: 300 },
             neighborReplant: { base: 0, min: 0, max: 1 },
+            cloverExtraPlots: { base: 0, min: 0, max: 2 },
             birdPlotsPct: { base: 100, min: 34, max: 100 },
             rotPct: { base: 100, min: 25, max: 100 },
             fogDurationPct: { base: 100, min: 25, max: 100 },
@@ -406,6 +407,7 @@ describe("modifiersFor", () => {
             secondWindPct: 100,
             wormBonusPct: 100,
             neighborReplant: 0,
+            cloverExtraPlots: 0,
             birdPlotsPct: 100,
             rotPct: 100,
             fogDurationPct: 100,
@@ -618,7 +620,7 @@ describe("eligibleUpgrades", () => {
         const ids = Object.values(UPGRADES.upgrades)
             .filter((d) => d.needs.includes("events"))
             .map((d) => d.id)
-        expect(ids).toHaveLength(17)
+        expect(ids).toHaveLength(18)
         for (const id of ids) {
             expect(off).not.toContain(id)
             expect(on).toContain(id)

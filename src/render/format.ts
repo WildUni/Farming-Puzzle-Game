@@ -345,10 +345,11 @@ function secondsUntil(tick: number, now: number): number {
 }
 
 // Text on the event banner: "Frost in 4s" or "Moles → Plot 2 in 4s" during the warning,
-// "Frost 6s" while a lasting event runs. null when there is nothing to show.
+// "Frost 6s" while a lasting event runs. null when there is nothing to show, including during
+// the event's news (newsText shows then instead).
 function eventBannerText(state: GameState): string | null {
     const event = state.event
-    if (event === null) return null
+    if (event === null || state.tick < event.warnAt) return null
     const { name } = EVENTS.events[event.id]
     if (state.tick < event.startsAt) {
         const where = event.plot === null ? "" : ` → ${targetText(event.plot)}`
@@ -368,15 +369,32 @@ function rushBannerText(state: GameState): string | null {
     return left > 0 ? `Rush wave! ${left} left` : null
 }
 
+// The news ticker: "NEWS  Cold snap on the way" from an event's announcement until its warning
+// starts. null for events without news, and outside that stretch.
+function newsText(state: GameState): string | null {
+    const event = state.event
+    if (event === null || state.tick >= event.warnAt) return null
+    const news = EVENTS.events[event.id].news
+    return news === null ? null : `NEWS  ${news.headline}`
+}
+
+// "Scarecrow 45s" while Scarecrow keeps Crows and Birds away, else null.
+function scarecrowText(state: GameState): string | null {
+    if (state.tick >= state.scarecrowUntil) return null
+    return `Scarecrow ${secondsUntil(state.scarecrowUntil, state.tick)}s`
+}
+
 // True when the banner's event is a good one, for its colour.
 function eventIsGood(state: GameState): boolean {
     return state.event !== null && EVENTS.events[state.event.id].kind === "good"
 }
 
-type PlotOverlay = "target" | "blocked" | "frozen" | "fast" | "worms" | "shield" | "fertilized"
+type PlotOverlay =
+    "target" | "blocked" | "frozen" | "fast" | "worms" | "shield" | "fertilized" | "clover"
 
 // Markers drawn on each plot: the plot a plot event will hit, harvest blocked, growth stopped or
-// slowed, growth sped up, extra crops from Worms, Greenhouse protection, and a fertilized crop.
+// slowed, growth sped up, extra crops from Worms, Greenhouse protection, a fertilized crop, and a
+// Lucky clover mark.
 function plotOverlays(state: GameState): PlotOverlay[][] {
     const { event, tick } = state
     const shielded = shieldedPlots(state)
@@ -396,12 +414,13 @@ function plotOverlays(state: GameState): PlotOverlay[][] {
         if (shielded.includes(i)) marks.push("shield")
         const plot = state.plots[i]
         if (plot.state === "growing" && plot.fertilized === true) marks.push("fertilized")
+        if (state.cloverPlots.includes(i)) marks.push("clover")
         return marks
     })
 }
 
 export { powerUpButtonText, shownEffects, activeEffectText, ordersFrozen }
-export { eventBannerText, eventIsGood, rushBannerText, plotOverlays }
+export { eventBannerText, eventIsGood, rushBannerText, plotOverlays, newsText, scarecrowText }
 export type { PlotOverlay }
 
 // The storage bar's label: crops held out of the cap, e.g. "Storage 12 / 25".

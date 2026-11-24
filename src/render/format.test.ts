@@ -9,6 +9,8 @@ import {
     rushBannerText,
     eventIsGood,
     plotOverlays,
+    newsText,
+    scarecrowText,
     timerText,
     plotText,
     orderText,
@@ -490,6 +492,7 @@ describe("event text", () => {
     const run = (overrides: Partial<RunEvent>): RunEvent => ({
         id: "frost",
         announcedAt: 0,
+        warnAt: 0,
         startsAt: 50,
         endsAt: 130,
         plot: null,
@@ -511,6 +514,30 @@ describe("event text", () => {
         const moles = run({ id: "moles", startsAt: 50, endsAt: 50, plot: 1 })
         expect(eventBannerText(at(20, moles))).toBe("Moles → Plot 2 in 3s")
         expect(eventBannerText(at(50, moles))).toBeNull()
+    })
+
+    it("newsText shows the headline until the warning, and the banner waits for it", () => {
+        const news = run({ announcedAt: 0, warnAt: 100, startsAt: 150, endsAt: 230 })
+        const headline = EVENTS.events.frost.news!.headline
+        expect(newsText(at(0, news))).toBe(`NEWS  ${headline}`)
+        expect(newsText(at(99, news))).toBe(`NEWS  ${headline}`)
+        expect(eventBannerText(at(99, news))).toBeNull()
+        expect(newsText(at(100, news))).toBeNull()
+        expect(eventBannerText(at(100, news))).toBe("Frost in 5s")
+        expect(newsText(at(0, run({ id: "moles", warnAt: 0 })))).toBeNull()
+        expect(newsText(at(0, null))).toBeNull()
+    })
+
+    it("scarecrowText counts down the guard and is null once it ends", () => {
+        const s = { ...game("survival"), tick: 100, scarecrowUntil: 551 }
+        expect(scarecrowText(s)).toBe("Scarecrow 46s")
+        expect(scarecrowText({ ...s, tick: 551 })).toBeNull()
+        expect(scarecrowText(game("survival"))).toBeNull()
+    })
+
+    it("plotOverlays marks Lucky clover plots", () => {
+        const s = { ...game("survival"), cloverPlots: [1, 3] }
+        expect(plotOverlays(s)).toEqual([[], ["clover"], [], ["clover"]])
     })
 
     it("eventIsGood follows the event's kind", () => {

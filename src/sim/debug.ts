@@ -30,7 +30,12 @@ function debugEvent(state: GameState, id: string, options: DebugEventOptions): G
     const shift = event.startsAt - (state.tick + 1)
     return {
         ...state,
-        event: { ...event, startsAt: event.startsAt - shift, endsAt: event.endsAt - shift }
+        event: {
+            ...event,
+            warnAt: state.tick, // no news either
+            startsAt: event.startsAt - shift,
+            endsAt: event.endsAt - shift
+        }
     }
 }
 

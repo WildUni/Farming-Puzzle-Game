@@ -409,24 +409,24 @@ Add the news ticker and the 8 good events, so runs have welcome surprises as wel
 
 ### Event data and news (about 2 hours)
 
-- [ ] `events.json`: kind (good or bad), weight, warning time, duration, effect; move Day 4's three events into it
-- [ ] The scheduler balances good and bad events by weight
-- [ ] News ticker: a small banner that announces some events and never stops play
-- [ ] Early warning upgrade makes warnings and news arrive sooner
+- [x] `events.json`: kind (good or bad), weight, warning time, duration, effect; move Day 4's three events into it
+- [x] The scheduler balances good and bad events by weight
+- [x] News ticker: a small banner that announces some events and never stops play (it takes the event banner's place during the news lead)
+- [x] Early warning upgrade makes warnings and news arrive sooner
 
 ### Good events (about 4 hours)
 
-- [ ] Growth: Rain shower (a one-time cut), Sunny spell (faster growth for a while)
-- [ ] Yield: Worms, Lucky clover
-- [ ] Protection: Scarecrow blocks some bad events for a while
-- [ ] Helping hands: Helpful neighbor harvests ripe crops, within storage limits
-- [ ] Orders: Generous customer, Slow day (the run timer is not affected)
-- [ ] Turn on the Good omen power-up from Day 9
+- [x] Growth: Rain shower (a one-time cut), Sunny spell (faster growth for a while)
+- [x] Yield: Worms, Lucky clover
+- [x] Protection: Scarecrow blocks some bad events for a while
+- [x] Helping hands: Helpful neighbor harvests ripe crops, within storage limits
+- [x] Orders: Generous customer, Slow day (the run timer is not affected)
+- [x] Turn on the Good omen power-up from Day 9
 
 ### Related upgrades (about 2 hours)
 
-- [ ] Good fortune, Rainmaker, Long summer, Worm farm, Four-leaf, Good neighbors, Big spender
-- [ ] Test: one fixed-seed test per event
+- [x] Good fortune, Rainmaker, Long summer, Worm farm, Four-leaf, Good neighbors, Big spender
+- [x] Test: one fixed-seed test per event
 
 **Gate:** all 8 good events and the ticker show up in a run, Early warning visibly moves warnings sooner, and the run replays exactly.
 

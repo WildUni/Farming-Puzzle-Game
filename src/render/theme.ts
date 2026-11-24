@@ -31,6 +31,7 @@ const COLORS = {
     slotEmpty: 0x5f6b52, // a slot with no power-up in it
     eventGood: 0x2e8b3a, // event banner for a good event
     eventBad: 0xb3362c, // event banner for a bad event
+    news: 0x34495e, // the news ticker, in the event banner's place
     rush: 0xe07b12, // rush wave banner
     rushCard: 0xffd8a8, // order card of a rush wave order
     eventTarget: 0xff3b30, // outline on the plot a plot event will hit

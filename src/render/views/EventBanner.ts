@@ -1,8 +1,9 @@
 // Banner above the plots announcing the next event and counting down its warning, then its
-// time left. Green for good events, red for bad ones. Never takes clicks.
+// time left. Green for good events, red for bad ones. Before the warning of an event with news,
+// it is the news ticker instead: the headline on a dark strip. Never takes clicks.
 import { GameObjects, Scene } from "phaser"
 import type { GameState } from "../../sim/types"
-import { eventBannerText, eventIsGood } from "../format"
+import { eventBannerText, eventIsGood, newsText } from "../format"
 import { COLORS, TEXT } from "../theme"
 
 const WIDTH = 420
@@ -22,12 +23,15 @@ export class EventBanner {
     }
 
     update(state: GameState): void {
-        const text = state.allowEvents ? eventBannerText(state) : null
+        const news = state.allowEvents ? newsText(state) : null
+        const text = state.allowEvents ? (news ?? eventBannerText(state)) : null
         const visible = text !== null
         this.box.setVisible(visible)
         this.label.setVisible(visible)
         if (!visible) return
         this.label.setText(text)
-        this.box.setFillStyle(eventIsGood(state) ? COLORS.eventGood : COLORS.eventBad)
+        this.box.setFillStyle(
+            news !== null ? COLORS.news : eventIsGood(state) ? COLORS.eventGood : COLORS.eventBad
+        )
     }
 }

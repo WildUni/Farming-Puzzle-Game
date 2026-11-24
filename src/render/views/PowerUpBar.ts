@@ -4,7 +4,7 @@ import { GameObjects, Scene } from "phaser"
 import type { GameState } from "../../sim/types"
 import { modifiersFor } from "../../sim/upgrades"
 import { POWER_UPS, canUsePowerUp, powerUpTargets } from "../../sim/powerups"
-import { activeEffectText, powerUpButtonText, shownEffects } from "../format"
+import { activeEffectText, powerUpButtonText, scarecrowText, shownEffects } from "../format"
 import { COLORS, TEXT } from "../theme"
 
 const BUTTON_W = 200
@@ -65,7 +65,10 @@ export class PowerUpBar {
         })
 
         const lines = shownEffects(state).map((a) => activeEffectText(a, state.tick))
-        this.effects.setVisible(visible && lines.length > 0)
+        const scarecrow = scarecrowText(state)
+        if (scarecrow !== null) lines.push(scarecrow)
+        // Shown even with power-ups off, since Scarecrow is an event.
+        this.effects.setVisible(lines.length > 0)
         this.effects.setText(lines.join("   "))
     }
 

@@ -144,7 +144,7 @@ Checks a parsed JSON value and returns it in the typed shape. Throws an `Error` 
 - `id`, `name` or `text` is not a non-empty string, or an `id` is used twice.
 - `modes` is empty, has a repeat, or has a value other than `survival` or `timed`.
 - `weight` is not a whole number `>= 1`.
-- `effect` is not an object with a known `kind`, is one only events use (`blockHarvest`, `stealCrop`, `harvestBonus`, `fog`, `harvestAll`, `seedPlots`, `addOrder`, `rotStorage`, `tipOrder`), or its numbers break the rules in [effects.md](effects.md#types-in-typesmd).
+- `effect` is not an object with a known `kind`, is one only events use (`blockHarvest`, `stealCrop`, `harvestBonus`, `fog`, `harvestAll`, `seedPlots`, `addOrder`, `rotStorage`, `tipOrder`, `luckyClover`, `scarecrow`), or its numbers break the rules in [effects.md](effects.md#types-in-typesmd).
 - `seconds` is missing for a lasting effect, present for an instant one, or not a whole number `>= 1`.
 - `target` is not `"plot"` or `"order"` when present; `"plot"` is missing on a `finishGrowth` power-up or present on any other; `"order"` is missing on a `fillOrder` power-up or present on any other.
 - `needs` has a repeat or a value that is not a `GameSystem`, or leaves out `"events"` on a `goodEvent` power-up.

@@ -678,4 +678,20 @@ describe("replay: events", () => {
             expect(replayState(seed, cfg, log, state.tick, crops)).toEqual(state)
         }
     })
+
+    it("replays runs that hit news, Lucky clover and Scarecrow equal", () => {
+        const seen = new Set<string>()
+        for (const [, cfg] of configs) {
+            for (let seed = 1; seed <= 20; seed++) {
+                const { state, log } = play(seed, cfg, 4000, (s) => {
+                    if (s.event !== null && s.tick < s.event.warnAt) seen.add("news")
+                    if (s.cloverPlots.length > 0) seen.add("clover")
+                    if (s.tick < s.scarecrowUntil) seen.add("scarecrow")
+                    return botMoves(s)
+                })
+                expect(replayState(seed, cfg, log, state.tick, crops)).toEqual(state)
+            }
+        }
+        expect([...seen].sort()).toEqual(["clover", "news", "scarecrow"])
+    })
 })

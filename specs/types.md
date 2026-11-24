@@ -86,37 +86,39 @@ How `step` creates orders at the current difficulty: how many it keeps open, eac
 
 Everything that changes during a run. If `step` or `replay` would give a different result without a value, it belongs here.
 
-| Field                             | Meaning                                                                             |
-| --------------------------------- | ----------------------------------------------------------------------------------- |
-| `mode`                            | The run's `GameMode`                                                                |
-| `status`                          | `'running'` until the run ends                                                      |
-| `tick`                            | Current tick, starting at 0                                                         |
-| `rng`                             | `RNGStreams`. Each random draw reads its system's stream and stores it back         |
-| `plots`                           | One `Plot` per plot                                                                 |
-| `inventory`                       | Crop id → amount held. Missing ids mean 0                                           |
-| `orders`                          | Open orders                                                                         |
-| `nextOrderId`                     | Id for the next order created                                                       |
-| `score`                           | Points so far                                                                       |
-| `ordersCompleted`, `ordersFailed` | Run counters                                                                        |
-| `lives`                           | Lives left (Survival). The run ends at 0. Always 0 in other modes                   |
-| `coins`                           | In-run coins, from filled Survival orders and selling crops. Reset every run        |
-| `livesBought`                     | Lives bought this run. Sets the next life's price                                   |
-| `upgrades`                        | `OwnedUpgrade` copies picked this run (id, tier, target), in pick order             |
-| `upgradeOffer`                    | `OfferCard`s (id, tier) while the player chooses, else `null`. Time stops while set |
-| `offersMade`                      | Upgrade offers made this run. Sets when the next one is due                         |
-| `allowPowerUps`                   | Copied from `GameConfig.allowPowerUps`, so the rules can read it                    |
-| `powerUps`                        | Held power-up ids, one per slot, in the order they dropped                          |
-| `activeEffects`                   | `ActiveEffect`s working right now (see [effects.md](effects.md))                    |
-| `allowEvents`                     | Copied from `GameConfig.allowEvents`, so the rules can read it                      |
-| `event`                           | The announced or running `RunEvent`, else `null` (see [events.md](events.md))       |
-| `nextEventAt`                     | First tick a new event may be announced on                                          |
-| `secondWind`                      | Survival: a life was lost and the next new order hasn't been made yet (Second wind) |
-| `combo`                           | Timed: orders filled in a row; sets the score multiplier (`comboPct`)               |
-| `comboEndsAt`                     | Timed: last tick the streak survives without another fill; `0` with no streak       |
-| `bestCombo`                       | Timed: longest streak this run, for the summary                                     |
-| `giantPenaltyUntil`               | First tick after a failed Giant order's penalty (see [powerups.md](powerups.md)); 0 |
-| `fertilizer`                      | Fertilizer held. Doesn't count toward storage (see [economy.md](economy.md))        |
-| `rerollsThisOffer`                | Paid rerolls of the open offer; sets the next reroll's price. 0 on each new offer   |
+| Field                             | Meaning                                                                                |
+| --------------------------------- | -------------------------------------------------------------------------------------- |
+| `mode`                            | The run's `GameMode`                                                                   |
+| `status`                          | `'running'` until the run ends                                                         |
+| `tick`                            | Current tick, starting at 0                                                            |
+| `rng`                             | `RNGStreams`. Each random draw reads its system's stream and stores it back            |
+| `plots`                           | One `Plot` per plot                                                                    |
+| `inventory`                       | Crop id → amount held. Missing ids mean 0                                              |
+| `orders`                          | Open orders                                                                            |
+| `nextOrderId`                     | Id for the next order created                                                          |
+| `score`                           | Points so far                                                                          |
+| `ordersCompleted`, `ordersFailed` | Run counters                                                                           |
+| `lives`                           | Lives left (Survival). The run ends at 0. Always 0 in other modes                      |
+| `coins`                           | In-run coins, from filled Survival orders and selling crops. Reset every run           |
+| `livesBought`                     | Lives bought this run. Sets the next life's price                                      |
+| `upgrades`                        | `OwnedUpgrade` copies picked this run (id, tier, target), in pick order                |
+| `upgradeOffer`                    | `OfferCard`s (id, tier) while the player chooses, else `null`. Time stops while set    |
+| `offersMade`                      | Upgrade offers made this run. Sets when the next one is due                            |
+| `allowPowerUps`                   | Copied from `GameConfig.allowPowerUps`, so the rules can read it                       |
+| `powerUps`                        | Held power-up ids, one per slot, in the order they dropped                             |
+| `activeEffects`                   | `ActiveEffect`s working right now (see [effects.md](effects.md))                       |
+| `allowEvents`                     | Copied from `GameConfig.allowEvents`, so the rules can read it                         |
+| `event`                           | The announced or running `RunEvent`, else `null` (see [events.md](events.md))          |
+| `nextEventAt`                     | First tick a new event may be announced on                                             |
+| `secondWind`                      | Survival: a life was lost and the next new order hasn't been made yet (Second wind)    |
+| `combo`                           | Timed: orders filled in a row; sets the score multiplier (`comboPct`)                  |
+| `comboEndsAt`                     | Timed: last tick the streak survives without another fill; `0` with no streak          |
+| `bestCombo`                       | Timed: longest streak this run, for the summary                                        |
+| `cloverPlots`                     | Plots Lucky clover marked for a double harvest, ascending (see [events.md](events.md)) |
+| `scarecrowUntil`                  | First tick Scarecrow no longer keeps `scaredOff` events away; 0 when it never ran      |
+| `giantPenaltyUntil`               | First tick after a failed Giant order's penalty (see [powerups.md](powerups.md)); 0    |
+| `fertilizer`                      | Fertilizer held. Doesn't count toward storage (see [economy.md](economy.md))           |
+| `rerollsThisOffer`                | Paid rerolls of the open offer; sets the next reroll's price. 0 on each new offer      |
 
 The Survival level and the next life's price are worked out from `ordersCompleted` and `livesBought` (see [difficulty.md](difficulty.md)), so they are not stored. The same goes for the upgrade `Modifiers`, which are added up from `upgrades` (see [upgrades.md](upgrades.md)).
 
