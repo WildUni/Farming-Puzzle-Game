@@ -21,7 +21,15 @@ import { runLevel } from "../sim/difficulty"
 import { lifePriceFor, maxLivesFor, rerollPriceFor } from "../sim/main"
 import { sellValueFor, storageCap, storageUsed } from "../sim/economy"
 import { UPGRADES, copyCount, effectAmount } from "../sim/upgrades"
-import { itemPrice, restockPrice, sellBlock, sellRefund, stockItem } from "../sim/shop"
+import {
+    isMaxed,
+    itemPrice,
+    ordersToFreeRestock,
+    restockPrice,
+    sellBlock,
+    sellRefund,
+    stockItem
+} from "../sim/shop"
 import { POWER_UPS, durationFor } from "../sim/powerups"
 import { EVENTS, shieldedPlots } from "../sim/events"
 import { appliesTo, fogged } from "../sim/effects"
@@ -193,9 +201,11 @@ function orderText(order: Order, state: GameState): string {
     return `${orderTitle(order)}\n${lines.join("\n")}`
 }
 
-// First line of an order card. "RUSH" marks a rush wave order, "SMALL" one Small order halved.
+// First line of an order card. "RUSH" marks a rush wave order, "SMALL" one Small order halved,
+// and "TIP +10" the extra coins Generous customer added to it.
 function orderTitle(order: Order): string {
-    const tags = [order.rush ? "RUSH" : "", order.small ? "SMALL" : ""].filter((t) => t !== "")
+    const tip = order.tip > 0 ? `TIP +${order.tip}` : ""
+    const tags = [order.rush ? "RUSH" : "", order.small ? "SMALL" : "", tip].filter((t) => t !== "")
     return tags.length === 0 ? `Order #${order.id}` : `Order #${order.id}  ${tags.join(" ")}`
 }
 
@@ -483,11 +493,13 @@ function shopItemText(state: GameState, slot: number): string {
     }
 }
 
-// Label on a stock card's buy button: the price now, or SOLD.
-function shopPriceText(state: GameState, slot: number): string {
+// Label on a stock card's buy button: the price now, SOLD, or Maxed for an upgrade that can't
+// be bought any more.
+function shopPriceText(state: GameState, slot: number, crops: CropTable): string {
     const item = stockItem(state, slot)
     if (item === null) return ""
     if (item.sold) return "SOLD"
+    if (isMaxed(state, slot, crops)) return "Maxed"
     return `Buy ${itemPrice(state, slot)}`
 }
 
@@ -514,10 +526,24 @@ function sellRefundText(state: GameState, index: number): string {
     }
 }
 
-// Label on the shop's restock button: the price, or free with Free restock.
+// Label on the shop's Restock button: free with the banked count, or the price.
 function restockText(state: GameState): string {
-    const price = restockPrice(state)
-    return price === 0 ? "Restock\nfree" : `Restock\n${price} coins`
+    const banked = state.shop.freeRestocks
+    if (banked > 0) return `Restock\nfree (${banked} left)`
+    return `Restock\n${restockPrice(state)} coins`
+}
+
+// Progress to the next free restock: the filled orders still needed, or full.
+function freeRestockText(state: GameState): string {
+    const left = ordersToFreeRestock(state)
+    if (left === null) return "Free restocks full"
+    return `Next free restock in ${left} ${left === 1 ? "order" : "orders"}`
+}
+
+// The play screen's Shop button: Shop, with the banked free restocks when there are any.
+function shopButtonText(state: GameState): string {
+    const banked = state.shop.freeRestocks
+    return banked > 0 ? `Shop\n${banked} free` : "Shop"
 }
 
 // A Promotion target button: the copy and its tier now and after.
@@ -526,11 +552,5 @@ function promotionTargetText(copy: OwnedUpgrade): string {
     return `${UPGRADES.upgrades[copy.id].name}\n${tierName(copy.tier)} → ${tierName(next)}`
 }
 
-// Time left on a running shop, or "" for a pausing one.
-function shopTimerText(state: GameState): string {
-    const closesAt = state.shop?.closesAt ?? null
-    return closesAt === null ? "" : `Shop closes in ${formatClock(closesAt - state.tick)}`
-}
-
 export { shopTitleText, shopItemText, shopPriceText, ownedUpgradeText, sellRefundText }
-export { restockText, promotionTargetText, shopTimerText }
+export { restockText, freeRestockText, shopButtonText, promotionTargetText }

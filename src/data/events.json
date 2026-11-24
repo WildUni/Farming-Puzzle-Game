@@ -27,11 +27,10 @@
             "id": "generousCustomer",
             "name": "Generous customer",
             "kind": "good",
-            "modes": ["survival"],
+            "modes": ["survival", "timed"],
             "weight": 15,
             "warnSeconds": 5,
-            "seconds": 20,
-            "effect": { "kind": "deliverBonus", "coins": 3 },
+            "effect": { "kind": "tipOrder", "coins": 10 },
             "amountStat": "deliverBonusPct"
         },
         {

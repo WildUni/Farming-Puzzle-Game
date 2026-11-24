@@ -54,6 +54,7 @@ type Order = {
     timeLimit: number
     small: boolean
     rush: boolean
+    tip: number
 }
 ```
 
@@ -153,7 +154,7 @@ One player move, passed to `applyAction` (see [main.md](main.md)).
 
 ### Upgrade types
 
-`ShopOpenRule`, `ShopModeConfig`, `ShopConfig`, `ShopItem` and `ShopState`, the `GameState` fields `shop` and `shopVisits`, `rng.shop`, `PowerUpDef.shopPrice`, and the actions `buyItem`, `sellUpgrade`, `restockShop` and `closeShop` are described in [shop.md](shop.md).
+`ShopModeConfig`, `ShopConfig`, `ShopItem` and `ShopState`, the `GameState` fields `shop` (always present: open or closed, the stock, and the free restock bank) and `nextInterestAt`, `rng.shop`, `PowerUpDef.shopPrice`, the actions `openShop`, `buyItem`, `sellUpgrade`, `restockShop` and `closeShop`, and the Modifiers stats `freeRestockBonus`, `restockOrdersCut` and `restockBankBonus` are described in [shop.md](shop.md). The `grantRestock` effect (Merchant call) is described in [powerups.md](powerups.md).
 
 `Tier`, `Pool`, `Modifiers`, `ModifierStat`, `StatDef`, `TierDef`, `UpgradeEffect`, `UpgradeDef`, `UpgradeConfig`, `UpgradeTarget`, `OwnedUpgrade` and `OfferCard`, described in [upgrades.md](upgrades.md). `Modifiers` is never stored in `GameState`; it is worked out from `GameState.upgrades`. `UpgradeTable` is replaced by `UpgradeConfig`.
 

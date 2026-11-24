@@ -29,7 +29,8 @@ function order(value: number, left = 0): Order {
         expiresAt: 100 + left,
         timeLimit: 600,
         small: false,
-        rush: false
+        rush: false,
+        tip: 0
     }
 }
 

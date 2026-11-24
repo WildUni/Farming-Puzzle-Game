@@ -53,15 +53,29 @@ All numbers are placeholders until playtesting.
 | `readyOne`    | Ready one    | survival, timed | 30     | `finishGrowth`             | –     | plot   |
 | `growthBoost` | Growth boost | survival, timed | 30     | `cutGrowth` 50 ticks (5 s) | –     | –      |
 | `orderFreeze` | Order freeze | survival, timed | 20     | `orderRate` 0%             | 10 s  | –      |
-| `coinBag`     | Coin bag     | survival        | 20     | `grantCoins` 10            | –     | –      |
+| `coinBag`     | Coin bag     | survival, timed | 20     | `grantCoins` 10            | –     | –      |
 | `readyAll`    | Ready all    | survival, timed | 8      | `finishAll`                | –     | –      |
 | `finishOne`   | Finish one   | survival, timed | 6      | `fillOrder`                | –     | order  |
 | `finishAll`   | Finish all   | survival, timed | 2      | `fillAllOrders`            | –     | –      |
-| `goldRush`    | Gold rush    | survival        | 10     | `deliverBonus` 5 coins     | 15 s  | –      |
+| `goldRush`    | Gold rush    | survival, timed | 10     | `deliverBonus` 5 coins     | 15 s  | –      |
 | `cleanSlate`  | Clean slate  | survival, timed | 8      | `clearField`               | –     | –      |
 | `goodOmen`    | Good omen    | survival, timed | 10     | `goodEvent` (needs events) | –     | –      |
 
-Coin bag and Gold rush are Survival only because coins have no use in Timed until the shop exists. Gold rush is "orders pay more for a while" rather than the design doc's "the current order pays extra", so it reuses Generous customer's effect. Finish all is the rarest and gives no score (the design doc's "skips the puzzle" concern); it still counts the orders as filled and pays their coins.
+Every power-up is in both modes. Coin bag and Gold rush were Survival only when they shipped, because coins had no use in Timed then. Gold rush is a **lasting** power-up, as the design doc now has it: every order filled in its 15 s pays +5 coins (a `deliverBonus` effect, which no event uses any more since Generous customer became a one-order tip). Finish all is the rarest and gives no score (the design doc's "skips the puzzle" concern); it still counts the orders as filled and pays their coins.
+
+### Merchant call (with the shop rework)
+
+Built with the Day 8b shop rework, since it needs the restock bank (see [shop.md](shop.md)). It does not open the shop: the shop can be opened at any time.
+
+| id             | name          | modes           | weight | effect         | lasts | target | shopPrice   |
+| -------------- | ------------- | --------------- | ------ | -------------- | ----- | ------ | ----------- |
+| `merchantCall` | Merchant call | survival, timed | 8      | `grantRestock` | –     | –      | 10 (unused) |
+
+- `grantRestock` is a new instant kind with no fields, power-up only (`validateEvents` refuses it).
+- `canUsePowerUp` is false for it while `shop.freeRestocks >= restockBankCap(state)`, so it is never wasted.
+- It is never stocked in the shop (buying a restock with coins is what Restock already does), like Coin bag: `rollStock` leaves out `grantRestock` as well as `grantCoins`. It still needs a `shopPrice` to load; give it one, it is unused.
+- No draw, no tick change. Filled orders still count toward the next free restock as usual.
+- Tests (`powerups.test.ts`): it adds one free restock; it is refused with the bank full and kept; Rain check's bigger bank lets it add past 2; it is never stocked.
 
 ## Types (in [types.md](types.md))
 
@@ -165,6 +179,7 @@ Otherwise it removes `powerUps[slot]` (a new array) and fires the effect:
 | `fillAllOrders` | Every open order is filled the same way, in list order, but adds **no** score                                                                                                                                            |
 | `goodEvent`     | `announceEvent(state, EVENTS, "good")`: a good event is announced now, with its usual warning. Stores `rng.events`                                                                                                       |
 | lasting         | `activeEffects = startEffect(activeEffects, id, effect, tick, durationFor(def, upgrades))` (Order freeze, Gold rush)                                                                                                     |
+| `grantRestock`  | Merchant call (below). `shop.freeRestocks = min(restockBankCap(state), freeRestocks + 1)`. Refused (the power-up is kept) while the bank is full                                                                         |
 
 Only Good omen draws a random number (from `rng.events`, like any announcement); no power-up changes `tick`. Using the same lasting power-up while it is active adds its length to the running effect instead of stacking a second one.
 
@@ -202,7 +217,7 @@ All three are marked `"needs": ["powerUps"]`, so they are never offered in a run
 
 **`dropTable`**
 
-- Lists ids for the mode, sorted; Coin bag is in Survival and not in Timed.
+- Lists ids for the mode, sorted; with the shipped data both modes get the same list (Coin bag and Gold rush included).
 
 **`rollDrop`**
 
@@ -237,12 +252,17 @@ All three are marked `"needs": ["powerUps"]`, so they are never offered in a run
 **Second batch (`powerups.test.ts`, `main.test.ts`)**
 
 - `validatePowerUps` accepts each new kind, and throws for `fillOrder` without an order target, an order target on another effect, Good omen without `needs: ["events"]`, an unknown or repeated need, `deliverBonus` with 0 coins or no seconds, and an event-only kind.
-- `dropTable` lists Coin bag and Gold rush in Survival only, and Good omen only with events on.
+- `dropTable` lists Coin bag and Gold rush in both modes, and Good omen only with events on.
 - Finish one targets open orders' ids, ascending; Good omen is usable only with events on and no event announced or running.
 - Ready all readies every growing crop; Clean slate empties every plot.
 - Finish one fills the chosen order without crops, scoring and paying like a delivery, and is refused without a target or with an unknown id; Finish all fills every order for coins and no score.
 - Gold rush starts a `deliverBonus` effect that adds 5 coins to deliveries.
 - Good omen announces a good event on the current tick from `rng.events` (never `rng.orders`), and is refused while an event is on or with events off.
+
+**Merchant call (`powerups.test.ts`)**
+
+- `validatePowerUps` accepts a `grantRestock` power-up; `validateEvents` refuses it as an event effect.
+- It adds one free restock without opening the shop, drawing nothing; it is refused with the bank full and kept; Rain check's bigger bank lets it add past 2; it is never stocked.
 
 **Replay (`verification.test.ts`)**
 
@@ -252,8 +272,11 @@ All three are marked `"needs": ["powerUps"]`, so they are never offered in a run
 
 - [ ] Tune drop chance, weights, slot count, lengths and amounts after playtesting.
 - [x] Ready all, Finish one, Finish all, Gold rush, Clean slate, Good omen.
-- [ ] Still to come: Combo freeze (Timed combos), Merchant call (the shop), Giant order (needs a "no new orders until this one is done" rule and its mode penalties).
+- [ ] Still to come: Combo freeze (Timed combos), Giant order (needs a "no new orders until this one is done" rule and its mode penalties).
 - [ ] Gold rush: keep "+5 coins per order for 15 s", or double coins for 15 s instead? (Also in the design doc's open questions.)
+- [x] Gold rush is Lasting (the design doc changed from "the current order pays extra"); nothing to change, it already was.
+- [x] Coin bag and Gold rush are in both modes, now that Timed orders pay coins.
+- [x] Merchant call: built with the shop rework (above). Weight 8 is a placeholder.
 - [ ] Finish all: is "no score, coins and filled count still given, rarest drop" the right way to keep it from skipping the puzzle? (Also in the design doc's open questions.)
 - [ ] Buying power-ups in the shop (specified in [shop.md](shop.md): a `shopPrice` per power-up), and pre-run power-ups paid with meta currency.
 - [ ] Should a drop with full slots replace the oldest held power-up, or offer a swap, instead of being lost?

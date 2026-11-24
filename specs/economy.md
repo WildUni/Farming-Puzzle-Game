@@ -1,6 +1,6 @@
 # economy.ts
 
-The in-run economy (Day 6): the storage cap, selling crops, fertilizer and paid upgrade rerolls. Coins also buy lives (see [difficulty.md](difficulty.md)) and, from Day 8, shop items.
+The in-run economy (Day 6): the storage cap, selling crops, fertilizer and paid upgrade rerolls. Coins also buy lives (see [difficulty.md](difficulty.md)) and, from Day 8, shop items. From Day 8b, selling crops and making fertilizer are done in the shop page's Storage section, and the shop stops the clock while it is open; the actions and their rules here don't change (see [shop.md](shop.md) and [ui.md](ui.md)).
 
 The numbers live in three places, so tuning never needs a code change:
 
@@ -176,4 +176,4 @@ No action here reads the clock or moves the tick, so replays work as before: a r
 - [ ] Should a reroll avoid repeating the cards it replaces? Should rerolls roll better tiers (see [upgrades.md](upgrades.md))?
 - [ ] Timed orders pay the same coins as Survival for now (base pay, Big tips, Early bird). Open question: should Timed have its own, lower rate (for example `timed.coinsPerOrder` in `modes.json`) once the shop exists? See the design doc.
 - [x] Bigger barn and Premium produce (Day 7) set `storageBonus` and `sellPricePct` (see [upgrades.md](upgrades.md)).
-- [x] Shop restock price resets each time the shop opens (Day 8, [shop.md](shop.md)).
+- [x] Shop restock price resets each time the shop opens (Day 8, [shop.md](shop.md)). Replaced in Day 8b by free restocks earned from orders and a fixed paid price.

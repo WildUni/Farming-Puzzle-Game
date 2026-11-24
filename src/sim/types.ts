@@ -48,6 +48,7 @@ type Order = {
     timeLimit: number // ticks the order was given when created
     small: boolean // Small order halved its amounts
     rush: boolean // a Timed rush wave added it
+    tip: number // extra coins filling it pays (Generous customer)
 }
 
 // How step creates orders at the current difficulty.
@@ -91,8 +92,8 @@ type GameState = {
     fertilizer: number // fertilizer held; doesn't count toward storage
     rerollsThisOffer: number // paid rerolls of the open offer; sets the next reroll's price
     miracleReadyAt: number // first tick Miracle grow can be used again (0: ready)
-    shop: ShopState | null // the open shop, or null while it is closed
-    shopVisits: number // shop visits so far this run, counting the open one
+    shop: ShopState // the shop: open or closed, its stock and the free restock bank
+    nextInterestAt: number // the tick the next Interest payment is made on
 }
 
 // What the run's upgrades add up to. Worked out from GameState.upgrades, never stored.
@@ -146,9 +147,11 @@ type Modifiers = {
     miracleRechargeSeconds: number // seconds Miracle grow takes to recharge after a use
     quickSoilSeconds: number // seconds taken off a crop's growth on a Quick soil plot
     autoHarvest: number // 1: the plot harvests itself when ready (Auto-harvester)
-    interestPct: number // % of held coins added on each shop visit (Interest)
+    interestPct: number // % of held coins added every interest.everyTicks of play (Interest)
     shopPricePct: number // % of the usual shop price (Discount card)
-    freeRestocks: number // shop restocks per visit that cost nothing (Free restock)
+    freeRestockBonus: number // extra free restocks per cycle of filled orders (Free restock)
+    restockOrdersCut: number // fewer filled orders per free restock (Fast restock)
+    restockBankBonus: number // extra free restocks the bank can hold (Rain check)
     tierLuck: number // shifts free-pick tier weights toward higher tiers (Lucky stars)
 }
 
@@ -209,25 +212,21 @@ type Action =
     | { type: "useMiracleGrow"; plot: number }
     | { type: "buyItem"; slot: number; target?: number | string } // plot, crop id, or owned index
     | { type: "sellUpgrade"; index: number }
+    | { type: "openShop" }
     | { type: "restockShop" }
     | { type: "closeShop" }
 
 // The shop. See specs/shop.md.
-type ShopOpenRule =
-    | { kind: "orders"; every: number; offset: number }
-    | { kind: "seconds"; at: number[] } // seconds into the run
-    | { kind: "never" }
-
-type ShopModeConfig = { open: ShopOpenRule; pauses: boolean; openTicks: number | null }
+type ShopModeConfig = { ordersPerFreeRestock: number }
 
 type ShopConfig = {
     modes: Record<"survival" | "timed", ShopModeConfig>
     stock: { upgrades: number; powerUps: number; life: boolean }
     tierPrice: Record<Tier, number>
-    priceRise: { perCopyPct: number; perVisitPct: number }
-    restock: { base: number; growth: number }
+    priceRise: { perCopyPct: number; perProgressPct: number; progressOrders: number }
+    restock: { price: number; bankCap: number } // paid price, and most free restocks banked
     sellRefundPct: number
-    interestMaxCoins: number
+    interest: { everyTicks: number; maxCoins: number } // Interest pays every everyTicks of play
 }
 
 type ShopItem =
@@ -236,9 +235,10 @@ type ShopItem =
     | { kind: "life"; sold: boolean }
 
 type ShopState = {
-    stock: ShopItem[] // upgrade cards first, then power-ups, then the life slot
-    restocks: number // restocks bought this visit, free ones included
-    closesAt: number | null // tick a running shop closes on; null for a pausing shop
+    open: boolean // the shop page is open, and the clock is stopped
+    stock: ShopItem[] | null // upgrade cards, then power-ups, then the life slot; null until first opened
+    freeRestocks: number // banked free restocks
+    restockProgress: number // filled orders counted toward the next free restock
 }
 
 // Effects move crops' and orders' clocks. See specs/effects.md.
@@ -264,6 +264,8 @@ type InstantEffect =
     | { kind: "seedPlots"; plots: number } // random seeds land on up to this many empty plots
     | { kind: "addOrder"; timePct: number } // an extra order with timePct% of the usual time
     | { kind: "rotStorage"; pct: number } // this % of each stored crop is lost, rounded down
+    | { kind: "tipOrder"; coins: number } // one random open order pays this many more coins
+    | { kind: "grantRestock" } // one free shop restock, up to the bank cap
 
 type Effect = LastingEffect | InstantEffect
 
@@ -374,7 +376,6 @@ export type {
     EventDef,
     EventConfig,
     RunEvent,
-    ShopOpenRule,
     ShopModeConfig,
     ShopConfig,
     ShopItem,

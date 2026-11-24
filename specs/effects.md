@@ -1,6 +1,6 @@
 # effects.ts
 
-Effects that change a run's clocks: how fast crops grow and how fast order timers run. Power-ups (see [powerups.md](powerups.md)) and events (see [events.md](events.md)) use the same effects, so Growth boost and Rain shower, or Order freeze and a later Slow day, run the same code. A few lasting effects don't move a clock but change what an action does while they work (Crows block harvesting, Generous customer adds coins to deliveries).
+Effects that change a run's clocks: how fast crops grow and how fast order timers run. Power-ups (see [powerups.md](powerups.md)) and events (see [events.md](events.md)) use the same effects, so Growth boost and Rain shower, or Order freeze and a later Slow day, run the same code. A few lasting effects don't move a clock but change what an action does while they work (Crows block harvesting, Gold rush adds coins to deliveries).
 
 `plot.ts` and `orders.ts` fix a crop's `readyAt` and an order's `expiresAt` when they are made. An effect never adds a new clock. It **moves those deadlines**: once when an instant effect fires, or a little on every tick while a lasting effect is active. So the `Plot` and `Order` shapes don't change, every number stays a whole tick, and replay stays exact.
 
@@ -23,7 +23,7 @@ type LastingEffect =
     | { kind: "growthRate"; pct: number } // growing crops' clocks
     | { kind: "orderRate"; pct: number } // open orders' timers
     | { kind: "blockHarvest"; plots: number } // harvest is refused on the plots in `only` (Crows land on up to `plots` plots)
-    | { kind: "deliverBonus"; coins: number } // each delivery pays this many more coins (Survival)
+    | { kind: "deliverBonus"; coins: number } // each delivery pays this many more coins (Gold rush)
     | { kind: "harvestBonus"; crops: number } // each harvest adds this many more crops (Worms)
     | { kind: "fog" } // the screen hides growth and order timers; no rule changes
 
@@ -41,6 +41,7 @@ type InstantEffect =
     | { kind: "seedPlots"; plots: number } // random crops are planted on up to this many empty plots (Birds)
     | { kind: "addOrder"; timePct: number } // one extra order with timePct% of the usual time (Emergency order)
     | { kind: "rotStorage"; pct: number } // this % of each stored crop is lost, rounded down (Rot)
+    | { kind: "tipOrder"; coins: number } // one random open order pays this many more coins when filled (Generous customer)
 
 type Effect = LastingEffect | InstantEffect
 
@@ -56,7 +57,7 @@ type ActiveEffect = {
 
 `pct`, `ticks`, `amount`, `coins`, `crops`, `plots` and `timePct` are whole numbers. A rate's `pct >= 0` and `pct !== 100`; `ticks`, `amount`, `coins`, `crops` and `plots` (both `seedPlots`' and `blockHarvest`'s) are `>= 1`; `addOrder`'s `timePct` and `rotStorage`'s `pct` are from 1 to 100. The files that use effects (`powerups.json`, `events.json`) check this when they load, and each says which kinds it allows.
 
-`growthRate` and `orderRate` are **rate effects**; `blockHarvest`, `deliverBonus`, `harvestBonus` and `fog` are **action effects**. The instant kinds that need the whole game state (`fillOrder`, `fillAllOrders`, `goodEvent`, `harvestAll`, `seedPlots`, `addOrder`, `rotStorage`) are carried out in `main.ts` or `events.ts`; `effects.ts` has helpers only for the ones that work on plots or effect lists alone.
+`growthRate` and `orderRate` are **rate effects**; `blockHarvest`, `deliverBonus`, `harvestBonus` and `fog` are **action effects**. The instant kinds that need the whole game state (`fillOrder`, `fillAllOrders`, `goodEvent`, `harvestAll`, `seedPlots`, `addOrder`, `rotStorage`, `tipOrder`) are carried out in `main.ts` or `events.ts`; `effects.ts` has helpers only for the ones that work on plots or effect lists alone.
 
 ## The rate rule
 
@@ -167,7 +168,7 @@ The player taps a plot with crows on it. Every working `blockHarvest` effect who
 
 ### `deliverBonusAt(active: ActiveEffect[], now: number): number`
 
-The sum of `coins` over `deliverBonus` effects with `startedAt <= now < endsAt`; `0` when there are none. `deliver` adds it in Survival.
+The sum of `coins` over `deliverBonus` effects with `startedAt <= now < endsAt`; `0` when there are none. `deliver` adds it (Survival and Timed).
 
 ### `harvestBonusAt(active: ActiveEffect[], plot: number, now: number): number`
 
@@ -262,5 +263,5 @@ Every plot becomes `{ state: "empty" }`. Returns the same array when every plot 
 
 - [x] Leaving plots out of an effect (`exclude`), for Greenhouse plots under bad events.
 - [x] Effects that hit only chosen plots: an `only` list next to `exclude`. Crows are the first; Frost on one plot and Lucky clover could use it too.
-- [x] Effect kinds for the first events: `blockHarvest` (Crows), `stealCrop` (Moles), `deliverBonus` (Generous customer).
+- [x] Effect kinds for the first events: `blockHarvest` (Crows), `stealCrop` (Moles), `deliverBonus` (Generous customer at first; Gold rush since Day 8b's change made Generous customer a `tipOrder`).
 - [ ] Should a lasting effect started again reset to its full length instead of adding time? Adding time is simpler to explain on a button ("+10 s").

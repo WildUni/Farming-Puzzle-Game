@@ -7,7 +7,7 @@ import { COLORS, MARGIN, TEXT } from "../theme"
 import { OrdersView } from "../views/OrdersView"
 import { StatsView } from "../views/StatsView"
 import { PlotsView } from "../views/PlotsView"
-import { PlantPicker } from "../views/PlantPicker"
+import { CropBar } from "../views/CropBar"
 import { PauseView } from "../views/PauseView"
 import { BuyLifeView } from "../views/BuyLifeView"
 import { GameOverView } from "../views/GameOverView"
@@ -17,11 +17,12 @@ import { MiracleGrowView } from "../views/MiracleGrowView"
 import { EventBanner } from "../views/EventBanner"
 import { RushBanner } from "../views/RushBanner"
 import { DebugPanel } from "../views/DebugPanel"
-import { BarnView } from "../views/BarnView"
-import { ShopView } from "../views/ShopView"
+import { DrawerView } from "../views/DrawerView"
+import { ShopButtonView } from "../views/ShopButtonView"
+import type { ShopData } from "./Shop"
 import { POWER_UPS, powerUpTargets } from "../../sim/powerups"
 import { fertilizerTargets } from "../../sim/economy"
-import { isShopPaused } from "../../sim/shop"
+import { isShopOpen } from "../../sim/shop"
 
 const MS_PER_TICK = 1000 / TICKS_PER_SECOND
 const MAX_CATCH_UP_TICKS = 5 // a background tab doesn't jump ahead when it comes back
@@ -39,7 +40,7 @@ export class Game extends Scene {
     private log: LogEntry[]
     private elapsed: number
     private paused: boolean
-    private pickerPlot: number | null // plot the plant picker is open for
+    private selectedCrop: string // the crop bar's selection; an empty plot click plants it
     private choosingSlot: number | null // power-up slot whose plot or order target is being picked
     private fertilizing: boolean // the plot to fertilize is being picked
     private miracling: boolean // the plot for Miracle grow is being picked
@@ -47,7 +48,7 @@ export class Game extends Scene {
     private orders: OrdersView
     private stats: StatsView
     private plots: PlotsView
-    private picker: PlantPicker
+    private cropBar: CropBar
     private pause: PauseView
     private buyLife: BuyLifeView
     private gameOver: GameOverView
@@ -56,8 +57,8 @@ export class Game extends Scene {
     private miracle: MiracleGrowView
     private eventBanner: EventBanner
     private rushBanner: RushBanner
-    private barn: BarnView
-    private shop: ShopView
+    private drawer: DrawerView
+    private shopButton: ShopButtonView
     private debugPanel: DebugPanel | null // dev builds only
     private debugged: boolean // the debug menu changed this run, so its log won't replay
     private debug: GameObjects.Text
@@ -84,7 +85,6 @@ export class Game extends Scene {
         this.log = []
         this.elapsed = 0
         this.paused = false
-        this.pickerPlot = null
         this.choosingSlot = null
         this.fertilizing = false
         this.miracling = false
@@ -93,12 +93,8 @@ export class Game extends Scene {
         this.orders = new OrdersView(this, (id) => this.onOrderClick(id))
         this.stats = new StatsView(this, this.crops)
         this.plots = new PlotsView(this, (i) => this.onPlotClick(i))
-        this.picker = new PlantPicker(
-            this,
-            this.crops,
-            (cropId) => this.onCropPick(cropId),
-            () => this.closePicker()
-        )
+        this.cropBar = new CropBar(this, this.crops, (cropId) => this.onCropPick(cropId))
+        this.selectedCrop = this.cropBar.first
         this.stats.update(this.state) // builds the table so its height is known
         this.pause = new PauseView(this, this.scale.width - MARGIN, this.stats.bottom + GAP, () =>
             this.togglePause()
@@ -121,32 +117,28 @@ export class Game extends Scene {
             () => this.act({ type: "rerollOffer" })
         )
         this.powerUpBar = new PowerUpBar(this, (slot) => this.onPowerUpClick(slot))
-        this.miracle = new MiracleGrowView(
+        this.shopButton = new ShopButtonView(
             this,
             this.scale.width - MARGIN,
             this.buyLife.bottom + GAP,
+            () => this.openShop()
+        )
+        this.miracle = new MiracleGrowView(
+            this,
+            this.scale.width - MARGIN,
+            this.shopButton.bottom + GAP,
             () => this.toggleMiracle()
         )
         this.eventBanner = new EventBanner(this)
         this.rushBanner = new RushBanner(this)
-        this.barn = new BarnView(this, this.crops, {
-            sell: (cropId, amount) => this.act({ type: "sellCrop", cropId, amount }),
-            makeFertilizer: (cropId) => this.act({ type: "makeFertilizer", cropId }),
-            fertilize: () => this.toggleFertilizing()
-        })
-        this.shop = new ShopView(this, this.crops, {
-            buy: (slot, target) =>
-                this.act(
-                    target === null ? { type: "buyItem", slot } : { type: "buyItem", slot, target }
-                ),
-            sell: (index) => this.act({ type: "sellUpgrade", index }),
-            restock: () => this.act({ type: "restockShop" }),
-            close: () => this.act({ type: "closeShop" })
-        })
+        this.drawer = new DrawerView(this, () => this.toggleFertilizing())
         this.debugPanel = import.meta.env.DEV
             ? new DebugPanel(this.crops, (change) => this.applyDebug(change))
             : null
-        this.events.once("shutdown", () => this.debugPanel?.destroy())
+        this.events.once("shutdown", () => {
+            this.debugPanel?.destroy()
+            this.scene.stop("Shop")
+        })
         this.gameOver = new GameOverView(
             this,
             () => this.restartNewSeed(),
@@ -172,10 +164,10 @@ export class Game extends Scene {
     }
 
     // Fixed-tick loop: step() once per MS_PER_TICK of real time. Paused, or while an
-    // upgrade offer or a pausing shop is open, the counter stops.
+    // upgrade offer or the shop is open, the counter stops.
     update(_time: number, delta: number) {
         if (this.paused || this.state.status === "ended") return
-        if (this.state.upgradeOffer !== null || isShopPaused(this.state)) {
+        if (this.state.upgradeOffer !== null || isShopOpen(this.state)) {
             this.elapsed = 0
             return
         }
@@ -188,9 +180,8 @@ export class Game extends Scene {
         if (
             this.state.status === "ended" ||
             this.state.upgradeOffer !== null ||
-            isShopPaused(this.state)
+            isShopOpen(this.state)
         ) {
-            this.closePicker()
             this.choosingSlot = null
             this.fertilizing = false
             this.miracling = false
@@ -218,16 +209,16 @@ export class Game extends Scene {
             aiming === "order" ? this.targets() : null
         )
         this.stats.update(this.state)
-        this.plots.update(this.state, this.pickerPlot, plotTargets)
-        // The barn is off while something covers it (its amount box is HTML, so it would show
-        // through the plant picker, the pick screen and the pause shade).
-        const barnFree =
+        this.plots.update(this.state, null, plotTargets)
+        // The crop bar and the drawer are off while something covers the board.
+        const boardFree =
             !this.paused &&
-            this.pickerPlot === null &&
             this.state.status === "running" &&
             this.state.upgradeOffer === null &&
-            this.state.shop === null
-        this.barn.update(this.state, barnFree, this.fertilizing)
+            !isShopOpen(this.state)
+        this.cropBar.update(this.selectedCrop, boardFree)
+        this.drawer.update(this.state, boardFree, this.fertilizing)
+        this.shopButton.update(this.state, this.paused)
         this.powerUpBar.update(this.state, this.choosingSlot)
         this.miracle.update(this.state, this.miracling)
         this.eventBanner.update(this.state)
@@ -235,7 +226,6 @@ export class Game extends Scene {
         this.pause.update(this.paused)
         this.buyLife.update(this.state)
         this.upgradePick.update(this.state)
-        this.shop.update(this.state)
         this.gameOver.update(this.state)
         this.debug.setText(debugText(this.state, this.seed, this.paused, this.debugged))
         this.debugPanel?.update(this.state)
@@ -251,7 +241,6 @@ export class Game extends Scene {
         if (this.state.status === "ended") return
         this.paused = !this.paused
         if (this.paused) {
-            this.closePicker()
             this.choosingSlot = null
             this.fertilizing = false
             this.miracling = false
@@ -313,7 +302,6 @@ export class Game extends Scene {
             this.act({ type: "usePowerUp", slot })
             return
         }
-        this.closePicker()
         this.fertilizing = false
         this.miracling = false
         this.choosingSlot = this.choosingSlot === slot ? null : slot
@@ -330,32 +318,30 @@ export class Game extends Scene {
     // The Miracle grow button: start (or cancel) choosing the growing plot to finish.
     private toggleMiracle(): void {
         if (this.paused) return
-        this.closePicker()
         this.choosingSlot = null
         this.fertilizing = false
         this.miracling = !this.miracling
         this.render()
     }
 
-    // The barn's Fertilize button: start (or cancel) choosing the plot to fertilize.
+    // The drawer's Fertilize button: start (or cancel) choosing the plot to fertilize.
     private toggleFertilizing(): void {
         if (this.paused) return
-        this.closePicker()
         this.choosingSlot = null
         this.miracling = false
         this.fertilizing = !this.fertilizing
         this.render()
     }
 
-    // Plot with crows: scare them off. Empty plot: open the plant picker. Ready plot: harvest it.
-    // Growing plot: nothing.
+    // Plot with crows: scare them off. Empty plot: plant the crop bar's crop. Ready plot: harvest
+    // it. Growing plot: nothing.
     // While a power-up's target is being chosen, a click picks (or cancels) instead.
     private onPlotClick(plot: number): void {
         if (
             this.paused ||
             this.state.status === "ended" ||
             this.state.upgradeOffer !== null ||
-            isShopPaused(this.state)
+            isShopOpen(this.state)
         ) {
             return
         }
@@ -389,9 +375,7 @@ export class Game extends Scene {
         if (this.act({ type: "scareCrows", plot })) return
         switch (this.state.plots[plot].state) {
             case "empty":
-                this.pickerPlot = plot
-                this.picker.show(plot)
-                this.render()
+                this.act({ type: "plant", plot, cropId: this.selectedCrop })
                 return
             case "ready":
                 this.act({ type: "harvest", plot })
@@ -419,14 +403,33 @@ export class Game extends Scene {
         this.act({ type: "deliver", orderId })
     }
 
+    // The crop bar: select a crop. It stays selected until another is clicked.
     private onCropPick(cropId: string): void {
-        if (this.pickerPlot !== null) this.act({ type: "plant", plot: this.pickerPlot, cropId })
-        this.closePicker()
+        this.selectedCrop = cropId
+        this.render()
     }
 
-    private closePicker(): void {
-        this.pickerPlot = null
-        this.picker.hide()
+    // The Shop button: sends openShop, then launches the shop page over this scene and pauses
+    // this one (the clock is stopped anyway, and the page takes every click).
+    private openShop(): void {
+        if (!this.act({ type: "openShop" })) return
+        this.stopChoosing()
+        const data: ShopData = {
+            crops: this.crops,
+            state: () => this.state,
+            act: (action) => this.act(action),
+            close: () => this.closeShop()
+        }
+        this.scene.launch("Shop", data)
+        this.scene.pause()
+    }
+
+    // The shop page's Close: sends closeShop, closes the page, and the clock resumes.
+    private closeShop(): void {
+        if (!this.act({ type: "closeShop" })) return
+        this.scene.stop("Shop")
+        this.scene.resume()
+        this.elapsed = 0
         this.render()
     }
 }

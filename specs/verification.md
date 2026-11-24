@@ -43,7 +43,7 @@ type ReplayError =
     | "refused" // applyAction rejected an entry
     | "bad-final-tick" // finalTick is not a whole number >= 0, or the run ended before it
     | "offer-pending" // time had to pass while an upgrade offer was unanswered
-    | "shop-pending" // time had to pass while a pausing shop was open (see shop.md)
+    | "shop-pending" // time had to pass while the shop was open (see shop.md)
 
 type ReplayResult =
     { ok: true; state: GameState } | { ok: false; error: ReplayError; entry: number | null } // entry: index in log, or null
@@ -56,9 +56,9 @@ Steps:
 3. For each log entry, in log order:
     1. Its tick must be a whole number from `0` to `finalTick`, otherwise `bad-tick`.
     2. Its tick must not be lower than the current `state.tick`, otherwise `out-of-order`. Several entries may share a tick.
-    3. `step` until `state.tick` equals the entry's tick. If the run ends before that tick is reached, `after-end`. If an upgrade offer is open and the tick still has to move, `offer-pending` (time can't pass until `chooseUpgrade` is logged).
+    3. `step` until `state.tick` equals the entry's tick. If the run ends before that tick is reached, `after-end`. If an upgrade offer is open and the tick still has to move, `offer-pending` (time can't pass until `chooseUpgrade` is logged). If the shop is open and the tick still has to move, `shop-pending` (time can't pass until `closeShop` is logged).
     4. Apply the action. If `applyAction` returns `null` (or anything that is not a state), `refused`.
-4. `step` until `state.tick` equals `finalTick`. If the run ends before `finalTick`, `bad-final-tick` with `entry: null`. If an offer is open and the tick still has to move, `offer-pending` with `entry: null`.
+4. `step` until `state.tick` equals `finalTick`. If the run ends before `finalTick`, `bad-final-tick` with `entry: null`. If an offer is open and the tick still has to move, `offer-pending` with `entry: null`; if the shop is open, `shop-pending` with `entry: null`.
 5. Return `{ ok: true, state }`.
 
 Rules:

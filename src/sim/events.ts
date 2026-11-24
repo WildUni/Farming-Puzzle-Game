@@ -30,7 +30,7 @@ import { eventGapTicks, runLevel } from "./difficulty"
 import { POWER_UPS } from "./powerups"
 import { cutGrowth, startEffect, stealCrop } from "./effects"
 import { plant } from "./plot"
-import { createOrder } from "./orders"
+import { createOrder, isExpired } from "./orders"
 import { storageFree } from "./economy"
 import rawEvents from "../data/events.json"
 
@@ -51,7 +51,8 @@ const AMOUNT_KINDS: readonly string[] = [
     "seedPlots",
     "blockHarvest",
     "addOrder",
-    "rotStorage"
+    "rotStorage",
+    "tipOrder"
 ]
 
 // ---------------------------------------------------------------------------------------------
@@ -120,6 +121,8 @@ function validateEffect(raw: unknown, at: string): Effect {
             return { kind: "addOrder", timePct: wholeBetween(raw.timePct, 1, 100, `${at}.timePct`) }
         case "rotStorage":
             return { kind: "rotStorage", pct: wholeBetween(raw.pct, 1, 100, `${at}.pct`) }
+        case "tipOrder":
+            return { kind: "tipOrder", coins: wholeAtLeast(raw.coins, 1, `${at}.coins`) }
         default:
             return fail(`${at}.kind`, "an effect kind events can use")
     }
@@ -249,6 +252,8 @@ function baseAmount(effect: Effect): number | null {
             return effect.timePct
         case "rotStorage":
             return effect.pct
+        case "tipOrder":
+            return effect.coins
         default:
             return null
     }
@@ -484,6 +489,21 @@ function rotStorage(inventory: Inventory, pct: number): Inventory {
     return out
 }
 
+// Generous customer: one open order, picked from rng.events (one draw, in board order), pays
+// `coins` more when it is filled. Orders failing on this tick are left out. With no open order
+// nothing happens and nothing is drawn.
+function tipOrder(state: GameState, coins: number): GameState {
+    const open = state.orders.filter((o) => !isExpired(o, state.tick))
+    if (open.length === 0) return state
+    const [roll, events] = randomInt(state.rng.events, 0, open.length - 1)
+    const id = open[roll].id
+    return {
+        ...state,
+        rng: { ...state.rng, events },
+        orders: state.orders.map((o) => (o.id === id ? { ...o, tip: o.tip + coins } : o))
+    }
+}
+
 // Fires the announced event on its start tick: an optional block roll, then its effect.
 // `crops` and `rules` (the current order rules) are for the effects that plant or make orders.
 function startEvent(
@@ -536,6 +556,8 @@ function startEvent(
             return addOrder(next, event.amount!, crops, rules)
         case "rotStorage":
             return { ...next, inventory: rotStorage(next.inventory, event.amount!) }
+        case "tipOrder":
+            return tipOrder(next, event.amount!)
         case "deliverBonus":
             return {
                 ...next,
@@ -584,5 +606,6 @@ export {
     announceEvent,
     buildEvent,
     startEvent,
-    rotStorage
+    rotStorage,
+    tipOrder
 }

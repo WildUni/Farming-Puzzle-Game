@@ -22,18 +22,31 @@ The game has three modes built on the same loop, plus shared systems for events,
 ### Systems
 
 - **Upgrades:** available in both Survival and Timed. Every few orders the player picks 1 of 3 for free. Paying in-run coins rerolls the 3 choices, as many times as the player can afford. Each reroll of the same pick costs more than the last, and the price goes back to its base on the next pick.
-- **Shop:** a second upgrade system where players spend in-run coins on the specific upgrades they want, so they can build toward a plan instead of relying on the free picks. It shows 3–4 items at a time and also sells power-ups and, in Survival, lives. Players can also sell an owned upgrade back for coins. When it opens and how prices rise are open questions.
+- **Shop:** a second upgrade system where players spend in-run coins on the specific upgrades they want, so they can build toward a plan instead of relying on the free picks. It shows 3–4 items at a time and also sells power-ups and, in Survival, lives. Players can also sell an owned upgrade back for coins. The shop can be opened at any time, and opening it pauses the clock in both modes. The stock only changes when the player restocks, so an item they are saving up for never disappears. Filling orders earns free restocks: one for every 7 filled orders (the number is per mode in config), banked up to 2; while the bank is full, filled orders don't count toward the next one. Free restocks are always used first; with none banked, a restock costs a fixed price in coins (it doesn't rise, and paid restocks aren't capped). The first stock is drawn the first time the shop is opened. The shop can't be opened while a free upgrade pick is waiting: the pick comes first. How prices rise is an open question. See Screen layout below.
 - **Buying lives:** the price rises each time, or scales with elapsed time, depending on mode.
 - **Power-ups:** available in both Survival and Timed. Dropped randomly from harvests or bought with coins. Possibly pre-loaded before a run using currency earned from finished runs (TBD).
 - **Currencies:** in-run coins have three uses during a run: the shop, rerolling the free upgrade pick, and lives (Survival only). They reset when the run ends. Meta currency (earned from finished runs) and paid coins (bought with real money) carry over between runs.
 - **Plots:** limited, so players must choose what to plant.
-- **Storage:** a limit on how many harvested crops the player can hold. Storage upgrades raise it. When storage is full, the player can't harvest until they free up space: sell crops for coins, turn some crops into fertilizer, or raise their storage. Fertilizer speeds up growth for one crop on one plot. Each crop has its own fertilizer rate: how many of that crop make one fertilizer, so a pumpkin is worth more fertilizer than a garlic. Making and using fertilizer needs the Compost upgrade (epic, not tiered); a config switch can make it a basic action instead. Each mode has its own storage limit.
+- **Storage:** a limit on how many harvested crops the player can hold. Storage upgrades raise it. When storage is full, the player can't harvest until they free up space: sell crops for coins, turn some crops into fertilizer, or raise their storage. Selling crops and making fertilizer happen in the shop page's storage section; using fertilizer on a plot happens from the drawer on the play screen. Fertilizer speeds up growth for one crop on one plot. Each crop has its own fertilizer rate: how many of that crop make one fertilizer, so a pumpkin is worth more fertilizer than a garlic. Making and using fertilizer needs the Compost upgrade (epic, not tiered); a config switch can make it a basic action instead. Each mode has its own storage limit.
 - **Events:** bad events (hindrances such as weeds, crows, picky customers and blocked plots) and good events. Every event gives a warning before it hits; some are announced by a news broadcast or newspaper. See Events (draft) below. Events with tradeoffs are planned (TBD).
 - **Crops:** players earn points to unlock new crops with different tradeoffs. Before a run, players pick which crops to bring, and orders only ask for those crops.
 - **Daily Challenge:** fixed modifiers (starting upgrades, boosts, selected crops), no power-ups, and a shared random seed so every player gets the same run. Has its own leaderboard.
 - **Leaderboards:** high scores per mode, split into power-up and no-power-up boards.
 - **Collectibles:** mystery boxes after a finished mode grant cosmetic skins or small boosts.
 - **Scoring:** calculated on the player's device for now.
+
+### Screen layout
+
+The game has two screens during a run: the play screen and the shop page.
+
+- **Play screen:** orders, plots and stats, with the crop bar always visible. The player selects a crop in the crop bar, then clicks plots to plant it; the crop stays selected, so several plots can be planted in a row without picking the crop again. Clicking a ready plot harvests it as before.
+- **Drawer:** a panel along the bottom of the play screen that does not pause the clock. It holds actions that need the board, such as using fertilizer on a plot.
+- **Shop page:** opened at any time with a button on the side of the screen; opening it pauses the clock in both modes, and closing it resumes play. It has three sections:
+  - **Shop:** upgrades and power-ups (and lives in Survival) to buy, a Restock button (free while a free restock is banked, otherwise its coin price), the free restocks banked, and how many more filled orders earn the next one. An item that can no longer be bought (its stat is capped, or it reached its copy limit) stays on show, marked "Maxed".
+  - **Storage:** the crops held, with selling and making fertilizer.
+  - **Your upgrades:** the upgrades the player owns, with selling them back.
+- **Moving between sections:** clickable section buttons for now. Swiping between sections may come later.
+- **Free upgrade pick:** stays a pop-up over the play screen, since it is a choice the player must make, not a page to browse.
 
 ## Upgrades (draft)
 
@@ -103,18 +116,20 @@ Once a stat reaches its cap, upgrades for it stop being offered, in both the fre
 | Grand finale | Points are boosted in the last 30 seconds | Points bonus | Timed |
 | Double delivery | Filling two orders back to back pays extra | Bonus size | Timed |
 | Extra plot | One more plot to plant on | Not tiered (one tier, TBD) | Shop only |
-| Interest | Unspent coins grow between shop visits | Interest rate | Shop only |
+| Interest | Unspent coins grow every 30 s of play, by at most 15 coins each time (numbers to tune); the clock it counts stops while the shop is open | Interest rate | Shop only |
 | Discount card | Shop prices drop | Price cut | Shop only |
 | Lucky stars | Free picks roll higher tiers more often | Tier odds boost | Shop only |
 | Rich soil | One chosen plot yields extra crops | Not tiered (one tier, TBD) | Shop only |
 | Quick soil | One chosen plot grows crops a fixed number of seconds faster | Not tiered (one tier, TBD) | Shop only |
 | Auto-harvester | One chosen plot harvests itself when crops are ready | Not tiered (one tier, TBD) | Shop only |
 | Promotion | Raise one owned upgrade by one tier | Not tiered (one tier, TBD) | Shop only |
-| Free restock | One free shop reroll per visit | Not tiered (one tier, TBD) | Shop only |
+| Free restock | Each free restock earned from orders comes as two instead of one (still up to the bank cap) | Not tiered (one tier, TBD) | Shop only |
+| Fast restock | Fewer filled orders are needed to earn a free restock | Orders saved | Shop only |
+| Rain check | More free restocks can be banked | Extra bank slots | Shop only |
 
 ## Power-ups (draft)
 
-Power-ups are either lasting (they work for a while) or instant (they happen right away). They are available in Survival and Timed, but not in the Daily Challenge. Durations and amounts are TBD.
+Power-ups are either lasting (they work for a while) or instant (they happen right away). Every power-up is available in both Survival and Timed (coin power-ups included, since Timed orders pay coins), but not in the Daily Challenge. Durations and amounts are TBD.
 
 | Power-up | Type | Effect | Notes |
 | --- | --- | --- | --- |
@@ -127,15 +142,15 @@ Power-ups are either lasting (they work for a while) or instant (they happen rig
 | Ready one | Instant | One chosen crop is ready to harvest |  |
 | Finish one | Instant | Completes one current order |  |
 | Finish all | Instant | Completes all current orders | Skips the puzzle: make it very rare, or give no combo or points bonus (TBD) |
-| Gold rush | Instant | The current order pays extra coins |  |
+| Gold rush | Lasting | Every order pays extra coins for a while |  |
 | Coin bag | Instant | Grants coins |  |
-| Merchant call | Instant | Calls the merchant and opens the shop | Could be how the shop opens in Timed |
+| Merchant call | Instant | Calls the merchant: grants one free restock | The shop is always open, so it grants a restock instead of opening the shop; up to the bank cap |
 | Giant order | Instant | Removes all current orders and creates one giant order that pays more coins. No new orders arrive until it is done | Failing it counts as a failed order, plus a mode penalty: in Survival, even more orders arrive; in Timed, no orders arrive for a short time |
 | Clean slate | Instant | Removes all crops from the field so the player can replant | Clears seeds dropped by Birds |
 
 ## Events (draft)
 
-Events are good or bad, and every one gives a warning before it hits. Some are announced by a news broadcast or newspaper: a small ticker or banner that does not stop play. The Early warning upgrade makes the news arrive sooner. Durations and amounts are TBD.
+Events are good or bad, and every one gives a warning before it hits. Every event happens in both Survival and Timed. Some are announced by a news broadcast or newspaper: a small ticker or banner that does not stop play. The Early warning upgrade makes the news arrive sooner. Durations and amounts are TBD.
 
 | Event | Kind | Effect | Notes |
 | --- | --- | --- | --- |
@@ -143,7 +158,7 @@ Events are good or bad, and every one gives a warning before it hits. Some are a
 | Worms | Good | Enriched soil gives extra yield |  |
 | Scarecrow | Good | Blocks some bad events for a while |  |
 | Sunny spell | Good | All crops grow faster for a while | Lasting, unlike Rain shower's one-time cut |
-| Generous customer | Good | The next order pays extra coins |  |
+| Generous customer | Good | A random order pays extra coins |  |
 | Lucky clover | Good | One random plot gives double crops on its next harvest |  |
 | Helpful neighbor | Good | Harvests all ripe crops for the player | Storage limits still apply |
 | Slow day | Good | Order timers tick more slowly for a while | The run timer is not affected |
@@ -230,8 +245,9 @@ Paid coins, bought with real money, carry over between runs and are separate fro
 - [ ] How fast does difficulty rise in Survival?
 - [ ] Which tradeoff events make the cut?
 - [ ] Return packs (decide later): which gameplay goals pay out, how much each pays, and whether a pack costs paid coins or real money.
-- [ ] When does the shop open? Survival could open it every few orders with the clock paused. Timed needs a choice: a short break between rush waves, or a shop that stays open while the clock keeps running.
-- [ ] How do shop prices rise: with run progress, with each copy of the same upgrade, or both? How much does a restock cost?
+- [ ] The shop pauses the clock in both modes for now. In Timed this lets the player stop the clock whenever they like and still act (buy, sell, make fertilizer). Keep it, give each run a limited amount of shop time, or keep the clock running while the shop is open in Timed?
+- [ ] Restock numbers: free ones every 7 filled orders, a bank of 2, and the fixed paid price. Tune after playtesting.
+- [ ] How do shop prices rise: with run progress (measured in filled orders, so it never moves while the shop is open), with each copy of the same upgrade, or both?
 - [ ] Upgrade tiers: what each tier costs in the shop, and the effect values per tier. Starting tier odds are common 40%, uncommon 30%, rare 15%, epic 10%, legendary 5%, to be tuned.
 - [ ] Should a paid reroll roll better tiers than a free pick?
 - [ ] Should order timers have a floor at their normal length? For now no upgrade can shorten them, which also rules out fake upgrades (Fake merchant) that do.
@@ -241,7 +257,7 @@ Paid coins, bought with real money, carry over between runs and are separate fro
 - [ ] Stat caps and copy limits: the cap for each stat, and the max copies for each non-tiered upgrade.
 - [ ] Fake merchant: how long do fake upgrades last? (Keen eye can reveal it.)
 - [ ] Finish all: for now it gives no score, still counts the orders as filled and pays their coins, and is the rarest power-up. Is that the right way to stop it skipping the puzzle?
-- [ ] Gold rush: for now every order pays +5 coins for 15 s (the same effect as Generous customer). Should it double coins for 15 s instead?
+- [ ] Gold rush: for now every order pays +5 coins for 15 s. Should it double coins for 15 s instead?
 - [ ] Storage overflow: for now a harvest that doesn't fit adds what fits and the rest is lost. Should it be refused instead? (Helpful neighbor does nothing when its harvest would overflow.)
 - [ ] Sell price: for now every crop sells for 25% of its order value. Should each crop have its own sell price?
 - [ ] Fertilizer: for now it cuts a share of the crop's remaining growth time, works once per plot per planting, has no holding limit and doesn't count toward storage. Which of these should change?

@@ -77,7 +77,9 @@ const MODIFIER_STATS: readonly ModifierStat[] = [
     "autoHarvest",
     "interestPct",
     "shopPricePct",
-    "freeRestocks",
+    "freeRestockBonus",
+    "restockOrdersCut",
+    "restockBankBonus",
     "tierLuck"
 ]
 

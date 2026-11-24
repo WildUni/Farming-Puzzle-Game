@@ -57,8 +57,7 @@ import {
     rerollPrice
 } from "./economy"
 import {
-    isShopDue,
-    isShopPaused,
+    isShopOpen,
     openShop,
     rollStock,
     itemPrice,
@@ -66,7 +65,11 @@ import {
     sellRefund,
     canBuy,
     canSell,
-    canRestock
+    canRestock,
+    restockBankCap,
+    withFilledOrder,
+    withInterest,
+    SHOP
 } from "./shop"
 
 // Salts for the separate streams. The orders stream uses the seed itself (see specs/mulberry.md).
@@ -123,8 +126,8 @@ function createGame(seed: RNGSeed, config: GameConfig): GameState {
         fertilizer: 0,
         rerollsThisOffer: 0,
         miracleReadyAt: 0,
-        shop: null,
-        shopVisits: 0
+        shop: { open: false, stock: null, freeRestocks: 0, restockProgress: 0 },
+        nextInterestAt: SHOP.interest.everyTicks
     }
 }
 
@@ -147,7 +150,7 @@ function canBuyLife(state: GameState): boolean {
         state.mode === "survival" &&
         state.status === "running" &&
         state.upgradeOffer === null &&
-        !isShopPaused(state) &&
+        !isShopOpen(state) &&
         state.lives < maxLivesFor(state) &&
         state.coins >= lifePriceFor(state)
     )
@@ -192,7 +195,7 @@ function canUseMiracleGrow(state: GameState): boolean {
     return (
         state.status === "running" &&
         state.upgradeOffer === null &&
-        !isShopPaused(state) &&
+        !isShopOpen(state) &&
         modifiersFor(state.upgrades).miracleGrow > 0 &&
         state.tick >= state.miracleReadyAt
     )
@@ -219,12 +222,14 @@ function canReroll(state: GameState): boolean {
     )
 }
 
-// Actions that work inside the shop. A pausing shop allows only these.
+// Actions that work while the shop is open: the shop's own and the Storage section's.
 const SHOP_ACTIONS: readonly Action["type"][] = [
     "buyItem",
     "sellUpgrade",
     "restockShop",
-    "closeShop"
+    "closeShop",
+    "sellCrop",
+    "makeFertilizer"
 ]
 
 // Harvests a ready plot as the harvest action does: yield, upgrades, the Bumper roll from
@@ -297,8 +302,8 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
     ) {
         return null
     }
-    // A pausing shop stops the clock too; only shop actions are allowed while it is open.
-    if (isShopPaused(state) && !SHOP_ACTIONS.includes(action.type)) return null
+    // The open shop stops the clock too; only shop and storage actions are allowed.
+    if (isShopOpen(state) && !SHOP_ACTIONS.includes(action.type)) return null
 
     switch (action.type) {
         case "plant": {
@@ -411,14 +416,14 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
         case "buyItem": {
             const target = action.target ?? null
             if (!canBuy(state, action.slot, target, crops)) return null
-            const shop = state.shop!
-            const item = shop.stock[action.slot]
+            const shop = state.shop
+            const item = shop.stock![action.slot]
             const paid: GameState = {
                 ...state,
                 coins: state.coins - itemPrice(state, action.slot)!,
                 shop: {
                     ...shop,
-                    stock: shop.stock.map((it, i) =>
+                    stock: shop.stock!.map((it, i) =>
                         i === action.slot ? { ...it, sold: true } : it
                     )
                 }
@@ -455,21 +460,30 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
             }
         }
 
+        case "openShop":
+            return openShop(state, crops)
+
         case "restockShop": {
             if (!canRestock(state)) return null
-            const shop = state.shop!
-            const paid: GameState = { ...state, coins: state.coins - restockPrice(state) }
+            // A banked free restock is used first; with none, the restock costs coins.
+            const shop = state.shop
+            const free = shop.freeRestocks > 0
+            const paid: GameState = {
+                ...state,
+                coins: state.coins - restockPrice(state),
+                shop: { ...shop, freeRestocks: free ? shop.freeRestocks - 1 : 0 }
+            }
             const [stock, shopRng] = rollStock(paid, crops)
             return {
                 ...paid,
                 rng: { ...paid.rng, shop: shopRng },
-                shop: { ...shop, stock, restocks: shop.restocks + 1 }
+                shop: { ...paid.shop, stock }
             }
         }
 
         case "closeShop": {
-            if (state.shop === null || state.upgradeOffer !== null) return null
-            return { ...state, shop: null }
+            if (!isShopOpen(state)) return null
+            return { ...state, shop: { ...state.shop, open: false } }
         }
 
         case "chooseUpgrade": {
@@ -519,6 +533,14 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
                 }
                 case "fillAllOrders":
                     return state.orders.reduce((s, o) => completeOrder(s, o, false), used)
+                case "grantRestock": {
+                    // canUsePowerUp checked the bank isn't full.
+                    const freeRestocks = Math.min(
+                        restockBankCap(state),
+                        state.shop.freeRestocks + 1
+                    )
+                    return { ...used, shop: { ...state.shop, freeRestocks } }
+                }
                 case "goodEvent": {
                     // canUsePowerUp checked no event is announced or running.
                     const [event, events] = announceEvent(state, EVENTS, "good")
@@ -550,9 +572,10 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
 
 // Fills `order`: removes it, adds 1 to ordersCompleted, adds orderPoints to score when `scored`
 // (level, combo and speed bonuses, from the state before the fill), and pays coins (Survival and
-// Timed alike, for now): the base pay, Big tips, Generous customer / Gold rush, and Early bird
-// when at least half the order's time is left. deliver and the Finish power-ups use it. In Timed a scored fill then
-// extends the streak (see withCombo).
+// Timed alike, for now): the base pay, Big tips, Gold rush, the order's tip (Generous customer),
+// and Early bird when at least half the order's time is left. deliver and the Finish power-ups
+// use it. In Timed a scored fill then extends the streak (see withCombo). Every fill counts
+// toward the next free shop restock (withFilledOrder).
 function completeOrder(state: GameState, order: Order, scored: boolean): GameState {
     const combo = state.mode === "timed" && scored
     const points = scored ? orderPoints(state, order) : 0
@@ -562,6 +585,7 @@ function completeOrder(state: GameState, order: Order, scored: boolean): GameSta
         DIFFICULTY.coinsPerOrder +
         m.coinsPerOrder +
         deliverBonusAt(state.activeEffects, state.tick) +
+        order.tip +
         early
     const filled: GameState = {
         ...state,
@@ -570,7 +594,7 @@ function completeOrder(state: GameState, order: Order, scored: boolean): GameSta
         ordersCompleted: state.ordersCompleted + 1,
         coins: state.mode === "puzzle" ? state.coins : state.coins + pay
     }
-    return combo ? withCombo(filled, state) : filled
+    return withFilledOrder(combo ? withCombo(filled, state) : filled)
 }
 
 // One more order in the streak: combo + 1, the window restarts from this tick, best combo kept.
@@ -683,19 +707,19 @@ function isOfferDue(state: GameState): boolean {
     )
 }
 
-// Moves the game forward one tick. Returns a new state, or `state` itself once ended
-// or while an upgrade offer is open. See specs/main.md for the order of the steps.
+// Moves the game forward one tick. Returns a new state, or `state` itself once ended, while
+// an upgrade offer is open, or while the shop is open. See specs/main.md for the order of the
+// steps.
 function step(state: GameState, crops: CropTable): GameState {
-    if (state.status === "ended" || state.upgradeOffer !== null || isShopPaused(state)) {
+    if (state.status === "ended" || state.upgradeOffer !== null || isShopOpen(state)) {
         return state
     }
 
-    // 1. Tick, and a running shop closes on its closing tick
+    // 1. Tick
     const tick = state.tick + 1
-    const closes = state.shop !== null && tick >= state.shop.closesAt!
 
     // 2. Events: the announced one starts on its startsAt tick, and is cleared once it ends
-    const ticked: GameState = { ...state, tick, shop: closes ? null : state.shop }
+    const ticked: GameState = { ...state, tick }
     let ev = startEvent(ticked, crops, orderRules(ticked))
     if (ev.event !== null && tick >= ev.event.endsAt) {
         ev = { ...ev, event: null, nextEventAt: tick + gapTicks(ev) }
@@ -711,7 +735,8 @@ function step(state: GameState, crops: CropTable): GameState {
         plots: moved.plots.map((p) => updateGrowth(p, tick)),
         activeEffects: moved.active
     }
-    const harvested = autoHarvest(grown, crops)
+    // 4b. Interest, on its own clock (step doesn't run while the shop is open)
+    const harvested = withInterest(autoHarvest(grown, crops))
     const plots = harvested.plots
 
     // 5. Failed orders
@@ -764,8 +789,8 @@ function step(state: GameState, crops: CropTable): GameState {
         activeEffects: moved.active
     }
 
-    // 6. End of run (a running shop closes with it)
-    if (isRunOver(next)) return { ...next, status: "ended", shop: null }
+    // 6. End of run
+    if (isRunOver(next)) return { ...next, status: "ended" }
 
     // 7. New orders, using the rules for the current difficulty
     const rules = orderRules(next)
@@ -827,14 +852,7 @@ function step(state: GameState, crops: CropTable): GameState {
 
     // 9. Upgrade offer, drawn from its own stream after the orders
     const pool = offerPool(announced)
-    const offered =
-        pool === null || !isOfferDue(announced) ? announced : makeOffer(announced, pool, crops)
-
-    // 10. Shop, from its own stream, once no offer is waiting
-    if (offered.upgradeOffer !== null || offered.shop !== null || !isShopDue(offered)) {
-        return offered
-    }
-    return openShop(offered, crops)
+    return pool === null || !isOfferDue(announced) ? announced : makeOffer(announced, pool, crops)
 }
 
 // Draws an upgrade offer from rng.upgrades. With nothing eligible the count still goes up and

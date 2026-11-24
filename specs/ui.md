@@ -56,7 +56,7 @@ The Timed length comes from `MODES.timed.runTicks` (`modes.json`), so it stays r
 
 Shown over the board while `state.upgradeOffer` is not `null` (Survival only).
 
-- A shade covers the board and swallows clicks, like the pause shade. The plant picker closes when it opens.
+- A shade covers the board and swallows clicks, like the pause shade. Any plot choosing (fertilizer, Miracle grow, a power-up) stops when it opens.
 - Title `Choose an upgrade`, and one card per offered card, side by side.
 - Each card's text (`upgradeCardText`): name, tier, the one-line description with the tier's values filled in, and how many copies the player will have after picking it out of `maxCopies`, e.g. `Fast growth
 Rare
@@ -70,22 +70,32 @@ Crops grow 7% faster
 - **Reroll** button under the cards (`rerollText`): `Reroll` and the next reroll's price (`rerollPriceFor`). Disabled when `canReroll` is false. Clicking it sends `rerollOffer` through `act()`; the cards are rebuilt for the new offer, and the price shown rises.
 - The game loop does not step while an offer is open. Pause still works on top of it.
 
-## Barn (BarnView)
+## Crop bar (CropBar)
 
-A panel under the power-up bar for storage, selling and fertilizer (see [economy.md](economy.md)).
+> Day 8b: replaces the plant picker that opened when an empty plot was clicked.
 
-- **Storage bar** across the screen: `Storage 12 / 25` (`storageText`), filled by `storageFill`. It turns red and the label adds `FULL` when `isStorageFull`.
-- **Crop buttons**, one per crop in id order, each showing the crop and how many are held (`barnCropText`). Clicking one selects it (white outline) and resets the amount to 1.
-- **Amount box** (an HTML input) with **-** and **+** buttons on either side. `sellAmount` reads it as a whole number from 1 to the amount held. Keys typed in it don't reach the game's shortcuts.
-- **Sell** (`sellButtonText`: `Sell 3` and the coins it pays) sends `sellCrop` with the amount. **Sell all** sends `sellCrop` with everything held of the selected crop.
-- **Make fertilizer** (`makeFertilizerText`: what one costs in the selected crop, or `needs Compost` while fertilizer is locked) sends `makeFertilizer`. Disabled with too few crops, or without Compost.
+A row of crop buttons on the play screen, always visible while the run is on, one per crop in id order (`cropButtonText`: the crop and its grow time).
+
+- Clicking a crop selects it (white outline). One crop is selected at a time; the first crop is selected when the run starts. Clicking the selected crop again keeps it selected.
+- Clicking an empty plot sends `plant { plot, cropId }` with the selected crop through `act()`. The crop stays selected, so several plots can be planted in a row.
+- Clicking a ready plot harvests it and a plot with Crows scares them, whatever crop is selected, as before.
+- While a plot is being chosen for a power-up, fertilizer or Miracle grow, a plot click does that instead of planting.
+- The selected crop is screen state kept by the Game scene, never part of `GameState`, so it is not logged.
+
+## Drawer (BarnView becomes the drawer)
+
+> Day 8b: the barn's selling and fertilizer-making move to the shop page's Storage section.
+
+A panel along the bottom of the play screen that never pauses the clock. It starts open; a tab on its top edge folds it down to just the storage bar and opens it again.
+
+- **Storage bar** across the screen: `Storage 12 / 25` (`storageText`), filled by `storageFill`. It turns red and the label adds `FULL` when `isStorageFull`. Shown folded or open.
 - **Fertilize** (`fertilizeText`: how many are held) starts choosing a plot: the plots in `fertilizerTargets` are outlined and the rest dimmed, as for a plot power-up, and the button says `Cancel`. Clicking a highlighted plot sends `useFertilizer`; clicking anything else, Esc, or starting a power-up cancels. Disabled with no fertilizer or nothing to fertilize.
 - A fertilized crop shows `FERT` along the top of its plot (`plotOverlays`).
-- Every button is greyed out when its action would be refused. The whole panel is off (and the amount box hidden, since HTML sits above the canvas) while paused, while the plant picker or an upgrade offer is open, and after the run ends.
+- The drawer is off while paused, while an upgrade offer or the shop page is open, and after the run ends.
 
 ## Miracle grow (MiracleGrowView)
 
-A button in the right-hand column under Buy life, shown only once Miracle grow is owned (both modes).
+A button in the right-hand column under the Shop button, shown only once Miracle grow is owned (both modes).
 
 - Shows `miracleGrowText`: `Miracle grow` then `ready`, or the time left on the recharge (`formatClock(miracleReadyAt − tick)`).
 - Enabled when `miracleTargets` is not empty. Clicking starts choosing a plot: the plots in `miracleTargets` are outlined and the rest dimmed, as for fertilizer, and the button says `Cancel`. Clicking a highlighted plot sends `useMiracleGrow { plot }`; clicking the button again, anything else, Esc, starting a power-up or fertilizer cancels.
@@ -137,6 +147,8 @@ While `isFogged(state)` (a `fog` effect is working): growing plots show `?` inst
 
 An order Small order halved has `SMALL` after its number on the first line of its card (`Order #4  SMALL`), and so does a Sneak peek card for one (`Next order  SMALL`).
 
+An order Generous customer tipped has `TIP +10` (its `tip`) after any other tags (`Order #4  SMALL TIP +10`).
+
 ## Rush waves (RushBanner, OrdersView)
 
 Timed only.
@@ -154,22 +166,24 @@ With Sneak peek, a dimmed card under the open orders shows `nextOrderPreview(sta
 
 The overlay rules come from `plotOverlays(state)` in `format.ts`, which returns one list of overlay names per plot, so they can be unit tested without Phaser.
 
-## Shop (ShopView)
+## Shop page (ShopScene)
 
-Shown while `state.shop` is not `null` (see [shop.md](shop.md)).
+> Day 8b: replaces the Day 8 `ShopView` that opened by itself on a schedule (see [shop.md](shop.md)).
 
-- **Pausing shop:** a shade covers the board and swallows clicks, as for the upgrade pick. The plant picker and any plot choosing (fertilizer, Miracle grow, a power-up) close when it opens. The game loop does not step; pause still works on top of it.
-- **Running shop:** the same panel without the shade, so the board stays playable behind it, with the time left (`shopTimerText`: `Shop closes in 0:12`). It hides while an upgrade offer is open and comes back after the pick.
-- Title `Shop`, and the coins held.
-- **Stock cards**, one per slot, side by side (`shopItemText`):
-    - Upgrade: name, tier, the line with the tier's values filled in, and the copy count after buying, as on a pick card, with the frame coloured by tier.
-    - Power-up: name and its button text (`powerUpButtonText`).
-    - Life: `Life` and the hearts after buying (`heartsText`).
-    - Under each, a **Buy** button with the price (`shopPriceText`: `Buy 18`). Disabled when `canBuy` is false (too few coins, slots or lives full, nothing left to gain). A sold card shows `SOLD` and no button.
-    - A targeted upgrade, or Promotion, moves to a second step as on the pick: `Choose a plot`, `Choose a crop` or `Choose an upgrade to promote`, with one button per valid target and **Back**. Plot targets reuse `targetText`; Promotion targets show the copy's name and its tier now and after (`promotionTargetText`: `Fast growth  Rare → Epic`).
-- **Owned upgrades:** a list of every owned copy (name, tier, and the plot or crop for a targeted one), each with **Sell** and its refund (`sellRefundText`: `Sell +15`). Disabled when `canSell` is false, with the reason from `sellBlock` as the label: `Can't sell`, `Needed by Bigger bumper`, `Barn too full`.
-- **Restock** with its price (`restockText`: `Restock 8`, or `Restock free`), disabled when `canRestock` is false; and **Close**, which sends `closeShop`.
+A Phaser scene launched over the Game scene (`scene.launch`). The Game scene keeps the `GameState`, the tick loop and the action log; it hands the shop page a way to read the state and its `act()` function, so every move made in the shop is checked by the sim and logged.
+
+- **Shop button** on the side of the play screen: `Shop`, with the free restocks banked when there are any (`shopButtonText`: `Shop\n2 free`). Clicking it sends `openShop`; the shop page opens and the clock stops. It is disabled while an upgrade offer is open (the pick comes first), while paused, and after the run ends.
+- The page covers the whole screen. At the top: the title and the coins held (`shopTitleText`), then three section buttons, **Shop**, **Storage** and **Your upgrades**, the open one highlighted. It opens on **Shop**. A **Close** button at the bottom sends `closeShop`; the clock resumes. Swiping between sections may come later.
+- **Shop section:**
+    - **Stock cards**, one per slot (`shopItemText`): an upgrade as on a pick card (name, tier, line, copy count after buying), framed by tier; a power-up's button text; a life with the hearts after buying, or `Lives full`.
+    - Under each card a **Buy** button with the price (`shopPriceText`: `Buy 18`), disabled when `canBuyAny` is false. A sold card shows `SOLD`; a Maxed card shows `Maxed` and no button.
+    - A targeted upgrade, or Promotion, moves to a second step: `Choose a plot`, `Choose a crop` or `Choose an upgrade to promote`, one button per valid target, and **Back**. Plot targets use `targetText`; Promotion targets show the copy's name and its tier now and after (`promotionTargetText`).
+    - **Restock** (`restockText`: `Restock\nfree (2 left)` or `Restock\n10 coins`), disabled when `canRestock` is false, and the progress to the next free restock (`freeRestockText`: `Next free restock in 3 orders`, or `Free restocks full`).
+- **Storage section** (moved from the barn): the storage bar; one button per crop with how many are held (`barnCropText`), clicking one selects it; **−** and **+** buttons with the amount between them (`sellAmount` keeps it from 1 to the amount held); **Sell** (`sellButtonText`) and **Sell all**; **Make fertilizer** (`makeFertilizerText`). The barn's HTML amount box is replaced by the Phaser buttons.
+- **Your upgrades section:** every owned copy (`ownedUpgradeText`: name, tier, and its plot or crop), each with **Sell** and its refund, or the reason it can't be sold (`sellRefundText`: `Sell +15`, `Can't sell`, `Needed by Bigger bumper`, `Barn too full`). Past what fits, the list scrolls.
 - Every button sends its action through `act()`, so it is logged.
+- Built as the `Shop` scene (`scenes/Shop.ts`). The Game scene pauses itself (`scene.pause`) while the page is up and resumes on Close, so its keys (P, R, L) wait. Esc closes the page, or goes Back from choosing a target.
+- The Shop button sits in the right-hand column between Buy life and Miracle grow, a little narrower than the column so it clears the plot grid.
 
 ## End of run (GameOverView)
 
@@ -227,15 +241,17 @@ Three sections, top to bottom:
 - `activeEffectText` shows the name and seconds left, rounding up: `1s` with one tick left, `10s` with 100.
 - `isFogged` follows the fog effect's working ticks; `plotText` shows `?` for a growing crop in fog; `orderText` shows `?:??` in fog.
 - `nextOrderText` lists the next order's crops and value.
-- `orderText` and `nextOrderText` add `SMALL` to the title of a halved order.
+- `orderText` and `nextOrderText` add `SMALL` to the title of a halved order; `orderText` adds `TIP +N` after it for a tipped order, and nothing with no tip.
 - `heartsText(lives, max)` shows a full heart per life and an empty one up to the cap; `buyLifeText` says `Lives full` at the cap.
 - `plotOverlays` marks every plot Worms are working on.
 - The Level row and the game-over level follow `runLevel` (Steady pace).
 - Storage, selling, fertilizer and reroll text: see the "Screen text" tests in [economy.md](economy.md). `sellButtonText` shows Premium produce's boosted price.
 - `miracleGrowText` reads `ready` with no recharge left (and on `miracleReadyAt` itself), and the time left otherwise.
-- Shop: `shopItemText` for an upgrade, a power-up and a life slot; `shopPriceText` follows `itemPrice` (with Discount card); `sellRefundText` follows `sellRefund` and gives each refusal's label; `restockText` shows the price and `free` with Free restock; `promotionTargetText` shows the tier now and after; `shopTimerText` rounds seconds up.
+- Shop: `shopItemText` for an upgrade, Promotion, a power-up and a life slot (and `Lives full`); `shopPriceText` follows `itemPrice` (with Discount card) and shows `SOLD` and `Maxed`; `sellRefundText` follows `sellRefund` and gives each refusal's label; `restockText` shows `free` with the count left while a free restock is banked, else the price; `freeRestockText` counts the orders left, and says full when the bank is; `shopButtonText` shows the banked count; `promotionTargetText` shows the tier now and after. (`shopTimerText` went with the running shop.)
 
 ## Open items
+
+- [ ] Day 8b layout choices made as defaults, to confirm: the first crop starts selected in the crop bar; the drawer starts open and holds the storage bar and Fertilize only (power-ups, Miracle grow and Buy life stay where they are); Buy life stays on the play screen as well as in the shop.
 
 - [ ] Plot upgrades: pick the plot on the board itself (valid plots highlighted, the rest greyed out) instead of a row of `Plot N` buttons, once a plot upgrade can be offered. Greenhouse is the first (see [events.md](events.md)).
 

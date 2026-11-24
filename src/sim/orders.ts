@@ -25,7 +25,8 @@ function createOrder(
         expiresAt: now + rules.orderTicks,
         timeLimit: rules.orderTicks,
         small: false,
-        rush: false
+        rush: false,
+        tip: 0
     }
     return [order, afterAmount]
 }

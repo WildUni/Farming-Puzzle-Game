@@ -1,5 +1,5 @@
-// The shop: when it opens, its stock, prices, refunds and what can be bought or sold. The
-// actions themselves live in main.ts. See specs/shop.md.
+// The shop: opening it, its stock, the free restock bank, prices, refunds and what can be
+// bought or sold. The actions themselves live in main.ts. See specs/shop.md.
 import type {
     CropTable,
     GameState,
@@ -9,7 +9,6 @@ import type {
     ShopConfig,
     ShopItem,
     ShopModeConfig,
-    ShopOpenRule,
     Tier,
     UpgradeTarget
 } from "./types"
@@ -41,10 +40,6 @@ function fail(field: string, rule: string): never {
     throw new Error(`shop config: ${field} must be ${rule}`)
 }
 
-function has(obj: Record<string, unknown>, key: string): boolean {
-    return Object.prototype.hasOwnProperty.call(obj, key)
-}
-
 function wholeAtLeast(v: unknown, min: number, field: string): number {
     if (typeof v !== "number" || !Number.isInteger(v) || v < min) {
         fail(field, `a whole number >= ${min}`)
@@ -57,43 +52,15 @@ function object(v: unknown, field: string): Record<string, unknown> {
     return v
 }
 
-function validateOpen(raw: unknown, at: string): ShopOpenRule {
-    const open = object(raw, at)
-    switch (open.kind) {
-        case "orders":
-            return {
-                kind: "orders",
-                every: wholeAtLeast(open.every, 1, `${at}.every`),
-                offset: wholeAtLeast(open.offset, 0, `${at}.offset`)
-            }
-        case "seconds": {
-            const at_ = open.at
-            if (!Array.isArray(at_)) fail(`${at}.at`, "a list of whole numbers >= 1")
-            const seconds = at_.map((v: unknown, i) => wholeAtLeast(v, 1, `${at}.at[${i}]`))
-            for (let i = 1; i < seconds.length; i++) {
-                if (seconds[i] <= seconds[i - 1]) fail(`${at}.at`, "strictly rising")
-            }
-            return { kind: "seconds", at: seconds }
-        }
-        case "never":
-            return { kind: "never" }
-        default:
-            return fail(`${at}.kind`, `"orders", "seconds" or "never"`)
-    }
-}
-
 function validateMode(raw: unknown, at: string): ShopModeConfig {
     const mode = object(raw, at)
-    const open = validateOpen(mode.open, `${at}.open`)
-    if (typeof mode.pauses !== "boolean") fail(`${at}.pauses`, "true or false")
-    let openTicks: number | null = null
-    if (mode.pauses) {
-        if (has(mode, "openSeconds")) fail(`${at}.openSeconds`, "left out when pauses is true")
-    } else {
-        if (!has(mode, "openSeconds")) fail(`${at}.openSeconds`, "given when pauses is false")
-        openTicks = wholeAtLeast(mode.openSeconds, 1, `${at}.openSeconds`) * TICKS_PER_SECOND
+    return {
+        ordersPerFreeRestock: wholeAtLeast(
+            mode.ordersPerFreeRestock,
+            1,
+            `${at}.ordersPerFreeRestock`
+        )
     }
-    return { open, pauses: mode.pauses, openTicks }
 }
 
 // Checks a parsed JSON value and returns it typed. Throws naming the bad field.
@@ -121,10 +88,7 @@ function validateShop(raw: unknown): ShopConfig {
 
     const rise = object(root.priceRise, "priceRise")
     const restock = object(root.restock, "restock")
-    const growth = restock.growth
-    if (typeof growth !== "number" || !Number.isFinite(growth) || growth < 1) {
-        fail("restock.growth", "a number >= 1")
-    }
+    const interest = object(root.interest, "interest")
     const sellRefundPct = wholeAtLeast(root.sellRefundPct, 0, "sellRefundPct")
     if (sellRefundPct > 100) fail("sellRefundPct", "a whole number from 0 to 100")
 
@@ -138,11 +102,19 @@ function validateShop(raw: unknown): ShopConfig {
         tierPrice: prices,
         priceRise: {
             perCopyPct: wholeAtLeast(rise.perCopyPct, 0, "priceRise.perCopyPct"),
-            perVisitPct: wholeAtLeast(rise.perVisitPct, 0, "priceRise.perVisitPct")
+            perProgressPct: wholeAtLeast(rise.perProgressPct, 0, "priceRise.perProgressPct"),
+            progressOrders: wholeAtLeast(rise.progressOrders, 1, "priceRise.progressOrders")
         },
-        restock: { base: wholeAtLeast(restock.base, 1, "restock.base"), growth },
+        restock: {
+            price: wholeAtLeast(restock.price, 1, "restock.price"),
+            bankCap: wholeAtLeast(restock.bankCap, 1, "restock.bankCap")
+        },
         sellRefundPct,
-        interestMaxCoins: wholeAtLeast(root.interestMaxCoins, 0, "interestMaxCoins")
+        interest: {
+            everyTicks:
+                wholeAtLeast(interest.everySeconds, 1, "interest.everySeconds") * TICKS_PER_SECOND,
+            maxCoins: wholeAtLeast(interest.maxCoins, 0, "interest.maxCoins")
+        }
     }
 }
 
@@ -156,27 +128,20 @@ function modeConfig(state: GameState, config: ShopConfig): ShopModeConfig | null
     return state.mode === "puzzle" ? null : config.modes[state.mode]
 }
 
-// True while a shop that stops the clock is open.
-function isShopPaused(state: GameState): boolean {
-    return state.shop !== null && state.shop.closesAt === null
+// True while the shop page is open. The clock is stopped and only shop and storage actions work.
+function isShopOpen(state: GameState): boolean {
+    return state.shop.open
 }
 
-// True when the mode's open rule says the next visit is due.
-function isShopDue(state: GameState, config: ShopConfig = SHOP): boolean {
-    const mode = modeConfig(state, config)
-    if (mode === null) return false
-    const open = mode.open
-    switch (open.kind) {
-        case "orders":
-            return state.ordersCompleted >= open.offset + state.shopVisits * open.every
-        case "seconds":
-            return (
-                state.shopVisits < open.at.length &&
-                state.tick >= open.at[state.shopVisits] * TICKS_PER_SECOND
-            )
-        case "never":
-            return false
-    }
+// True when openShop would succeed: the run is on, the mode has a shop, no upgrade offer is
+// waiting (the pick comes first) and the shop is closed.
+function canOpenShop(state: GameState, config: ShopConfig = SHOP): boolean {
+    return (
+        state.status === "running" &&
+        modeConfig(state, config) !== null &&
+        state.upgradeOffer === null &&
+        !state.shop.open
+    )
 }
 
 // The pools the shop draws upgrades from: the mode's own plus "shop".
@@ -190,10 +155,13 @@ function shopPool(state: GameState, crops: CropTable): string[] {
 }
 
 // Power-ups the shop can stock: those that can drop in this run, except ones that only give
-// coins (selling coins for coins).
+// coins (selling coins for coins) or a restock (which Restock already sells).
 function stockablePowerUps(state: GameState): string[] {
     if (!state.allowPowerUps) return []
-    return dropTable(state).filter((id) => POWER_UPS.powerUps[id].effect.kind !== "grantCoins")
+    return dropTable(state).filter((id) => {
+        const kind = POWER_UPS.powerUps[id].effect.kind
+        return kind !== "grantCoins" && kind !== "grantRestock"
+    })
 }
 
 // A new stock from rng.shop: upgrade cards (two draws each, plain tier weights), then power-ups
@@ -235,35 +203,93 @@ function rollStock(
     return [items, rng]
 }
 
-// Coins Interest adds when a visit starts.
+// Coins the next Interest payment adds: interestPct of held coins, up to interest.maxCoins.
 function interestFor(state: GameState, config: ShopConfig = SHOP): number {
     const { interestPct } = modifiersFor(state.upgrades)
-    return Math.min(Math.floor((state.coins * interestPct) / 100), config.interestMaxCoins)
+    return Math.min(Math.floor((state.coins * interestPct) / 100), config.interest.maxCoins)
 }
 
-// Starts a visit: counts it, pays Interest, then draws the stock.
-function openShop(state: GameState, crops: CropTable, config: ShopConfig = SHOP): GameState {
-    const mode = modeConfig(state, config)
-    const counted: GameState = {
-        ...state,
-        shopVisits: state.shopVisits + 1,
-        coins: state.coins + interestFor(state, config)
-    }
-    const [stock, shopRng] = rollStock(counted, crops, config)
-    const closesAt = mode === null || mode.pauses ? null : state.tick + mode.openTicks!
+// Interest's clock, run by step once per tick of play (step doesn't run while the shop is
+// open, so the clock stops then). On nextInterestAt it pays interestFor (0 with no Interest
+// owned) and the timer moves on by interest.everyTicks.
+function withInterest(state: GameState, config: ShopConfig = SHOP): GameState {
+    if (state.tick < state.nextInterestAt) return state
     return {
-        ...counted,
-        rng: { ...counted.rng, shop: shopRng },
-        shop: { stock, restocks: 0, closesAt }
+        ...state,
+        coins: state.coins + interestFor(state, config),
+        nextInterestAt: state.nextInterestAt + config.interest.everyTicks
     }
+}
+
+// Opens the shop page. The first time, draws the first stock from rng.shop. null when
+// canOpenShop is false.
+function openShop(state: GameState, crops: CropTable, config: ShopConfig = SHOP): GameState | null {
+    if (!canOpenShop(state, config)) return null
+    if (state.shop.stock !== null) return { ...state, shop: { ...state.shop, open: true } }
+    const [stock, shopRng] = rollStock(state, crops, config)
+    return {
+        ...state,
+        rng: { ...state.rng, shop: shopRng },
+        shop: { ...state.shop, open: true, stock }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Free restocks
+
+// Filled orders that earn the next free restock: the mode's number less Fast restock, at least 1.
+function ordersPerFreeRestock(state: GameState, config: ShopConfig = SHOP): number {
+    const mode = modeConfig(state, config)
+    if (mode === null) return 1
+    const { restockOrdersCut } = modifiersFor(state.upgrades)
+    return Math.max(1, mode.ordersPerFreeRestock - restockOrdersCut)
+}
+
+// Free restocks each cycle of filled orders adds: 1, plus Free restock.
+function restocksPerCycle(state: GameState): number {
+    return 1 + modifiersFor(state.upgrades).freeRestockBonus
+}
+
+// The most free restocks the bank holds: restock.bankCap, plus Rain check.
+function restockBankCap(state: GameState, config: ShopConfig = SHOP): number {
+    return config.restock.bankCap + modifiersFor(state.upgrades).restockBankBonus
+}
+
+// True while the bank holds as many free restocks as it can.
+function isBankFull(state: GameState, config: ShopConfig = SHOP): boolean {
+    return state.shop.freeRestocks >= restockBankCap(state, config)
+}
+
+// Counts one filled order toward the next free restock. With the bank full, or in Puzzle,
+// nothing changes.
+function withFilledOrder(state: GameState, config: ShopConfig = SHOP): GameState {
+    if (modeConfig(state, config) === null || isBankFull(state, config)) return state
+    const shop = state.shop
+    const progress = shop.restockProgress + 1
+    if (progress < ordersPerFreeRestock(state, config)) {
+        return { ...state, shop: { ...shop, restockProgress: progress } }
+    }
+    const freeRestocks = Math.min(
+        restockBankCap(state, config),
+        shop.freeRestocks + restocksPerCycle(state)
+    )
+    return { ...state, shop: { ...shop, restockProgress: 0, freeRestocks } }
+}
+
+// Filled orders still needed for the next free restock, or null while the bank is full (and
+// in Puzzle).
+function ordersToFreeRestock(state: GameState, config: ShopConfig = SHOP): number | null {
+    if (modeConfig(state, config) === null || isBankFull(state, config)) return null
+    return Math.max(1, ordersPerFreeRestock(state, config) - state.shop.restockProgress)
 }
 
 // ---------------------------------------------------------------------------------------------
 // Prices
 
-// The % every price rises by for the visits before this one.
-function visitRisePct(state: GameState, config: ShopConfig): number {
-    return 100 + config.priceRise.perVisitPct * Math.max(0, state.shopVisits - 1)
+// The % every price rises by with run progress: perProgressPct per progressOrders filled orders.
+function progressPct(state: GameState, config: ShopConfig): number {
+    const { perProgressPct, progressOrders } = config.priceRise
+    return 100 + perProgressPct * Math.floor(state.ordersCompleted / progressOrders)
 }
 
 // What stock[slot] costs now, or null for a bad slot. Worked out live, never stored.
@@ -278,14 +304,14 @@ function itemPrice(state: GameState, slot: number, config: ShopConfig = SHOP): n
             const raw =
                 (config.tierPrice[item.tier] *
                     perCopy *
-                    visitRisePct(state, config) *
+                    progressPct(state, config) *
                     shopPricePct) /
                 1000000
             return Math.max(1, Math.round(raw))
         }
         case "powerUp": {
             const base = POWER_UPS.powerUps[item.id].shopPrice
-            const raw = (base * visitRisePct(state, config) * shopPricePct) / 10000
+            const raw = (base * progressPct(state, config) * shopPricePct) / 10000
             return Math.max(1, Math.round(raw))
         }
         case "life":
@@ -293,13 +319,9 @@ function itemPrice(state: GameState, slot: number, config: ShopConfig = SHOP): n
     }
 }
 
-// The next restock's price this visit: free while Free restock has some left.
+// The next restock's price: 0 while a free restock is banked, else restock.price.
 function restockPrice(state: GameState, config: ShopConfig = SHOP): number {
-    const restocks = state.shop?.restocks ?? 0
-    const free = modifiersFor(state.upgrades).freeRestocks
-    if (restocks < free) return 0
-    const { base, growth } = config.restock
-    return Math.round(base * growth ** (restocks - free))
+    return state.shop.freeRestocks > 0 ? 0 : config.restock.price
 }
 
 // What selling one owned copy pays back.
@@ -310,17 +332,18 @@ function sellRefund(copy: OwnedUpgrade, config: ShopConfig = SHOP): number {
 // ---------------------------------------------------------------------------------------------
 // What can be done
 
-// The item in `slot` of the open shop, or null for a closed shop or a bad slot.
+// The item in `slot` of the stock, or null before the first stock or for a bad slot.
 function stockItem(state: GameState, slot: number): ShopItem | null {
-    if (state.shop === null || !Number.isInteger(slot)) return null
-    if (slot < 0 || slot >= state.shop.stock.length) return null
-    return state.shop.stock[slot]
+    const stock = state.shop.stock
+    if (stock === null || !Number.isInteger(slot)) return null
+    if (slot < 0 || slot >= stock.length) return null
+    return stock[slot]
 }
 
 // True when shop actions can be taken right now: the run is on, the shop is open, and no
 // upgrade offer is waiting.
 function shopUsable(state: GameState): boolean {
-    return state.status === "running" && state.shop !== null && state.upgradeOffer === null
+    return state.status === "running" && state.shop.open && state.upgradeOffer === null
 }
 
 // Where a buy of the upgrade in `slot` may go: [null] for untargeted, plot indexes or crop ids
@@ -332,6 +355,13 @@ function buyTargets(state: GameState, slot: number, crops: CropTable): UpgradeTa
     const def = UPGRADES.upgrades[item.id]
     if (def.kind === "instant") return promotionTargets(state.upgrades)
     return validTargets(state.upgrades, item.id, state.plots.length, crops)
+}
+
+// True for an unsold upgrade card that can't be bought any more (capped, or out of copies).
+function isMaxed(state: GameState, slot: number, crops: CropTable): boolean {
+    const item = stockItem(state, slot)
+    if (item === null || item.kind !== "upgrade" || item.sold) return false
+    return buyTargets(state, slot, crops).length === 0
 }
 
 // True when the upgrade in `slot` needs the player to choose where it goes.
@@ -409,17 +439,25 @@ function canRestock(state: GameState, config: ShopConfig = SHOP): boolean {
 export {
     validateShop,
     SHOP,
-    isShopPaused,
-    isShopDue,
+    isShopOpen,
+    canOpenShop,
     shopPool,
     rollStock,
     interestFor,
+    withInterest,
     openShop,
+    ordersPerFreeRestock,
+    restocksPerCycle,
+    restockBankCap,
+    isBankFull,
+    withFilledOrder,
+    ordersToFreeRestock,
     itemPrice,
     restockPrice,
     sellRefund,
     stockItem,
     buyTargets,
+    isMaxed,
     needsTarget,
     canBuy,
     canBuyAny,

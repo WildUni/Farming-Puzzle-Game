@@ -13,6 +13,7 @@ import type {
 import { TICKS_PER_SECOND } from "./game_constants"
 import { randomInt } from "./mulberry"
 import { modifiersFor, scalePct } from "./upgrades"
+import { isBankFull, isShopOpen } from "./shop"
 import rawPowerUps from "../data/powerups.json"
 
 const DROP_MODES: readonly GameMode[] = ["survival", "timed"]
@@ -70,6 +71,7 @@ function validateEffect(raw: unknown, at: string): Effect {
         case "fillOrder":
         case "fillAllOrders":
         case "goodEvent":
+        case "grantRestock":
             return { kind: raw.kind }
         default:
             return fail(`${at}.kind`, "a known effect kind")
@@ -234,10 +236,12 @@ function canUsePowerUp(
     if (state.status === "ended" || state.upgradeOffer !== null || !state.allowPowerUps) {
         return false
     }
-    // A pausing shop stops time, like an offer.
-    if (state.shop !== null && state.shop.closesAt === null) return false
+    // The open shop stops time, like an offer.
+    if (isShopOpen(state)) return false
     const def = heldDef(state, slot, config)
     if (def === null || !systemsOn(def, state)) return false
+    // Merchant call waits while the restock bank is full, so it is never wasted.
+    if (def.effect.kind === "grantRestock" && isBankFull(state)) return false
     // Good omen calls an event now, so it waits while another event is announced or running.
     if (def.effect.kind === "goodEvent" && state.event !== null) return false
     if (def.target === null) return target === null

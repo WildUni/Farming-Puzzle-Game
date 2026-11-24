@@ -68,4 +68,5 @@
 * helpfulNeighbor event does not help you harvest if it puts u over the limit
 * crops have a different conversion rate to fertilizers
 * fertilizers can only be used once per plot, and dont count towards total store. might add a limit later.
+* added shop
 * 

@@ -89,6 +89,7 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
         timeLimit: 600,
         small: false,
         rush: false,
+        tip: 0,
         ...overrides
     }
 }
@@ -142,8 +143,7 @@ describe("createGame", () => {
             rush: seedStream(1, 7),
             shop: seedStream(1, 8)
         })
-        expect(g.shop).toBeNull()
-        expect(g.shopVisits).toBe(0)
+        expect(g.shop).toEqual({ open: false, stock: null, freeRestocks: 0, restockProgress: 0 })
         expect(g.secondWind).toBe(false)
         expect(g.allowEvents).toBe(false)
         expect(g.event).toBeNull()
@@ -488,16 +488,6 @@ function stepN(state: GameState, n: number): GameState {
     return state
 }
 
-// Steps n times, walking straight out of any shop that opens on the way (a pausing shop stops
-// the clock until it is closed).
-function stepPastShops(state: GameState, n: number): GameState {
-    for (let i = 0; i < n; i++) {
-        if (state.shop !== null) state = apply(state, { type: "closeShop" })
-        state = step(state, crops)
-    }
-    return state
-}
-
 describe("step: tick and rules", () => {
     it("increases tick by 1", () => {
         const state = makeState({ tick: 41 })
@@ -643,7 +633,7 @@ describe("step: orders", () => {
 
 describe("step: end of run", () => {
     it("ends a Timed run on tick MODES.timed.runTicks", () => {
-        let state = stepPastShops(createGame(2, timed), MODES.timed.runTicks - 1)
+        let state = stepN(createGame(2, timed), MODES.timed.runTicks - 1)
         expect(state.status).toBe("running")
 
         const before = state
@@ -656,7 +646,7 @@ describe("step: end of run", () => {
     })
 
     it("changes nothing after a Timed run ends, and refuses actions", () => {
-        const ended = stepPastShops(createGame(2, timed), MODES.timed.runTicks)
+        const ended = stepN(createGame(2, timed), MODES.timed.runTicks)
         expect(ended.status).toBe("ended")
         expect(step(ended, crops)).toBe(ended)
         expect(applyAction(ended, { type: "plant", plot: 0, cropId: "garlic" }, crops)).toBeNull()

@@ -255,10 +255,20 @@
             "min": 50,
             "max": 100
         },
-        "freeRestocks": {
+        "freeRestockBonus": {
             "base": 0,
             "min": 0,
             "max": 1
+        },
+        "restockOrdersCut": {
+            "base": 0,
+            "min": 0,
+            "max": 4
+        },
+        "restockBankBonus": {
+            "base": 0,
+            "min": 0,
+            "max": 2
         },
         "tierLuck": {
             "base": 0,
@@ -515,7 +525,7 @@
             "id": "bigSpender",
             "name": "Big spender",
             "text": "Generous customers pay {0}% more",
-            "pools": ["survival"],
+            "pools": ["survival", "timed"],
             "maxCopies": 3,
             "sellable": true,
             "needs": ["events"],
@@ -1024,7 +1034,7 @@
         {
             "id": "interest",
             "name": "Interest",
-            "text": "Coins grow {0}% each shop visit",
+            "text": "Coins grow {0}% every 30 s of play (up to 15)",
             "pools": ["shop"],
             "maxCopies": 3,
             "sellable": true,
@@ -1052,14 +1062,43 @@
         {
             "id": "freeRestock",
             "name": "Free restock",
-            "text": "One free restock per shop visit",
+            "text": "Free restocks come two at a time",
             "pools": ["shop"],
             "tier": "rare",
             "maxCopies": 1,
             "sellable": true,
             "effects": [
                 {
-                    "stat": "freeRestocks",
+                    "stat": "freeRestockBonus",
+                    "amount": 1
+                }
+            ]
+        },
+        {
+            "id": "fastRestock",
+            "name": "Fast restock",
+            "text": "Free restocks need {0} fewer orders",
+            "pools": ["shop"],
+            "maxCopies": 2,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "restockOrdersCut",
+                    "perTier": [1, 1, 2, 2, 3]
+                }
+            ]
+        },
+        {
+            "id": "rainCheck",
+            "name": "Rain check",
+            "text": "Bank {0} more free restock",
+            "pools": ["shop"],
+            "tier": "rare",
+            "maxCopies": 2,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "restockBankBonus",
                     "amount": 1
                 }
             ]

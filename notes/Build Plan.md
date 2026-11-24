@@ -344,6 +344,30 @@ Add the second upgrade system, where players spend coins on the exact upgrades, 
 
 **Gate:** the shop opens on schedule in both modes, buying and selling change coins and upgrades correctly, and the run replays exactly.
 
+## Day 8b — Shop rework and screen layout
+
+The design changed after Day 8 (see the Design Doc's Shop and Screen layout): the shop can be opened at any time and stops the clock, its stock only changes on a restock, free restocks are earned by filling orders, and the barn moves into it. Planting moves to a crop bar. See [shop.md](../specs/shop.md) and [ui.md](../specs/ui.md).
+
+### Shop rules (about 3 hours)
+
+- [ ] `openShop` / `closeShop` as logged actions; the open shop stops `step`, and only shop and storage actions work
+- [ ] Remove the opening schedule and the running shop; first stock drawn on first open
+- [ ] Free restocks: one per 7 filled orders (per mode in config), bank of 2, nothing counted while full; paid restock at a fixed price
+- [ ] Price rise by filled orders instead of visits; Interest every 30 s of play, up to 15 coins
+- [ ] Free restock (two per cycle), Fast restock (fewer orders) and Rain check (bigger bank)
+- [ ] Maxed cards stay in stock and can't be bought
+- [ ] Test: a run that opens the shop, restocks free and paid, and sells crops replays exactly
+
+### Screens (about 4 hours)
+
+- [ ] Shop page as a scene launched over the Game scene, with Shop, Storage and Your upgrades sections and section buttons
+- [ ] Storage section takes the barn's selling and fertilizer-making, with −/+ buttons instead of the HTML box
+- [ ] Drawer at the bottom of the play screen: storage bar and Fertilize, never pauses
+- [ ] Crop bar always visible: select a crop, click plots to plant; remove the plant picker
+- [ ] Shop button with the free restocks banked
+
+**Gate:** the shop opens and closes at any time in both modes with the clock stopped, free restocks arrive every 7 orders, several plots can be planted with one crop selection, and the run replays exactly.
+
 ## Day 9 — Power-ups
 
 Grow Day 4's two power-ups into the design's full set of 14, split into lasting and instant.
@@ -368,7 +392,7 @@ Grow Day 4's two power-ups into the design's full set of 14, split into lasting 
 - [ ] Crop timing: Growth boost, Ready one (replaces Day 4's finish-one-plot), Ready all
 - [ ] Orders: Finish one, and Finish all (rare, or with no combo or points bonus; set in config while the design decides)
 - [ ] Coins: Gold rush, Coin bag
-- [ ] Merchant call: opens the shop
+- [ ] Merchant call: grants one free shop restock, up to the bank cap
 - [ ] Giant order: clears current orders into one large order; failing it adds the mode penalty (more orders in Survival, a gap with no orders in Timed)
 - [ ] Clean slate: clears the field so the player can replant
 

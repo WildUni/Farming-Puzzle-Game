@@ -16,8 +16,16 @@ import { UPGRADES, validTargets } from "./upgrades"
 import { powerUpTargets } from "./powerups"
 import { EVENTS } from "./events"
 import { MODES } from "./modes"
-import { SHOP, buyTargets, canBuy, canBuyAny, canRestock, canSell, needsTarget } from "./shop"
-import { TICKS_PER_SECOND } from "./game_constants"
+import {
+    SHOP,
+    buyTargets,
+    canBuy,
+    canBuyAny,
+    canOpenShop,
+    canRestock,
+    canSell,
+    needsTarget
+} from "./shop"
 import type { Action, Crop, CropTable, GameConfig, GameState, LogEntry } from "./types"
 
 const cropList: Crop[] = [
@@ -26,17 +34,6 @@ const cropList: Crop[] = [
     { id: "pumpkin", growTicks: 250, yield: 5, value: 12, fertilizerCost: 1 }
 ]
 const crops: CropTable = buildCropTable(cropList)
-
-// closeShop entries for every scheduled Timed shop visit, so a log with no other moves can
-// still reach the end of a Timed run.
-const timedOpen = SHOP.modes.timed.open
-const TIMED_SHOP_CLOSES: LogEntry[] =
-    timedOpen.kind === "seconds"
-        ? timedOpen.at.map((sec) => ({
-              tick: sec * TICKS_PER_SECOND,
-              action: { type: "closeShop" }
-          }))
-        : []
 
 const survival: GameConfig = { mode: "survival", allowPowerUps: false, allowEvents: false }
 const timed: GameConfig = { mode: "timed", allowPowerUps: false, allowEvents: false }
@@ -61,7 +58,7 @@ function botMoves(state: GameState): Action[] {
         moves.push(pickCard(state))
     }
     // Walks straight out of the shop.
-    if (state.shop !== null) moves.push({ type: "closeShop" })
+    if (state.shop.open) moves.push({ type: "closeShop" })
     state.plots.forEach((p, plot) => {
         if (p.state === "ready") moves.push({ type: "harvest", plot })
     })
@@ -199,7 +196,6 @@ describe("replay: the in-run economy", () => {
             expect(storageUsed(state)).toBeLessThanOrEqual(storageCap(state))
             if (storageFree(state) === 0) wasFull = true
             else if (wasFull && storageUsed(state) < storageCap(state) / 2) emptiedAfterFull = true
-            if (state.shop !== null) state = applyAction(state, { type: "closeShop" }, crops)!
             if (state.upgradeOffer === null) state = step(state, crops)
         }
         expect(wasFull).toBe(true)
@@ -358,31 +354,21 @@ describe("replay: rejects bad logs", () => {
 
     it("rejects an action on or after the tick a Timed run ends", () => {
         const plant: Action = { type: "plant", plot: 0, cropId: "garlic" }
-        const last: LogEntry[] = [
-            ...TIMED_SHOP_CLOSES,
-            { tick: MODES.timed.runTicks - 1, action: plant }
-        ]
+        const last: LogEntry[] = [{ tick: MODES.timed.runTicks - 1, action: plant }]
         expect(replay(1, timed, last, MODES.timed.runTicks, crops).ok).toBe(true)
 
-        const n = TIMED_SHOP_CLOSES.length
-        const onEnd: LogEntry[] = [
-            ...TIMED_SHOP_CLOSES,
-            { tick: MODES.timed.runTicks, action: plant }
-        ]
+        const onEnd: LogEntry[] = [{ tick: MODES.timed.runTicks, action: plant }]
         expect(replay(1, timed, onEnd, MODES.timed.runTicks, crops)).toEqual({
             ok: false,
             error: "after-end",
-            entry: n
+            entry: 0
         })
 
-        const afterEnd: LogEntry[] = [
-            ...TIMED_SHOP_CLOSES,
-            { tick: MODES.timed.runTicks + 5, action: plant }
-        ]
+        const afterEnd: LogEntry[] = [{ tick: MODES.timed.runTicks + 5, action: plant }]
         expect(replay(1, timed, afterEnd, MODES.timed.runTicks + 10, crops)).toEqual({
             ok: false,
             error: "after-end",
-            entry: n
+            entry: 0
         })
     })
 
@@ -417,7 +403,7 @@ describe("replay: rejects bad logs", () => {
     })
 
     it("rejects a finalTick after a Timed run ended", () => {
-        expect(replay(1, timed, TIMED_SHOP_CLOSES, MODES.timed.runTicks + 1, crops)).toEqual({
+        expect(replay(1, timed, [], MODES.timed.runTicks + 1, crops)).toEqual({
             ok: false,
             error: "bad-final-tick",
             entry: null
@@ -487,21 +473,30 @@ describe("replay: Miracle grow", () => {
     })
 })
 
-// Shops: buys the first item it can afford (with its first target), sells a copy now and then,
-// restocks once per visit when rich, then walks out. Otherwise plays like botMoves.
+// Shops: opens the shop every SHOP_EVERY ticks, buys what it can afford (with its first
+// target), sells a copy while it owns more than two, restocks with a free restock or when
+// rich, then walks out. Otherwise plays like botMoves.
+const SHOP_EVERY = 250
+
 function shopper(state: GameState): Action[] {
     const shop = state.shop
-    if (shop === null || state.upgradeOffer !== null) return botMoves(state)
-    for (let slot = 0; slot < shop.stock.length; slot++) {
+    if (state.upgradeOffer !== null) return botMoves(state)
+    if (!shop.open) {
+        if (state.tick % SHOP_EVERY === 0 && canOpenShop(state)) return [{ type: "openShop" }]
+        return botMoves(state)
+    }
+    for (let slot = 0; slot < shop.stock!.length; slot++) {
         if (!canBuyAny(state, slot, crops)) continue
         if (!needsTarget(state, slot)) return [{ type: "buyItem", slot }]
         const target = buyTargets(state, slot, crops).find((t) => canBuy(state, slot, t, crops))
         return [{ type: "buyItem", slot, target: target! }]
     }
     const sellable = state.upgrades.findIndex((_, i) => canSell(state, i))
-    if (sellable >= 0 && state.shopVisits % 2 === 0)
+    if (sellable >= 0 && state.upgrades.length > 2) {
         return [{ type: "sellUpgrade", index: sellable }]
-    if (shop.restocks === 0 && canRestock(state)) return [{ type: "restockShop" }]
+    }
+    const rich = state.coins >= 4 * SHOP.restock.price
+    if ((shop.freeRestocks > 0 || rich) && canRestock(state)) return [{ type: "restockShop" }]
     return [{ type: "closeShop" }]
 }
 
@@ -510,7 +505,7 @@ describe("replay: the shop", () => {
         const powered = { ...survival, allowPowerUps: true }
         const { state, log } = play(seed, powered, 8000, shopper)
         const types = new Set(log.map((e) => e.action.type))
-        for (const t of ["buyItem", "sellUpgrade", "restockShop", "closeShop"]) {
+        for (const t of ["openShop", "buyItem", "closeShop"]) {
             expect(types).toContain(t)
         }
         expect(replayState(seed, powered, log, state.tick, crops)).toEqual(state)
@@ -519,25 +514,52 @@ describe("replay: the shop", () => {
     it.each([1, 2, 3, 42])("replays a Timed run that shops equal (seed %i)", (seed) => {
         const { state, log } = play(seed, timed, MODES.timed.runTicks, shopper)
         expect(state.status).toBe("ended")
-        expect(state.shopVisits).toBe(TIMED_SHOP_CLOSES.length)
-        expect(log.some((e) => e.action.type === "buyItem")).toBe(true)
+        const types = new Set(log.map((e) => e.action.type))
+        for (const t of ["openShop", "buyItem", "restockShop", "closeShop"]) {
+            expect(types).toContain(t)
+        }
         expect(replayState(seed, timed, log, state.tick, crops)).toEqual(state)
     })
 
-    it("fails with shop-pending when time has to pass with a pausing shop open", () => {
-        const [close] = TIMED_SHOP_CLOSES
-        const late: LogEntry = { tick: close.tick + 1, action: { type: "closeShop" } }
-        expect(replay(1, timed, [late], close.tick + 1, crops)).toEqual({
+    it("sells upgrades and restocks free and paid in the scripted runs", () => {
+        let free = 0
+        let paid = 0
+        let sold = 0
+        for (const seed of [1, 2, 3, 42]) {
+            const powered = { ...survival, allowPowerUps: true }
+            const { log } = play(seed, powered, 8000, shopper)
+            let s = createGame(seed, powered)
+            for (const entry of log) {
+                while (s.tick < entry.tick) s = step(s, crops)
+                if (entry.action.type === "restockShop") {
+                    if (s.shop.freeRestocks > 0) free++
+                    else paid++
+                }
+                if (entry.action.type === "sellUpgrade") sold++
+                s = applyAction(s, entry.action, crops)!
+            }
+        }
+        expect(free).toBeGreaterThan(0)
+        expect(paid).toBeGreaterThan(0)
+        expect(sold).toBeGreaterThan(0)
+    })
+
+    it("fails with shop-pending when time has to pass with the shop open", () => {
+        const open: LogEntry = { tick: 100, action: { type: "openShop" } }
+        const close: LogEntry = { tick: 100, action: { type: "closeShop" } }
+        const late: LogEntry = { tick: 101, action: { type: "closeShop" } }
+        expect(replay(1, timed, [open, late], 101, crops)).toEqual({
             ok: false,
             error: "shop-pending",
-            entry: 0
+            entry: 1
         })
-        expect(replay(1, timed, [], close.tick + 1, crops)).toEqual({
+        expect(replay(1, timed, [open], 101, crops)).toEqual({
             ok: false,
             error: "shop-pending",
             entry: null
         })
-        expect(replay(1, timed, [close], close.tick + 1, crops).ok).toBe(true)
+        expect(replay(1, timed, [open, close], 101, crops).ok).toBe(true)
+        expect(replay(1, timed, [open], 100, crops).ok).toBe(true)
     })
 })
 

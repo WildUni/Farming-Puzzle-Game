@@ -82,7 +82,9 @@ function rawConfig(): Record<string, unknown> {
             autoHarvest: { base: 0, min: 0, max: 1 },
             interestPct: { base: 0, min: 0, max: 25 },
             shopPricePct: { base: 100, min: 50, max: 100 },
-            freeRestocks: { base: 0, min: 0, max: 1 },
+            freeRestockBonus: { base: 0, min: 0, max: 1 },
+            restockOrdersCut: { base: 0, min: 0, max: 4 },
+            restockBankBonus: { base: 0, min: 0, max: 2 },
             tierLuck: { base: 0, min: 0, max: 60 }
         },
         tiers: {
@@ -423,7 +425,9 @@ describe("modifiersFor", () => {
             autoHarvest: 0,
             interestPct: 0,
             shopPricePct: 100,
-            freeRestocks: 0,
+            freeRestockBonus: 0,
+            restockOrdersCut: 0,
+            restockBankBonus: 0,
             tierLuck: 0
         })
     })

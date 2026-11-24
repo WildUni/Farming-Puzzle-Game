@@ -1,6 +1,6 @@
 # debug.ts
 
-Cheats for testing a run by hand: start any event, add any upgrade, give any power-up. The debug menu (see [ui.md](ui.md#debug-menu)) calls these; nothing else does.
+Cheats for testing a run by hand: start any event, add any upgrade, give any power-up, bank a free restock. The debug menu (see [ui.md](ui.md#debug-menu)) calls these; nothing else does.
 
 These are **not actions**. They don't go through `applyAction` and are never logged, so a run that uses one can't be replayed. The Game scene remembers that the run was changed (see [ui.md](ui.md#debug-menu)); the sim doesn't store it.
 
@@ -28,9 +28,11 @@ Adds one copy of upgrade `id` at `tier`, as if it had been picked.
 - Adds plots for `extraPlots` the same way `chooseUpgrade` does. `main.ts` exports that part as `withUpgrade(state, copy)` so the two can't differ.
 - Doesn't touch an open upgrade offer.
 
-### `debugOpenShop(state, crops): GameState | null`
+`debugUpgrade` returns `null` for an instant upgrade (Promotion), since there is no copy to add.
 
-Opens a shop visit now with `openShop`, as if one were due (it counts as a visit). `null` once the run has ended, in Puzzle, or while a shop or an upgrade offer is open. The debug menu's **Shop** section has an **Open shop** button for it. `debugUpgrade` returns `null` for an instant upgrade (Promotion), since there is no copy to add.
+### `debugFreeRestock(state): GameState | null`
+
+Banks one free shop restock (`shop.freeRestocks + 1`), as filling orders would. `null` once the run has ended, in Puzzle, or with the bank full (`restockBankCap`). The debug menu's **Shop** section has a **Free restock** button for it. (Day 8's `debugOpenShop` is gone: `openShop` is a normal action now, see [shop.md](shop.md).)
 
 ### `debugPowerUp(state, id): GameState | null`
 
@@ -51,7 +53,7 @@ Gives power-up `id`, appended to `powerUps`.
 - Announces each shipped event with the same `RunEvent` that `buildEvent` gives, replacing an event already announced.
 - `skipWarning` makes the event start on the next `step`: Frost's effect is active after one step.
 - Moles needs a plot with a crop; refuses a missing, empty or out-of-range plot, and a plot on an untargeted event.
-- Refuses: events off, unknown id, Generous customer in Timed, an ended run.
+- Refuses: events off, unknown id, an event not in the run's mode (none of the shipped events, so Generous customer works in Timed), an ended run.
 - Leaves every RNG stream and `nextEventAt` as they were.
 
 **`debugUpgrade`**
@@ -64,6 +66,10 @@ Gives power-up `id`, appended to `powerUps`.
 **`debugPowerUp`**
 
 - Appends the power-up; refuses with full slots, power-ups off, an unknown id and an ended run.
+
+**`debugFreeRestock`**
+
+- Banks one free restock without opening the shop, up to the cap; refuses with the bank full, after the end and in Puzzle.
 
 ## Open items
 

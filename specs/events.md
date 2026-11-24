@@ -60,7 +60,7 @@ Each event:
 | `effect`       | yes          | One `Effect` from [effects.md](effects.md). Not one of the power-up-only kinds (see `validateEvents`)         |
 | `target`       | no           | `"plot"` when the event hits one plot. Required exactly when the effect is `stealCrop`                        |
 | `durationStat` | no           | A `…Pct` modifier that scales `seconds`. Lasting events only                                                  |
-| `amountStat`   | no           | A `…Pct` modifier that scales the effect's amount (`ticks` of `cutGrowth`, `coins` of `deliverBonus`)         |
+| `amountStat`   | no           | A `…Pct` modifier that scales the effect's amount (`ticks` of `cutGrowth`, `coins` of `tipOrder`)             |
 | `blockStat`    | no           | A `…Chance` modifier: the % chance the event does nothing when it starts (see [Starting](#starting-an-event)) |
 | `banStat`      | no           | A `…Ban` modifier: while it is above 0 the event is never announced (Pest control)                            |
 
@@ -74,7 +74,7 @@ All numbers are placeholders until playtesting.
 | ------------------ | ----------------- | ---- | --------------- | ------ | ---- | ---------------------- | ----- | ------ | -------------------------------- |
 | `rainShower`       | Rain shower       | good | survival, timed | 30     | 3 s  | `cutGrowth` 50 ticks   | –     | –      | `amountStat: rainCutPct`         |
 | `sunnySpell`       | Sunny spell       | good | survival, timed | 20     | 3 s  | `growthRate` 150%      | 15 s  | –      | `durationStat: sunnyDurationPct` |
-| `generousCustomer` | Generous customer | good | survival        | 15     | 5 s  | `deliverBonus` 3 coins | 20 s  | –      | `amountStat: deliverBonusPct`    |
+| `generousCustomer` | Generous customer | good | survival, timed | 15     | 5 s  | `tipOrder` 10 coins    | –     | –      | `amountStat: deliverBonusPct`    |
 | `frost`            | Frost             | bad  | survival, timed | 30     | 5 s  | `growthRate` 0%        | 8 s   | –      | `durationStat: frostDurationPct` |
 | `crows`            | Crows             | bad  | survival, timed | 30     | 5 s  | `blockHarvest` 2 plots | 6 s   | –      | `durationStat: crowDurationPct`  |
 | `moles`            | Moles             | bad  | survival, timed | 25     | 5 s  | `stealCrop`            | –     | plot   | `blockStat: moleBlockChance`     |
@@ -88,7 +88,7 @@ All numbers are placeholders until playtesting.
 
 Crows also have `banStat: crowBan` (Pest control). They land on up to 2 plots that hold a crop when they start, and stop each one being harvested until the player taps it to scare them off (`scareCrows`) or they leave on `endsAt`. They can't be scared during the warning, which is the player's chance to harvest first.
 
-Generous customer is Survival only because Timed earns no coins.
+Generous customer was Survival only when it shipped, because Timed earned no coins then; now that Timed orders pay coins it is in both modes. Since the Day 8b design change it tips **one random open order** (`tipOrder`) instead of adding coins to every delivery for 20 s; the 10 coins are a placeholder, raised from 3 because one order now gets the whole bonus.
 
 | Constant (in `events.json`) | Value |
 | --------------------------- | ----- |
@@ -228,16 +228,17 @@ An instant event starts and ends on the same tick.
 1. **Block roll.** If the event has a `blockStat` whose value is above 0, draw `roll = randomInt(rng.events, 0, 99)` and store the stream. If `roll < value`, the event does nothing more. With no `blockStat` or a value of 0, nothing is drawn.
 2. **Fire the effect**, with `amount` in place of the definition's amount:
 
-| Effect         | What happens                                                                                                                                                                                                                                                                           |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cutGrowth`    | `plots = cutGrowth(plots, amount, tick)`                                                                                                                                                                                                                                               |
-| `stealCrop`    | If `plots[event.plot]` is `growing` or `ready`, it becomes `empty`. If the player emptied it during the warning, nothing happens and the block roll is skipped                                                                                                                         |
-| `harvestAll`   | Every `ready` plot is harvested into `inventory` (`yield + yieldBonus` from `modifiersAt`; no bumper roll and no drop, so no draws) and becomes `empty`. With `neighborReplant` above 0 it is replanted with the same crop on this tick (growth from `plantGrowthPct`)                 |
-| `seedPlots`    | Up to `amount` of the `empty`, unshielded plots get a crop planted on this tick (growth from `plantGrowthPct`). For each: `pick` a plot from those still free, then `pick` a crop id from the sorted crop table, both from `rng.events`. With no free plot nothing is drawn            |
-| `addOrder`     | `createOrder(nextOrderId, tick, rng.events, crops, rules)` with `orderTicks = scalePct(rules.orderTicks, amount)`, appended to `orders` even past `maxOpenOrders`; `nextOrderId` goes up by 1. Two draws                                                                               |
-| `blockHarvest` | Crows land: from the `growing` or `ready` plots not in `exclude`, `pick` up to `amount` plots one at a time from those still free, all from `rng.events`, then `startEffect(…, exclude, only)` with the chosen plots ascending. With no such plot nothing happens and nothing is drawn |
-| `rotStorage`   | Each stored crop loses `floor(amount_held × amount / 100)`; crops that reach 0 are removed (`rotStorage(inventory, pct)`)                                                                                                                                                              |
-| other lasting  | `activeEffects = startEffect(activeEffects, id, effect, tick, endsAt − startsAt, exclude)`; `deliverBonus` and `harvestBonus` use `amount` as their coins or crops                                                                                                                     |
+| Effect         | What happens                                                                                                                                                                                                                                                                                                   |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cutGrowth`    | `plots = cutGrowth(plots, amount, tick)`                                                                                                                                                                                                                                                                       |
+| `stealCrop`    | If `plots[event.plot]` is `growing` or `ready`, it becomes `empty`. If the player emptied it during the warning, nothing happens and the block roll is skipped                                                                                                                                                 |
+| `harvestAll`   | Every `ready` plot is harvested into `inventory` (`yield + yieldBonus` from `modifiersAt`; no bumper roll and no drop, so no draws) and becomes `empty`. With `neighborReplant` above 0 it is replanted with the same crop on this tick (growth from `plantGrowthPct`)                                         |
+| `seedPlots`    | Up to `amount` of the `empty`, unshielded plots get a crop planted on this tick (growth from `plantGrowthPct`). For each: `pick` a plot from those still free, then `pick` a crop id from the sorted crop table, both from `rng.events`. With no free plot nothing is drawn                                    |
+| `addOrder`     | `createOrder(nextOrderId, tick, rng.events, crops, rules)` with `orderTicks = scalePct(rules.orderTicks, amount)`, appended to `orders` even past `maxOpenOrders`; `nextOrderId` goes up by 1. Two draws                                                                                                       |
+| `blockHarvest` | Crows land: from the `growing` or `ready` plots not in `exclude`, `pick` up to `amount` plots one at a time from those still free, all from `rng.events`, then `startEffect(…, exclude, only)` with the chosen plots ascending. With no such plot nothing happens and nothing is drawn                         |
+| `rotStorage`   | Each stored crop loses `floor(amount_held × amount / 100)`; crops that reach 0 are removed (`rotStorage(inventory, pct)`)                                                                                                                                                                                      |
+| `tipOrder`     | From the open orders not failing on this tick, in board order, `pick` one with `randomInt(rng.events, 0, n − 1)` and add `amount` to its `tip` (`tipOrder(state, coins)`). Filling it pays the tip on top of the usual coins (see [main.md](main.md)). With no open order nothing happens and nothing is drawn |
+| other lasting  | `activeEffects = startEffect(activeEffects, id, effect, tick, endsAt − startsAt, exclude)`; `deliverBonus` and `harvestBonus` use `amount` as their coins or crops                                                                                                                                             |
 
 For a lasting **bad** event, `exclude` is `shieldedPlots(state)` at the start; for a good one, `[]`. A plot shielded later is not added to a running effect.
 
@@ -251,7 +252,7 @@ After new orders, and only if the run didn't end on this step: if `allowEvents`,
 
 - **`harvest`** returns `null` while `harvestBlocked(activeEffects, plot, tick)` (see [effects.md](effects.md)).
 - **`scareCrows`** clears the crows from one plot (see [main.md](main.md)).
-- **`deliver`** in Survival adds `deliverBonusAt(activeEffects, tick)` to the coins paid.
+- **`deliver`** adds `deliverBonusAt(activeEffects, tick)` (Gold rush) and the order's `tip` (Generous customer) to the coins paid.
 
 ## Upgrades this unlocks (in [upgrades.md](upgrades.md))
 
@@ -264,7 +265,7 @@ All have `"needs": ["events"]`. `GameSystem` becomes `"powerUps" | "events"`.
 | `calmSkies`    | Calm skies    | survival, timed | tiered | 5         | `eventGapPct` +5, +8, +12, +18, +25         | –                     | yes      |
 | `rainmaker`    | Rainmaker     | survival, timed | tiered | 3         | `rainCutPct` +20, +30, +50, +75, +100       | –                     | yes      |
 | `longSummer`   | Long summer   | survival, timed | tiered | 3         | `sunnyDurationPct` +15, +25, +40, +60, +100 | –                     | yes      |
-| `bigSpender`   | Big spender   | survival        | tiered | 3         | `deliverBonusPct` +20, +35, +50, +75, +100  | –                     | yes      |
+| `bigSpender`   | Big spender   | survival, timed | tiered | 3         | `deliverBonusPct` +20, +35, +50, +75, +100  | –                     | yes      |
 | `frostCover`   | Frost cover   | survival, timed | tiered | 3         | `frostDurationPct` −10, −15, −25, −35, −50  | –                     | yes      |
 | `crowDecoy`    | Crow decoy    | survival, timed | tiered | 3         | `crowDurationPct` −10, −15, −25, −35, −50   | –                     | yes      |
 | `moleTraps`    | Mole traps    | survival, timed | tiered | 3         | `moleBlockChance` +10, +15, +20, +30, +40   | –                     | yes      |
@@ -312,7 +313,7 @@ New stats:
 **`shieldedPlots` / `eventTargets` / `eligibleEvents`**
 
 - A Greenhouse plot is shielded; Moles targets only plots with a crop, and never a shielded one.
-- Generous customer is eligible in Survival only; Moles is not eligible with every plot empty.
+- Generous customer is eligible in both modes; Moles is not eligible with every plot empty.
 
 **`announceEvent`**
 
@@ -329,7 +330,7 @@ New stats:
 - Nothing is announced, started or ended while an upgrade offer is open; the warning resumes where it stopped.
 - **Rain shower** brings every growing crop `amount` ticks closer on its start tick, and crops brought to that tick are ready on it.
 - **Sunny spell** and **Frost** move crops by the rate rule for exactly their length; Frost skips a shielded plot.
-- **Generous customer** adds its bonus to deliveries from `startsAt` to `endsAt − 1`, and not after.
+- **Generous customer** has no length; on its start tick it tips one open order (one draw from `rng.events`), and filling that order pays the tip while the others pay as usual. With no open order it does nothing and draws nothing.
 - **Crows** land on up to 2 plots holding a crop (never a shielded or empty one), drawing one `pick` per plot from `rng.events`; with no crop on the field they do nothing and draw nothing. They refuse `harvest` on those plots from `startsAt` to `endsAt − 1`, never on the others, and allow it on `endsAt`.
 - **Scaring Crows:** `scareCrows` on a crow plot lets it be harvested on the same tick while the other crow plot stays blocked; scaring the last one removes the effect; it is refused on a plot without crows and during the warning. A run that scares crows replays equal.
 - **Moles** empties its plot on `startsAt`; does nothing (and draws nothing) if the plot was harvested during the warning; does nothing when the Mole traps roll hits.
@@ -337,7 +338,7 @@ New stats:
 
 **Second batch (also in `events.test.ts`)**
 
-- `validateEvents` accepts each new kind and `banStat`, and throws for a zero or out-of-range amount, a power-up-only kind, Fog without seconds, an `amountStat` on Fog, and a `banStat` that isn't a `…Ban` stat.
+- `validateEvents` accepts each new kind (`tipOrder` included) and `banStat`, and throws for a zero or out-of-range amount (`tipOrder` of 0 coins), `seconds` on `tipOrder`, a power-up-only kind, Fog without seconds, an `amountStat` on Fog, and a `banStat` that isn't a `…Ban` stat.
 - Pest control removes Crows from `eligibleEvents`. A forced kind uses one draw and only that kind; with nothing of that kind eligible it gives `null` and draws nothing.
 - **Slow day** holds open orders' timers by half its length.
 - **Worms** add 1 crop to harvests while they work (3 with a legendary Worm farm) and none after.
@@ -362,3 +363,6 @@ New stats:
 - [x] Pest control, as a `banStat` (`crowBan`) on Crows instead of an `"event"` upgrade target. Banning Frost or Moles too would be one more stat each.
 - [ ] Should a good event be allowed to overlap a bad one, or run back to back with no gap?
 - [x] Good omen power-up: announce a random good event now (`announceEvent` takes a forced kind).
+- [x] Generous customer tips one random open order (`tipOrder`, the order's `tip` field) instead of a 20 s bonus on every delivery (Day 8b design change).
+- [x] Generous customer and Big spender are in both modes, now that Timed orders pay coins.
+- [ ] Generous customer's tip is 10 coins for now. Tune it, and decide whether the tipped order should be picked at announcement (so the warning names it) instead of at the start.

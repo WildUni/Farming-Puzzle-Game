@@ -1,4 +1,4 @@
-// Cheats for the debug menu: start any event, add any upgrade, give any power-up, open the shop.
+// Cheats for the debug menu: start any event, add any upgrade, give any power-up, bank a free restock.
 // Not actions: never logged, so a run that uses them can't be replayed. See specs/debug.md.
 import type { CropTable, GameState, Tier, UpgradeTarget } from "./types"
 import { EVENTS, buildEvent, eventTargets } from "./events"
@@ -6,7 +6,7 @@ import { UPGRADES, modifiersFor, validTargets } from "./upgrades"
 import { POWER_UPS } from "./powerups"
 import { withUpgrade } from "./main"
 import { TIERS } from "./game_constants"
-import { openShop } from "./shop"
+import { isBankFull } from "./shop"
 
 type DebugEventOptions = { plot: number | null; skipWarning: boolean }
 
@@ -74,13 +74,12 @@ function debugPowerUp(state: GameState, id: string): GameState | null {
     return { ...state, powerUps: [...state.powerUps, id] }
 }
 
-// Opens a shop visit now, as if it were due. null once the run ended, in Puzzle, while a shop or
-// an upgrade offer is already open.
-function debugOpenShop(state: GameState, crops: CropTable): GameState | null {
-    if (state.status === "ended" || state.mode === "puzzle") return null
-    if (state.shop !== null || state.upgradeOffer !== null) return null
-    return openShop(state, crops)
+// Banks one free shop restock, up to the bank cap. null once the run ended, in Puzzle, or with
+// the bank full.
+function debugFreeRestock(state: GameState): GameState | null {
+    if (state.status === "ended" || state.mode === "puzzle" || isBankFull(state)) return null
+    return { ...state, shop: { ...state.shop, freeRestocks: state.shop.freeRestocks + 1 } }
 }
 
-export { debugEvent, debugUpgrade, debugPowerUp, debugOpenShop, upgradeTiers }
+export { debugEvent, debugUpgrade, debugPowerUp, debugFreeRestock, upgradeTiers }
 export type { DebugEventOptions }

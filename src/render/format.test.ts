@@ -51,7 +51,8 @@ import {
     restockText,
     promotionTargetText,
     shopTitleText,
-    shopTimerText
+    freeRestockText,
+    shopButtonText
 } from "./format"
 import { sellValue, storageUsed, rerollPrice } from "../sim/economy"
 import { ECONOMY } from "../sim/economy_config"
@@ -119,7 +120,8 @@ describe("orderText", () => {
             expiresAt: 600,
             timeLimit: 600,
             small: false,
-            rush: false
+            rush: false,
+            tip: 0
         }
         const state = { ...game("timed"), tick: 100, inventory: { garlic: 2 } }
         expect(orderText(order, state)).toBe("Order #3\ngarlic x4  (have 2)\nvalue 8   0:50")
@@ -377,7 +379,8 @@ describe("orderTimeFraction and isOrderUrgent", () => {
         expiresAt: ORDER_TICKS,
         timeLimit: ORDER_TICKS,
         small: false,
-        rush: false
+        rush: false,
+        tip: 0
     }
 
     it("runs from 1 when the order opens to 0 on its last tick", () => {
@@ -595,7 +598,8 @@ describe("second batch text: fog, worms, sneak peek, steady pace", () => {
             expiresAt: 600,
             timeLimit: 600,
             small: false,
-            rush: false
+            rush: false,
+            tip: 0
         }
         expect(orderText(order, fogged(12))).toBe("Order #2\ngarlic x3  (have 0)\nvalue 6   ?:??")
     })
@@ -608,10 +612,26 @@ describe("second batch text: fog, worms, sneak peek, steady pace", () => {
             expiresAt: 600,
             timeLimit: 600,
             small: true,
-            rush: false
+            rush: false,
+            tip: 0
         }
         expect(orderText(order, game("survival")).split("\n")[0]).toBe("Order #4  SMALL")
         expect(nextOrderText(order).split("\n")[0]).toBe("Next order  SMALL")
+    })
+
+    it("marks an order Generous customer tipped, after SMALL", () => {
+        const order: Order = {
+            id: 4,
+            required: { garlic: 2 },
+            value: 8,
+            expiresAt: 600,
+            timeLimit: 600,
+            small: true,
+            rush: false,
+            tip: 10
+        }
+        expect(orderText(order, game("survival")).split("\n")[0]).toBe("Order #4  SMALL TIP +10")
+        expect(orderText({ ...order, small: false, tip: 0 }, game("survival"))).not.toContain("TIP")
     })
 
     it("nextOrderText lists the next order's crops and value", () => {
@@ -622,7 +642,8 @@ describe("second batch text: fog, worms, sneak peek, steady pace", () => {
             expiresAt: 0,
             timeLimit: 1,
             small: false,
-            rush: false
+            rush: false,
+            tip: 0
         }
         expect(nextOrderText(order)).toBe("Next order\ncarrot x2\nvalue 16")
     })
@@ -661,7 +682,8 @@ describe("rush wave text", () => {
         expiresAt: 1000,
         timeLimit: 300,
         small: false,
-        rush: true
+        rush: true,
+        tip: 0
     })
 
     it("marks a rush order, before SMALL", () => {
@@ -790,16 +812,16 @@ describe("shop text", () => {
     const shopState = (overrides: Partial<GameState> = {}): GameState => ({
         ...createGame(1, { mode: "survival", allowPowerUps: true, allowEvents: false }),
         coins: 200,
-        shopVisits: 1,
         shop: {
+            open: true,
             stock: [
                 { kind: "upgrade", id: "bigTips", tier: "rare", sold: false },
                 { kind: "upgrade", id: "promotion", tier: "epic", sold: false },
                 { kind: "powerUp", id: "orderFreeze", sold: false },
                 { kind: "life", sold: true }
             ],
-            restocks: 0,
-            closesAt: null
+            freeRestocks: 0,
+            restockProgress: 0
         },
         ...overrides
     })
@@ -813,12 +835,15 @@ describe("shop text", () => {
         expect(shopItemText(shopState(), 3)).toBe("Life\nLives full")
     })
 
-    it("shopPriceText follows itemPrice, with Discount card, and says SOLD", () => {
+    it("shopPriceText follows itemPrice, with Discount card, and says SOLD and Maxed", () => {
         const s = shopState()
-        expect(shopPriceText(s, 0)).toBe(`Buy ${SHOP.tierPrice.rare}`)
+        expect(shopPriceText(s, 0, crops)).toBe(`Buy ${SHOP.tierPrice.rare}`)
         const discounted = shopState({ upgrades: [own("discountCard", "legendary")] })
-        expect(shopPriceText(discounted, 0)).toBe(`Buy ${(SHOP.tierPrice.rare * 80) / 100}`)
-        expect(shopPriceText(s, 3)).toBe("SOLD")
+        expect(shopPriceText(discounted, 0, crops)).toBe(`Buy ${(SHOP.tierPrice.rare * 80) / 100}`)
+        expect(shopPriceText(s, 3, crops)).toBe("SOLD")
+        const max = UPGRADES.upgrades.bigTips.maxCopies
+        const maxed = shopState({ upgrades: Array.from({ length: max }, () => own("bigTips")) })
+        expect(shopPriceText(maxed, 0, crops)).toBe("Maxed")
     })
 
     it("sellRefundText gives the refund or why a copy can't be sold", () => {
@@ -838,15 +863,17 @@ describe("shop text", () => {
         expect(ownedUpgradeText(own("richSoil", "rare", 1))).toBe("Rich soil (Rare) · Plot 2")
     })
 
-    it("restockText, promotionTargetText, shopTitleText and shopTimerText", () => {
-        expect(restockText(shopState())).toBe("Restock\n5 coins")
-        expect(restockText(shopState({ upgrades: [own("freeRestock", "rare")] }))).toBe(
-            "Restock\nfree"
-        )
+    it("restockText, freeRestockText, shopButtonText, promotionTargetText, shopTitleText", () => {
+        const bank = (freeRestocks: number, restockProgress = 0) =>
+            shopState({ shop: { ...shopState().shop, freeRestocks, restockProgress } })
+        expect(restockText(shopState())).toBe(`Restock\n${SHOP.restock.price} coins`)
+        expect(restockText(bank(2))).toBe("Restock\nfree (2 left)")
+        expect(freeRestockText(shopState())).toBe("Next free restock in 7 orders")
+        expect(freeRestockText(bank(0, 6))).toBe("Next free restock in 1 order")
+        expect(freeRestockText(bank(2))).toBe("Free restocks full")
+        expect(shopButtonText(shopState())).toBe("Shop")
+        expect(shopButtonText(bank(2))).toBe("Shop\n2 free")
         expect(promotionTargetText(own("fastGrowth", "rare"))).toBe("Fast growth\nRare → Epic")
         expect(shopTitleText(shopState())).toBe("Shop  ·  200 coins")
-        expect(shopTimerText(shopState())).toBe("")
-        const running = shopState({ tick: 100, shop: { stock: [], restocks: 0, closesAt: 111 } })
-        expect(shopTimerText(running)).toBe("Shop closes in 0:02")
     })
 })

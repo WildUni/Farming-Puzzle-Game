@@ -41,7 +41,7 @@
             "id": "coinBag",
             "name": "Coin bag",
             "text": "+10 coins",
-            "modes": ["survival"],
+            "modes": ["survival", "timed"],
             "weight": 20,
             "shopPrice": 1,
             "effect": {
@@ -87,7 +87,7 @@
             "id": "goldRush",
             "name": "Gold rush",
             "text": "Orders pay +5 coins for {seconds} s",
-            "modes": ["survival"],
+            "modes": ["survival", "timed"],
             "weight": 10,
             "seconds": 15,
             "shopPrice": 12,
@@ -117,6 +117,17 @@
             "shopPrice": 10,
             "effect": {
                 "kind": "goodEvent"
+            }
+        },
+        {
+            "id": "merchantCall",
+            "name": "Merchant call",
+            "text": "One free shop restock",
+            "modes": ["survival", "timed"],
+            "weight": 8,
+            "shopPrice": 10,
+            "effect": {
+                "kind": "grantRestock"
             }
         }
     ]

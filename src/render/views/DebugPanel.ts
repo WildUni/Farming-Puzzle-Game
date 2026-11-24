@@ -7,7 +7,7 @@ import { POWER_UPS } from "../../sim/powerups"
 import {
     debugEvent,
     debugPowerUp,
-    debugOpenShop,
+    debugFreeRestock,
     debugUpgrade,
     upgradeTiers
 } from "../../sim/debug"
@@ -142,11 +142,11 @@ export class DebugPanel {
         this.section("Power-ups", this.powerUpSelect, this.powerUpButton)
 
         // Shop
-        const shopButton = el("button", "Open shop", ROW_STYLE)
+        const shopButton = el("button", "Free restock", ROW_STYLE)
         shopButton.addEventListener("click", () => {
-            const label = "Opened the shop"
+            const label = "Banked a free restock"
             this.report(
-                this.apply((state) => debugOpenShop(state, this.crops), label),
+                this.apply((state) => debugFreeRestock(state), label),
                 label
             )
         })

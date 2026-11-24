@@ -76,7 +76,7 @@ function startsNext(state: GameState, id: string, extra: Partial<RunEvent> = {})
         amount:
             def.effect.kind === "cutGrowth"
                 ? def.effect.ticks
-                : def.effect.kind === "deliverBonus"
+                : def.effect.kind === "deliverBonus" || def.effect.kind === "tipOrder"
                   ? def.effect.coins
                   : def.effect.kind === "blockHarvest"
                     ? def.effect.plots
@@ -186,6 +186,7 @@ describe("validateEvents", () => {
         ["a weight of 0", (r) => (r.events[0].weight = 0)],
         ["warnSeconds 0", (r) => (r.events[0].warnSeconds = 0)],
         ["a power-up-only effect", (r) => (r.events[0].effect = { kind: "grantCoins", amount: 1 })],
+        ["the Merchant call effect", (r) => (r.events[0].effect = { kind: "grantRestock" })],
         ["finishGrowth", (r) => (r.events[0].effect = { kind: "finishGrowth" })],
         ["a rate of 100", (r) => (r.events[1].effect = { kind: "growthRate", pct: 100 })],
         ["0 bonus coins", (r) => (r.events[1].effect = { kind: "deliverBonus", coins: 0 })],
@@ -235,9 +236,9 @@ describe("shieldedPlots / eventTargets / eligibleEvents", () => {
         expect(eventTargets(s, EVENTS.events.frost)).toEqual([])
     })
 
-    it("Generous customer is Survival only; Moles needs a plot with a crop", () => {
+    it("Generous customer is in both modes; Moles needs a plot with a crop", () => {
         expect(eligibleEvents(game(), "good")).toContain("generousCustomer")
-        expect(eligibleEvents(createGame(1, timedOn), "good")).not.toContain("generousCustomer")
+        expect(eligibleEvents(createGame(1, timedOn), "good")).toContain("generousCustomer")
         const always = ["birds", "crows", "emergencyOrder", "fog", "frost", "rot"]
         expect(eligibleEvents(game(), "bad")).toEqual(always)
         expect(eligibleEvents(game({ plots: [ready, empty, empty, empty] }), "bad")).toEqual(
@@ -498,19 +499,33 @@ describe("events in step", () => {
         expect(found).toBe(true)
     })
 
-    it("Generous customer adds its bonus to deliveries while it lasts", () => {
-        const length = EVENTS.events.generousCustomer.durationTicks!
-        const bonus = (EVENTS.events.generousCustomer.effect as { coins: number }).coins
-        let s = step(startsNext(game(), "generousCustomer"), crops)
-        const order = s.orders[0]
-        const crop = Object.keys(order.required)[0]
+    it("Generous customer tips one random open order, which pays the tip when filled", () => {
+        const tip = (EVENTS.events.generousCustomer.effect as { coins: number }).coins
+        expect(EVENTS.events.generousCustomer.durationTicks).toBeNull()
+        const two = stepN(game({ nextEventAt: Number.MAX_SAFE_INTEGER }), 1)
+        const withOrders = { ...two, orders: [two.orders[0], { ...two.orders[0], id: 99 }] }
+        expect(withOrders.orders.every((o) => o.tip === 0)).toBe(true)
+        const s = step(startsNext(withOrders, "generousCustomer"), crops)
+        const tipped = s.orders.filter((o) => o.tip === tip)
+        expect(tipped).toHaveLength(1)
+        expect(s.orders.filter((o) => o.tip === 0)).toHaveLength(s.orders.length - 1)
+        expect(s.rng.events).toBe(advance(withOrders.rng.events, 1))
+
+        const crop = Object.keys(tipped[0].required)[0]
         const stocked = { ...s, inventory: { [crop]: 99 } }
-        const paid = (st: GameState) =>
-            applyAction(st, { type: "deliver", orderId: order.id }, crops)!.coins - st.coins
+        const paid = (orderId: number) =>
+            applyAction(stocked, { type: "deliver", orderId }, crops)!.coins - stocked.coins
         const normal = DIFFICULTY.coinsPerOrder
-        expect(paid(stocked)).toBe(normal + bonus)
-        s = stepN(stocked, length)
-        expect(paid({ ...s, inventory: { [crop]: 99 } })).toBe(normal)
+        const other = s.orders.find((o) => o.tip === 0)!
+        expect(paid(tipped[0].id)).toBe(normal + tip)
+        expect(paid(other.id)).toBe(normal)
+    })
+
+    it("Generous customer with no open order does nothing and draws nothing", () => {
+        const s = startsNext(game(), "generousCustomer")
+        const next = step(s, crops)
+        expect(next.rng.events).toBe(s.rng.events)
+        expect(next.coins).toBe(s.coins)
     })
 
     it("Moles empty their plot, fizzle on an emptied plot, and Mole traps can stop them", () => {
@@ -577,6 +592,7 @@ describe("validateEvents: new effect kinds and banStat", () => {
             { effect: { kind: "seedPlots", plots: 2 }, amountStat: "birdPlotsPct" },
             { effect: { kind: "addOrder", timePct: 50 }, amountStat: "emergencyTimePct" },
             { effect: { kind: "rotStorage", pct: 30 }, amountStat: "rotPct" },
+            { effect: { kind: "tipOrder", coins: 5 }, amountStat: "deliverBonusPct" },
             { effect: { kind: "blockHarvest", plots: 2 }, seconds: 2, banStat: "crowBan" }
         ]
         for (const k of kinds) expect(() => validateEvents(withEvent(k))).not.toThrow()
@@ -589,6 +605,8 @@ describe("validateEvents: new effect kinds and banStat", () => {
         ["addOrder over 100%", { effect: { kind: "addOrder", timePct: 101 } }],
         ["rotStorage of 0%", { effect: { kind: "rotStorage", pct: 0 } }],
         ["rotStorage over 100%", { effect: { kind: "rotStorage", pct: 101 } }],
+        ["tipOrder of 0 coins", { effect: { kind: "tipOrder", coins: 0 } }],
+        ["tipOrder with seconds", { effect: { kind: "tipOrder", coins: 5 }, seconds: 3 }],
         ["a power-up-only kind", { effect: { kind: "fillOrder" } }],
         ["fog without seconds", { effect: { kind: "fog" } }],
         ["an amountStat on fog", { effect: { kind: "fog" }, seconds: 2, amountStat: "rotPct" }],

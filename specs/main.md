@@ -30,7 +30,8 @@ Returns a fresh state for a new run.
 | `event`                                                             | `null`                                                                                                                                                                                                                                                           |
 | `nextEventAt`                                                       | `EVENTS.firstEventTicks`                                                                                                                                                                                                                                         |
 | `combo`, `comboEndsAt`, `bestCombo`, `comboMisses`, `pairOpenUntil` | `0`                                                                                                                                                                                                                                                              |
-| `shop`, `shopVisits`                                                | `null`, `0` (see [shop.md](shop.md))                                                                                                                                                                                                                             |
+| `shop`                                                              | `{ open: false, stock: null, freeRestocks: 0, restockProgress: 0 }` (see [shop.md](shop.md))                                                                                                                                                                     |
+| `nextInterestAt`                                                    | `SHOP.interest.everyTicks` (see [shop.md](shop.md))                                                                                                                                                                                                              |
 | `miracleReadyAt`                                                    | `0` (Miracle grow is ready as soon as it is owned)                                                                                                                                                                                                               |
 | `secondWind`                                                        | `false`                                                                                                                                                                                                                                                          |
 
@@ -88,7 +89,7 @@ Returns a **new** state, or `null` if the move is not allowed. A `null` result m
 - Calls `fulfill(order, inventory)`. Returns `null` if the inventory is short.
 - Removes the order from `orders` (other orders keep their order), stores the new inventory, adds `orderPoints(state, order)` to `score` (see [scoring.md](scoring.md)), and adds 1 to `ordersCompleted`. `orderPoints` reads the state **before** the fill: the Survival level, the Timed combo (so the first order in a streak scores ×1) and the time left for the speed bonus.
 - **Timed combo:** after the fill `combo` goes up by 1, `comboEndsAt = tick + MODES.timed.combo.windowTicks`, and `bestCombo = max(bestCombo, combo)`. **Double delivery pair:** if the fill paired (`isPairFill` on the state before it), `pairOpenUntil` becomes `0`; otherwise `pairOpenUntil = tick + MODES.timed.pairTicks`. Finish one does the same; Finish all scores nothing and leaves the streak alone (see [modes.md](modes.md)).
-- **Survival:** also adds `DIFFICULTY.coinsPerOrder + coinsPerOrder` (the modifier) `+ deliverBonusAt(activeEffects, tick)` (Generous customer, Gold rush) `+ earlyBirdCoins` when `2 × timeLeft(order, tick) >= timeLimit` (Early bird) to `coins`. Other modes don't earn coins.
+- **Survival and Timed:** also adds `DIFFICULTY.coinsPerOrder + coinsPerOrder` (the modifier) `+ deliverBonusAt(activeEffects, tick)` (Gold rush) `+ order.tip` (Generous customer) `+ earlyBirdCoins` when `2 × timeLeft(order, tick) >= timeLimit` (Early bird) to `coins`. Puzzle doesn't earn coins.
 - Everything after the crops are taken is shared with the Finish one and Finish all power-ups (`completeOrder`), which fill orders without crops.
 - Does not create a new order. That is `step`'s job. Filling an order can raise the level (see [difficulty.md](difficulty.md)); orders `step` creates from then on use the new level's rules, while orders already open keep their time limit and amount.
 
@@ -134,7 +135,7 @@ Appends `copy` to `upgrades` (a new array) and adds empty plots if `extraPlots` 
 
 ### Shop actions and the shop step
 
-`buyItem`, `sellUpgrade`, `restockShop` and `closeShop`, the pausing-shop rule in `applyAction` and `step`, closing a running shop on its tick (step 1a), and opening a visit after the offer (step 10) are specified in [shop.md](shop.md). `buyLife`, `useMiracleGrow` and `usePowerUp` are refused while a pausing shop is open.
+`openShop`, `buyItem`, `sellUpgrade`, `restockShop` and `closeShop`, and the open-shop rule in `applyAction` and `step`, are specified in [shop.md](shop.md). The player opens the shop whenever they like, except while an upgrade offer is open. While it is open, `step` returns `state` itself and `applyAction` accepts only `buyItem`, `sellUpgrade`, `restockShop`, `closeShop`, `sellCrop` and `makeFertilizer`, so `buyLife`, `useMiracleGrow`, `usePowerUp` and every board move wait until it closes. Every filled order (`completeOrder`, used by `deliver`, Finish one and Finish all) ends with `withFilledOrder`, which counts it toward the next free restock. Merchant call (`grantRestock`) banks one free restock (see [powerups.md](powerups.md)).
 
 ### `maxLivesFor(state: GameState): number`
 
@@ -190,6 +191,7 @@ Returns a **new** state. The steps run in this order, each one using the result 
     - **Rush wave (Timed):** before the top-up, if `rushWaveAt(tick)` is not `null`, `MODES.timed.rush.orders` rush orders are added to the end of `orders`, past `maxOpenOrders`. Each is made like a regular order (`createOrder` and the Small order roll, ids from `nextOrderId`) but draws from `rng.rush` instead of `rng.orders`, uses `orderTicks = scalePct(rules.orderTicks, rush.timePct)`, has `value = scalePct(value, rush.valuePct + rushValuePct)` (Rush pay) and `rush: true`. Second wind is not used. They count toward `maxOpenOrders`, so no regular order arrives until the board drops back below it. A failed rush order breaks the combo like any other.
 8. **Event announcement:** if `allowEvents`, no event is announced or running and `tick >= nextEventAt`, `announceEvent(state)` picks the next event from `rng.events` and stores it in `event`; if nothing is eligible, `nextEventAt = tick + gapTicks(state)`. Skipped when the run ended on this step.
    4a. **Auto-harvester** (after growth): every ready plot with `autoHarvest > 0` at it is harvested exactly as the `harvest` action would (`harvestPlot`), in plot order; a plot Crows block, or with storage full, stays ready. See [shop.md](shop.md).
+   4b. **Interest** (`withInterest`): when `tick >= nextInterestAt`, `coins += interestFor(state)` and `nextInterestAt += interest.everyTicks`. `step` doesn't run while the shop is open, so Interest's clock stops then. See [shop.md](shop.md).
 
 9. **Upgrade offer (Survival and Timed):** if `ordersCompleted >= (offersMade + 1) × ORDERS_PER_UPGRADE`, `rollOffer(state, mode, crops)` (the mode's own pool; Puzzle makes no offers) picks the offer from `rng.upgrades`, `upgradeOffer` is set to it (or stays `null` if nothing is eligible), the new state is stored in `rng.upgrades` and `offersMade` goes up by 1.
 
@@ -300,7 +302,7 @@ Returns a **new** state. The steps run in this order, each one using the result 
 
 - `createGame` copies `allowEvents` and sets `nextEventAt` to `firstEventTicks`.
 - Events start before effects move clocks and before growth, so Rain shower readies crops on its start tick; they are announced after new orders, so announcing never shifts `rng.orders`.
-- Crows refuse `harvest` and Generous customer adds to `deliver`'s coins, each only on their working ticks.
+- Crows refuse `harvest` only on their working ticks; an order Generous customer tipped pays its `tip` when filled.
 
 **Second batch** (see [upgrades.md](upgrades.md#shipped-with-the-second-batch) and [powerups.md](powerups.md) for the full lists)
 

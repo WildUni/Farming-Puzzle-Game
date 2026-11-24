@@ -33,7 +33,8 @@ function order(expiresAt: number, timeLimit = 100): Order {
         expiresAt,
         timeLimit,
         small: false,
-        rush: false
+        rush: false,
+        tip: 0
     }
 }
 

@@ -9,6 +9,7 @@ import {
     durationFor
 } from "./powerups"
 import { createGame, applyAction } from "./main"
+import { rollStock } from "./shop"
 import { buildCropTable } from "./plot"
 import { nextValue } from "./mulberry"
 import { TICKS_PER_SECOND } from "./game_constants"
@@ -96,6 +97,7 @@ describe("validatePowerUps", () => {
             "goldRush",
             "goodOmen",
             "growthBoost",
+            "merchantCall",
             "orderFreeze",
             "readyAll",
             "readyOne"
@@ -145,13 +147,20 @@ describe("validatePowerUps", () => {
 })
 
 describe("dropTable", () => {
-    it("lists the run's ids, sorted; Coin bag and Gold rush are Survival only", () => {
-        const both = ["cleanSlate", "finishAll", "finishOne", "growthBoost", "orderFreeze"]
+    it("lists the run's ids, sorted; every shipped power-up is in both modes", () => {
+        const both = [
+            "cleanSlate",
+            "finishAll",
+            "finishOne",
+            "growthBoost",
+            "merchantCall",
+            "orderFreeze"
+        ]
         const timed = state({ mode: "timed" })
         expect(dropTable(state())).toEqual(
             [...both, "coinBag", "goldRush", "readyAll", "readyOne"].sort()
         )
-        expect(dropTable(timed)).toEqual([...both, "readyAll", "readyOne"].sort())
+        expect(dropTable(timed)).toEqual(dropTable(state()))
         expect(dropTable(state(), config)).toEqual(["coins", "freeze", "ready"])
     })
 
@@ -308,7 +317,8 @@ describe("power-ups: second batch rules", () => {
             { effect: { kind: "fillOrder" }, target: "order" },
             { effect: { kind: "fillAllOrders" } },
             { effect: { kind: "goodEvent" }, needs: ["events"] },
-            { effect: { kind: "deliverBonus", coins: 2 }, seconds: 3 }
+            { effect: { kind: "deliverBonus", coins: 2 }, seconds: 3 },
+            { effect: { kind: "grantRestock" } }
         ]
         for (const k of kinds) expect(() => validatePowerUps(withPowerUp(k))).not.toThrow()
         const read = validatePowerUps(withPowerUp({ effect: { kind: "finishAll" } }))
@@ -341,7 +351,8 @@ describe("power-ups: second batch rules", () => {
             expiresAt: 500,
             timeLimit: 500,
             small: false,
-            rush: false
+            rush: false,
+            tip: 0
         })
         const s = state({ orders: [order(7), order(2)], powerUps: ["finishOne", "readyAll"] })
         expect(powerUpTargets(s, 0)).toEqual([2, 7])
@@ -365,5 +376,46 @@ describe("power-ups: second batch rules", () => {
         const on = state({ powerUps: ["goodOmen"], allowEvents: true })
         expect(canUsePowerUp(on, 0, null)).toBe(true)
         expect(canUsePowerUp({ ...on, event }, 0, null)).toBe(false)
+    })
+})
+
+describe("Merchant call", () => {
+    const rain = { id: "rainCheck", tier: "rare" as const, target: null }
+    const bank = (freeRestocks: number) => ({
+        open: false,
+        stock: null,
+        freeRestocks,
+        restockProgress: 0
+    })
+
+    it("adds one free restock, without opening the shop", () => {
+        const s = state({ powerUps: ["merchantCall"] })
+        expect(canUsePowerUp(s, 0, null)).toBe(true)
+        const used = applyAction(s, { type: "usePowerUp", slot: 0 }, crops)!
+        expect(used.shop.freeRestocks).toBe(1)
+        expect(used.shop.open).toBe(false)
+        expect(used.powerUps).toEqual([])
+        expect(used.tick).toBe(s.tick)
+        expect(used.rng).toEqual(s.rng)
+    })
+
+    it("is refused with the bank full, and kept", () => {
+        const full = state({ powerUps: ["merchantCall"], shop: bank(2) })
+        expect(canUsePowerUp(full, 0, null)).toBe(false)
+        expect(applyAction(full, { type: "usePowerUp", slot: 0 }, crops)).toBeNull()
+    })
+
+    it("Rain check's bigger bank lets it add past 2", () => {
+        const s = state({ powerUps: ["merchantCall"], shop: bank(2), upgrades: [rain] })
+        const used = applyAction(s, { type: "usePowerUp", slot: 0 }, crops)!
+        expect(used.shop.freeRestocks).toBe(3)
+    })
+
+    it("is never stocked in the shop", () => {
+        for (let seed = 1; seed <= 200; seed++) {
+            const s = { ...state(), rng: { ...state().rng, shop: seed } }
+            const [stock] = rollStock(s, crops)
+            expect(stock.some((i) => i.kind === "powerUp" && i.id === "merchantCall")).toBe(false)
+        }
     })
 })

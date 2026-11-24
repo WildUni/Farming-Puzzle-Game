@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { debugEvent, debugUpgrade, debugPowerUp, debugOpenShop, upgradeTiers } from "./debug"
+import { debugEvent, debugUpgrade, debugPowerUp, debugFreeRestock, upgradeTiers } from "./debug"
 import { EVENTS, buildEvent } from "./events"
 import { createGame, step } from "./main"
 import { buildCropTable } from "./plot"
@@ -58,11 +58,11 @@ describe("debugEvent", () => {
         expect(debugEvent(s, "frost", { plot: 0, skipWarning: false })).toBeNull()
     })
 
-    it("refuses with events off, an unknown id, the wrong mode, or an ended run", () => {
+    it("refuses with events off, an unknown id, or an ended run; allows Generous customer in Timed", () => {
         expect(debugEvent(game({}, none), "frost", noPlot)).toBeNull()
         expect(debugEvent(game(), "hail", noPlot)).toBeNull()
         const timed = { ...createGame(1, { ...all, mode: "timed" }) }
-        expect(debugEvent(timed, "generousCustomer", noPlot)).toBeNull()
+        expect(debugEvent(timed, "generousCustomer", noPlot)).not.toBeNull()
         expect(debugEvent(game({ status: "ended" }), "frost", noPlot)).toBeNull()
     })
 
@@ -122,15 +122,16 @@ describe("debugPowerUp", () => {
     })
 })
 
-describe("debugOpenShop", () => {
-    it("opens a visit now, and refuses with a shop or an offer open, or after the end", () => {
-        const opened = debugOpenShop(game(), crops)!
-        expect(opened.shop).not.toBeNull()
-        expect(opened.shopVisits).toBe(1)
-        expect(debugOpenShop(opened, crops)).toBeNull()
-        const offer = game({ upgradeOffer: [{ id: "bigTips", tier: "common" }] })
-        expect(debugOpenShop(offer, crops)).toBeNull()
-        expect(debugOpenShop(game({ status: "ended" }), crops)).toBeNull()
+describe("debugFreeRestock", () => {
+    it("banks one free restock up to the cap, and refuses after the end and in Puzzle", () => {
+        const one = debugFreeRestock(game())!
+        expect(one.shop.freeRestocks).toBe(1)
+        expect(one.shop.open).toBe(false)
+        const two = debugFreeRestock(one)!
+        expect(two.shop.freeRestocks).toBe(2)
+        expect(debugFreeRestock(two)).toBeNull()
+        expect(debugFreeRestock(game({ status: "ended" }))).toBeNull()
+        expect(debugFreeRestock(game({}, { ...none, mode: "puzzle" }))).toBeNull()
     })
 
     it("never adds an instant upgrade as a copy", () => {
