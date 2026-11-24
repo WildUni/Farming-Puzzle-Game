@@ -28,6 +28,8 @@ type LastingEffect =
     | { kind: "harvestBonus"; crops: number } // each harvest adds this many more crops (Worms)
     | { kind: "fog" } // the screen hides growth and order timers; no rule changes
     | { kind: "autoHarvest" } // ready crops harvest themselves in step (Auto harvest)
+    | { kind: "drought"; waterSeconds: number } // growing crops stop, except watered ones (Drought)
+    | { kind: "water" } // its plots ignore drought (one per plot, source "water:<plot>")
 
 type InstantEffect =
     | { kind: "cutGrowth"; ticks: number } // every growing crop gets this many ticks closer to ready
@@ -63,7 +65,7 @@ type ActiveEffect = {
 
 `pct`, `ticks`, `amount`, `coins`, `crops`, `plots` and `timePct` are whole numbers. A rate's `pct >= 0` and `pct !== 100`; `ticks`, `amount`, `coins`, `crops` and `plots` (both `seedPlots`' and `blockHarvest`'s) are `>= 1`; `addOrder`'s `timePct` and `rotStorage`'s `pct` are from 1 to 100; `giantOrder`'s `coinsPct` and `timePct` are `>= 1` (above 100 is the usual case); `luckyClover`'s `plots` and `scarecrow`'s `seconds` are `>= 1`. The files that use effects (`powerups.json`, `events.json`) check this when they load, and each says which kinds it allows.
 
-`growthRate`, `orderRate` and `comboRate` are **rate effects**; `blockHarvest`, `deliverBonus`, `harvestBonus`, `fog` and `autoHarvest` are **action effects**. `comboRate` moves no plot or order: `tickEffects` leaves it alone and `step` reads its shift through `comboShiftAt`. The instant kinds that need the whole game state (`fillOrder`, `fillAllOrders`, `goodEvent`, `harvestAll`, `seedPlots`, `addOrder`, `rotStorage`, `tipOrder`, `grantRestock`, `giantOrder`, `luckyClover`, `scarecrow`) are carried out in `main.ts` or `events.ts`; `effects.ts` has helpers only for the ones that work on plots or effect lists alone.
+`growthRate`, `orderRate`, `comboRate` and `drought` are **rate effects** (`drought` moves growth as rate 0, on every plot it applies to that no working `water` effect covers on that tick); `water` is a marker that moves nothing itself; `blockHarvest`, `deliverBonus`, `harvestBonus`, `fog` and `autoHarvest` are **action effects**. `comboRate` moves no plot or order: `tickEffects` leaves it alone and `step` reads its shift through `comboShiftAt`. The instant kinds that need the whole game state (`fillOrder`, `fillAllOrders`, `goodEvent`, `harvestAll`, `seedPlots`, `addOrder`, `rotStorage`, `tipOrder`, `grantRestock`, `giantOrder`, `luckyClover`, `scarecrow`) are carried out in `main.ts` or `events.ts`; `effects.ts` has helpers only for the ones that work on plots or effect lists alone.
 
 ## The rate rule
 
@@ -108,6 +110,12 @@ Each active effect works out its own shift, and the shifts on one clock add up b
 A crop's total is the sum over the `growthRate` effects that don't exclude its plot, so a Greenhouse plot under Frost keeps growing while a Sunny spell still speeds it up. Two `deliverBonus` effects add their coins; `blockHarvest` blocks a plot if any working one doesn't exclude it.
 
 ## Exports
+
+### Drought and water
+
+In `tickEffects`, a `drought` effect shifts each plot it applies to by `rateShift(0, …)` (`+1` a tick, like Frost), except a plot covered on that tick by a `water` effect: one whose `only` lists it, with `startedAt < now <= endsAt` (the same ticks a rate effect moves clocks on). `water` effects are dropped once they end like any other.
+
+`isWatered(active, plot, now)` and `droughtOn(active, plot, now)` (a working `drought` that applies to `plot`) are exported for the action and the screen.
 
 ### `rateShift(pct: number, startedAt: number, now: number): number`
 

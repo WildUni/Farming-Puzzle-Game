@@ -54,7 +54,7 @@ function rawConfig(): Record<string, unknown> {
             bumperExtra: { base: 1, min: 1, max: 4 },
             smallOrderChance: { base: 0, min: 0, max: 50 },
             sneakPeek: { base: 0, min: 0, max: 1 },
-            crowBan: { base: 0, min: 0, max: 1 },
+            pestBan: { base: 0, min: 0, max: 1 },
             earlyBirdCoins: { base: 0, min: 0, max: 15 },
             levelPacePct: { base: 100, min: 100, max: 200 },
             extraLives: { base: 0, min: 0, max: 2 },
@@ -64,6 +64,7 @@ function rawConfig(): Record<string, unknown> {
             wormBonusPct: { base: 100, min: 100, max: 300 },
             neighborReplant: { base: 0, min: 0, max: 1 },
             cloverExtraPlots: { base: 0, min: 0, max: 2 },
+            waterBonusSeconds: { base: 0, min: 0, max: 6 },
             birdPlotsPct: { base: 100, min: 34, max: 100 },
             rotPct: { base: 100, min: 25, max: 100 },
             fogDurationPct: { base: 100, min: 25, max: 100 },
@@ -398,7 +399,7 @@ describe("modifiersFor", () => {
             bumperExtra: 1,
             smallOrderChance: 0,
             sneakPeek: 0,
-            crowBan: 0,
+            pestBan: 0,
             earlyBirdCoins: 0,
             levelPacePct: 100,
             extraLives: 0,
@@ -408,6 +409,7 @@ describe("modifiersFor", () => {
             wormBonusPct: 100,
             neighborReplant: 0,
             cloverExtraPlots: 0,
+            waterBonusSeconds: 0,
             birdPlotsPct: 100,
             rotPct: 100,
             fogDurationPct: 100,
@@ -620,7 +622,7 @@ describe("eligibleUpgrades", () => {
         const ids = Object.values(UPGRADES.upgrades)
             .filter((d) => d.needs.includes("events"))
             .map((d) => d.id)
-        expect(ids).toHaveLength(18)
+        expect(ids).toHaveLength(19)
         for (const id of ids) {
             expect(off).not.toContain(id)
             expect(on).toContain(id)

@@ -23,6 +23,7 @@ import { UPGRADES, modifiersFor, scalePct } from "./upgrades"
 import { storageCap } from "./economy"
 import rawEvents from "../data/events.json"
 import type {
+    Action,
     EventConfig,
     GameConfig,
     GameState,
@@ -145,6 +146,7 @@ describe("validateEvents", () => {
         expect(Object.keys(EVENTS.events).sort()).toEqual([
             "birds",
             "crows",
+            "drought",
             "emergencyOrder",
             "fog",
             "frost",
@@ -250,7 +252,7 @@ describe("shieldedPlots / eventTargets / eligibleEvents", () => {
     it("Generous customer is in both modes; Moles needs a plot with a crop", () => {
         expect(eligibleEvents(game(), "good")).toContain("generousCustomer")
         expect(eligibleEvents(createGame(1, timedOn), "good")).toContain("generousCustomer")
-        const always = ["birds", "crows", "emergencyOrder", "fog", "frost", "rot"]
+        const always = ["birds", "crows", "drought", "emergencyOrder", "fog", "frost", "rot"]
         expect(eligibleEvents(game(), "bad")).toEqual(always)
         expect(eligibleEvents(game({ plots: [ready, empty, empty, empty] }), "bad")).toEqual(
             [...always, "moles"].sort()
@@ -604,7 +606,7 @@ describe("validateEvents: new effect kinds and banStat", () => {
             { effect: { kind: "addOrder", timePct: 50 }, amountStat: "emergencyTimePct" },
             { effect: { kind: "rotStorage", pct: 30 }, amountStat: "rotPct" },
             { effect: { kind: "tipOrder", coins: 5 }, amountStat: "deliverBonusPct" },
-            { effect: { kind: "blockHarvest", plots: 2 }, seconds: 2, banStat: "crowBan" }
+            { effect: { kind: "blockHarvest", plots: 2 }, seconds: 2, banStat: "pestBan" }
         ]
         for (const k of kinds) expect(() => validateEvents(withEvent(k))).not.toThrow()
     })
@@ -631,7 +633,7 @@ describe("validateEvents: new effect kinds and banStat", () => {
     }
 
     it("reads banStat, and null when it is left out", () => {
-        expect(EVENTS.events.crows.banStat).toBe("crowBan")
+        expect(EVENTS.events.crows.banStat).toBe("pestBan")
         expect(EVENTS.events.frost.banStat).toBeNull()
     })
 })
@@ -1014,5 +1016,113 @@ describe("news, Lucky clover and Scarecrow (Day 10)", () => {
             expect(eligibleEvents(after, "bad")).toContain("crows")
             expect(eligibleEvents(after, "bad")).toContain("birds")
         })
+    })
+})
+
+describe("Drought, digging up seeds and Pest control (Day 11)", () => {
+    const water = (plot: number): Action => ({ type: "waterPlot", plot })
+
+    // A field with two growing crops (plot 1 under a Greenhouse), Drought starting on tick 1.
+    function droughtGame(upgrades: OwnedUpgrade[] = []): GameState {
+        const s = game({
+            plots: [growing(500), growing(500), empty, ready],
+            upgrades: [own("greenhouse", "epic", 1), ...upgrades]
+        })
+        return step(builtNext(s, "drought"), crops) // tick 1: the drought starts
+    }
+
+    it("validateEvents accepts a drought effect and throws for waterSeconds below 1", () => {
+        const raw = rawConfig() as { events: Record<string, unknown>[] }
+        raw.events[1].effect = { kind: "drought", waterSeconds: 3 }
+        expect(validateEvents(raw).events.frost.effect).toEqual({
+            kind: "drought",
+            waterSeconds: 3
+        })
+        raw.events[1].effect = { kind: "drought", waterSeconds: 0 }
+        expect(() => validateEvents(raw)).toThrow()
+    })
+
+    it("holds every unwatered crop for its length and skips a Greenhouse plot", () => {
+        const s = droughtGame()
+        const later = stepN(s, 50) // ticks 2 … 51
+        expect((later.plots[0] as { readyAt: number }).readyAt).toBe(550)
+        expect((later.plots[1] as { readyAt: number }).readyAt).toBe(500)
+    })
+
+    it("a watered plot grows as usual for waterSeconds, then stops again", () => {
+        const s = droughtGame()
+        const tap = EVENTS.events.drought.effect as { waterSeconds: number }
+        const ticks = tap.waterSeconds * TICKS_PER_SECOND
+        const watered = applyAction(s, water(0), crops)!
+        expect(watered.rng).toBe(s.rng)
+        const later = stepN(watered, 50)
+        expect((later.plots[0] as { readyAt: number }).readyAt).toBe(550 - ticks)
+    })
+
+    it("watering again adds time, and Irrigation makes a tap last longer", () => {
+        const s = droughtGame()
+        const once = stepN(applyAction(s, water(0), crops)!, 80)
+        const twice = stepN(applyAction(applyAction(s, water(0), crops)!, water(0), crops)!, 80)
+        const plain = (once.plots[0] as { readyAt: number }).readyAt
+        const tap = (EVENTS.events.drought.effect as { waterSeconds: number }).waterSeconds
+        expect((twice.plots[0] as { readyAt: number }).readyAt).toBe(plain - tap * TICKS_PER_SECOND)
+
+        const irrigated = droughtGame([own("irrigation", "legendary")])
+        const longer = stepN(applyAction(irrigated, water(0), crops)!, 80)
+        expect((longer.plots[0] as { readyAt: number }).readyAt).toBe(plain - 3 * TICKS_PER_SECOND)
+    })
+
+    it("refuses watering with no drought, on a Greenhouse plot, and on empty or ready plots", () => {
+        const s = droughtGame()
+        expect(applyAction(s, water(1), crops)).toBeNull()
+        expect(applyAction(s, water(2), crops)).toBeNull()
+        expect(applyAction(s, water(3), crops)).toBeNull()
+        expect(applyAction(s, water(9), crops)).toBeNull()
+        expect(applyAction(game({ plots: [growing(500)] }), water(0), crops)).toBeNull()
+        const offer = { ...s, upgradeOffer: [{ id: "fastGrowth", tier: "common" as Tier }] }
+        expect(applyAction(offer, water(0), crops)).toBeNull()
+    })
+
+    it("Birds mark the plots they seed, and digUp empties only a seeded growing plot", () => {
+        const s = builtNext(game({ plots: [empty, empty, empty, growing(500)] }), "birds")
+        const seeded = step(s, crops)
+        const marked = seeded.plots.flatMap((p, i) =>
+            p.state === "growing" && p.seeded === true ? [i] : []
+        )
+        expect(marked.length).toBeGreaterThan(0)
+        expect(marked).not.toContain(3)
+        const dug = applyAction(seeded, { type: "digUp", plot: marked[0] }, crops)!
+        expect(dug.plots[marked[0]]).toEqual({ state: "empty" })
+        expect(dug.rng).toBe(seeded.rng)
+        expect(applyAction(seeded, { type: "digUp", plot: 3 }, crops)).toBeNull()
+        expect(applyAction(dug, { type: "digUp", plot: marked[0] }, crops)).toBeNull()
+        const grown = { ...seeded, tick: 100_000 }
+        const ripe = step(grown, crops)
+        expect(ripe.plots[marked[0]]).toEqual({
+            state: "ready",
+            cropId: (seeded.plots[marked[0]] as { cropId: string }).cropId
+        })
+    })
+
+    it("Pest control keeps Drought, Birds and Crows from ever being eligible", () => {
+        const banned = game({ upgrades: [own("pestControl", "epic")] })
+        const bad = eligibleEvents(banned, "bad")
+        for (const id of ["drought", "birds", "crows"]) expect(bad).not.toContain(id)
+        expect(bad).toContain("frost")
+    })
+
+    it("Crow decoy shortens Crows", () => {
+        const field = { plots: [ready, ready, empty, empty] }
+        const plain = builtNext(game(field), "crows").event!
+        const decoy = builtNext(
+            game({ ...field, upgrades: [own("crowDecoy", "legendary")] }),
+            "crows"
+        ).event!
+        const full = EVENTS.events.crows.durationTicks!
+        expect(plain.endsAt - plain.startsAt).toBe(full)
+        expect(decoy.endsAt - decoy.startsAt).toBe(
+            scalePct(full, modifiersFor([own("crowDecoy", "legendary")]).crowDurationPct)
+        )
+        expect(decoy.endsAt - decoy.startsAt).toBeLessThan(full)
     })
 })

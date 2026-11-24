@@ -42,7 +42,8 @@ const LASTING_KINDS: readonly string[] = [
     "blockHarvest",
     "deliverBonus",
     "harvestBonus",
-    "fog"
+    "fog",
+    "drought"
 ]
 const AMOUNT_KINDS: readonly string[] = [
     "cutGrowth",
@@ -131,6 +132,11 @@ function validateEffect(raw: unknown, at: string): Effect {
             return {
                 kind: "scarecrow",
                 seconds: wholeAtLeast(raw.seconds, 1, `${at}.seconds`)
+            }
+        case "drought":
+            return {
+                kind: "drought",
+                waterSeconds: wholeAtLeast(raw.waterSeconds, 1, `${at}.waterSeconds`)
             }
         default:
             return fail(`${at}.kind`, "an effect kind events can use")
@@ -452,7 +458,11 @@ function seedPlots(state: GameState, count: number, crops: CropTable): GameState
         free = free.filter((i) => i !== plot)
         const pct = plantGrowthPct(state, plot, cropId)
         const cut = plantCutTicks(state, plot, cropId)
-        const seeded = plant(plots[plot], cropId, state.tick, crops, pct, cut)!
+        // Marked, so the player can dig it up while it grows.
+        const seeded: Plot = {
+            ...plant(plots[plot], cropId, state.tick, crops, pct, cut)!,
+            seeded: true
+        } as Plot
         plots = plots.map((p, i) => (i === plot ? seeded : p))
     }
     return { ...state, plots, rng: { ...state.rng, events: rng } }
@@ -659,6 +669,7 @@ function startEvent(
         case "growthRate":
         case "orderRate":
         case "fog":
+        case "drought":
             return {
                 ...next,
                 activeEffects: startEffect(next.activeEffects, def.id, effect, now, length, exclude)

@@ -694,4 +694,30 @@ describe("replay: events", () => {
         }
         expect([...seen].sort()).toEqual(["clover", "news", "scarecrow"])
     })
+
+    it("replays runs that water crops in a Drought and dig up Birds' seeds equal", () => {
+        // Digs up every seeded plot and waters every other growing one, then plays as usual,
+        // leaving the last plot empty so Birds have somewhere to land.
+        const last = (s: GameState) => s.plots.length - 1
+        const tapper = (s: GameState): Action[] => [
+            ...s.plots.flatMap((p, plot): Action[] =>
+                p.state !== "growing"
+                    ? []
+                    : p.seeded === true
+                      ? [{ type: "digUp", plot }]
+                      : [{ type: "waterPlot", plot }]
+            ),
+            ...botMoves(s).filter((m) => !(m.type === "plant" && m.plot === last(s)))
+        ]
+        const used = new Set<string>()
+        for (const [, cfg] of configs) {
+            for (let seed = 1; seed <= 20; seed++) {
+                const { state, log } = play(seed, cfg, 4000, tapper)
+                for (const e of log) used.add(e.action.type)
+                expect(replayState(seed, cfg, log, state.tick, crops)).toEqual(state)
+            }
+        }
+        expect(used).toContain("waterPlot")
+        expect(used).toContain("digUp")
+    })
 })

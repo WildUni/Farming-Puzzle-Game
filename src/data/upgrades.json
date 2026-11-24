@@ -115,7 +115,7 @@
             "min": 0,
             "max": 1
         },
-        "crowBan": {
+        "pestBan": {
             "base": 0,
             "min": 0,
             "max": 1
@@ -164,6 +164,11 @@
             "base": 0,
             "min": 0,
             "max": 2
+        },
+        "waterBonusSeconds": {
+            "base": 0,
+            "min": 0,
+            "max": 6
         },
         "birdPlotsPct": {
             "base": 100,
@@ -666,14 +671,14 @@
         {
             "id": "pestControl",
             "name": "Pest control",
-            "text": "Crows never come again this run",
+            "text": "Drought, Birds and Crows never come again this run",
             "pools": ["survival", "timed"],
             "tier": "epic",
             "maxCopies": 1,
             "sellable": true,
             "effects": [
                 {
-                    "stat": "crowBan",
+                    "stat": "pestBan",
                     "amount": 1
                 }
             ],
@@ -791,6 +796,21 @@
                 {
                     "stat": "neighborReplant",
                     "amount": 1
+                }
+            ],
+            "needs": ["events"]
+        },
+        {
+            "id": "irrigation",
+            "name": "Irrigation",
+            "text": "Each Drought watering lasts {0} s longer",
+            "pools": ["survival", "timed"],
+            "maxCopies": 3,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "waterBonusSeconds",
+                    "perTier": [1, 1, 2, 2, 3]
                 }
             ],
             "needs": ["events"]

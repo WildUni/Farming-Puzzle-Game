@@ -37,6 +37,7 @@ type Plot =
           plantedAt: number
           readyAt: number
           fertilized?: true
+          seeded?: true // Birds planted it; digUp can empty it while it grows
       }
     | { state: "ready"; cropId: string }
 
@@ -125,7 +126,7 @@ type Modifiers = {
     bumperExtra: number // crops a Bumper harvest roll adds when it hits
     smallOrderChance: number // % chance a new order asks for half as many crops
     sneakPeek: number // 1: the next order is shown before it arrives
-    crowBan: number // 1: Crows never come (Pest control)
+    pestBan: number // 1: Drought, Birds and Crows never come (Pest control)
     earlyBirdCoins: number // coins for filling an order with at least half its time left (Survival)
     levelPacePct: number // % of filled orders a Survival level takes; 120 = levels come 20% slower
     extraLives: number // lives added on top of the starting lives (Survival)
@@ -135,6 +136,7 @@ type Modifiers = {
     wormBonusPct: number // % of Worms' extra crops
     neighborReplant: number // 1: Helpful neighbor replants what they harvest
     cloverExtraPlots: number // more plots Lucky clover marks (Four-leaf)
+    waterBonusSeconds: number // seconds added to each Drought watering tap (Irrigation)
     birdPlotsPct: number // % of the plots Birds seed
     rotPct: number // % of Rot's share of storage
     fogDurationPct: number // % of Fog's length
@@ -210,6 +212,8 @@ type Action =
     | { type: "chooseUpgrade"; upgradeId: string; target?: number | string }
     | { type: "usePowerUp"; slot: number; target?: number } // plot index, or order id
     | { type: "scareCrows"; plot: number }
+    | { type: "waterPlot"; plot: number }
+    | { type: "digUp"; plot: number }
     | { type: "sellCrop"; cropId: string; amount: number }
     | { type: "makeFertilizer"; cropId: string }
     | { type: "useFertilizer"; plot: number }
@@ -256,6 +260,8 @@ type LastingEffect =
     | { kind: "harvestBonus"; crops: number } // each harvest adds this many more crops
     | { kind: "fog" } // growth and order timers are hidden on screen; no rule changes
     | { kind: "autoHarvest" } // ready crops harvest themselves in step
+    | { kind: "drought"; waterSeconds: number } // crops stop growing unless watered
+    | { kind: "water" } // its plots ignore drought (source "water:<plot>", only: [plot])
 
 type InstantEffect =
     | { kind: "cutGrowth"; ticks: number } // every growing crop gets this many ticks closer

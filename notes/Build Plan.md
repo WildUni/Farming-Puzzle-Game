@@ -436,22 +436,22 @@ Add the bad events that hit plots and growth, each with the upgrade that counter
 
 ### Field events (about 5 hours)
 
-- [ ] Rework Crows to match the design: they block harvesting for a while (Day 4's version ate a ready crop)
-- [ ] Drought: crops grow only while the player taps them; keep it short so it isn't a chore
-- [ ] Frost: crops stop growing for a few seconds, and tapping doesn't help
-- [ ] Birds: drop random seeds on empty plots, plus a tap to dig a seed up
-- [ ] Moles: steal the crop from one plot, which starts over
-- [ ] Fog: hides growth timers or order details for a while
+- [x] Rework Crows to match the design: they block harvesting for a while (Day 4's version ate a ready crop)
+- [x] Drought: crops grow only while the player taps them; keep it short so it isn't a chore
+- [x] Frost: crops stop growing for a few seconds, and tapping doesn't help
+- [x] Birds: drop random seeds on empty plots, plus a tap to dig a seed up
+- [x] Moles: steal the crop from one plot, which starts over
+- [x] Fog: hides growth timers or order details for a while
 
 ### Counter upgrades (about 2.5 hours)
 
-- [ ] Calm skies (fewer bad events overall)
-- [ ] Pest control: Drought, Birds or Crows never happen again this run
-- [ ] Irrigation, Frost cover, Bird net, Crow decoy, Mole traps, Lantern
+- [x] Calm skies (fewer bad events overall; for now it lengthens the gap between every event, see the Design Doc)
+- [x] Pest control: Drought, Birds or Crows never happen again this run (one upgrade bans all three for now)
+- [x] Irrigation, Frost cover, Bird net, Crow decoy, Mole traps, Lantern
 
 ### Tests (about 30 minutes)
 
-- [ ] One fixed-seed test per event, and one with its counter upgrade
+- [x] One fixed-seed test per event, and one with its counter upgrade
 
 **Gate:** every field event can hit in a run, Greenhouse and each counter upgrade change it as listed, and the run replays exactly.
 

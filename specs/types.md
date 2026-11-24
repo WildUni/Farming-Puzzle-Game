@@ -33,11 +33,19 @@ type CropTable = Record<string, Crop> // cropId -> Crop
 ```ts
 type Plot =
     | { state: "empty" }
-    | { state: "growing"; cropId: string; plantedAt: number; readyAt: number; fertilized?: true }
+    | {
+          state: "growing"
+          cropId: string
+          plantedAt: number
+          readyAt: number
+          fertilized?: true
+          seeded?: true
+      }
     | { state: "ready"; cropId: string }
 ```
 
 - `fertilized` is set to `true` when fertilizer is used on this planting, and is absent before (so plots made before Day 6 compare equal). Fertilizer works once per planting.
+- `seeded` is set to `true` on a crop Birds planted, and is absent otherwise; `digUp` can empty such a plot while it grows (see [events.md](events.md)).
 
 - `plantedAt` is the tick the crop was planted on, moved by the same amount as `readyAt` whenever an effect moves the crop's clock (see [effects.md](effects.md)). It is only used to draw progress.
 - `readyAt` is the tick the crop becomes ready on. `plant` sets it to `plantedAt + growTicks`, and it is stored rather than worked out so later changes to growth speed don't affect crops already in the ground.

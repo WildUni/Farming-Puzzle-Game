@@ -381,6 +381,8 @@ export class Game extends Scene {
                 this.act({ type: "harvest", plot })
                 return
             case "growing":
+                // Birds' seeds are dug up; during a Drought any other crop is watered.
+                if (!this.act({ type: "digUp", plot })) this.act({ type: "waterPlot", plot })
                 return
         }
     }

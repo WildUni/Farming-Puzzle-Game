@@ -390,11 +390,21 @@ function eventIsGood(state: GameState): boolean {
 }
 
 type PlotOverlay =
-    "target" | "blocked" | "frozen" | "fast" | "worms" | "shield" | "fertilized" | "clover"
+    | "target"
+    | "blocked"
+    | "frozen"
+    | "fast"
+    | "worms"
+    | "shield"
+    | "fertilized"
+    | "clover"
+    | "dry"
+    | "wet"
+    | "seeds"
 
 // Markers drawn on each plot: the plot a plot event will hit, harvest blocked, growth stopped or
-// slowed, growth sped up, extra crops from Worms, Greenhouse protection, a fertilized crop, and a
-// Lucky clover mark.
+// slowed, growth sped up, extra crops from Worms, Greenhouse protection, a fertilized crop, a
+// Lucky clover mark, a crop Drought holds (dry) or a tap watered (wet), and Birds' seeds.
 function plotOverlays(state: GameState): PlotOverlay[][] {
     const { event, tick } = state
     const shielded = shieldedPlots(state)
@@ -415,6 +425,13 @@ function plotOverlays(state: GameState): PlotOverlay[][] {
         const plot = state.plots[i]
         if (plot.state === "growing" && plot.fertilized === true) marks.push("fertilized")
         if (state.cloverPlots.includes(i)) marks.push("clover")
+        if (plot.state === "growing" && here.some((a) => a.effect.kind === "drought")) {
+            const wet = state.activeEffects.some(
+                (a) => a.effect.kind === "water" && a.endsAt > tick && appliesTo(a, i)
+            )
+            marks.push(wet ? "wet" : "dry")
+        }
+        if (plot.state === "growing" && plot.seeded === true) marks.push("seeds")
         return marks
     })
 }

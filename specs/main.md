@@ -83,6 +83,16 @@ Returns a **new** state, or `null` if the move is not allowed. A `null` result m
 - **Lucky clover:** if `plot` is in `cloverPlots`, `yield + yieldBonus` is doubled before Bumper and Worms are added, and `plot` leaves `cloverPlots`. A harvest refused for any reason keeps the mark (see [events.md](events.md)).
 - **Power-up drop:** then calls `rollDrop(state)`, stores the new `rng.drops`, and appends the dropped id to `powerUps` if there is one and `powerUps.length < powerUpSlots`. A drop with every slot full is lost. With power-ups off or `dropChance` 0 it draws nothing (see [powerups.md](powerups.md)).
 
+**`waterPlot`** `{ type: 'waterPlot', plot }`
+
+- Returns `null` unless `plot` is a valid index of a `growing` plot and `droughtOn(activeEffects, plot, tick)`.
+- Starts (or extends) a `water` effect with source `water:<plot>`, `only: [plot]`, length `(waterSeconds + waterBonusSeconds) × TICKS_PER_SECOND`, where `waterSeconds` comes from the running drought effect. No draws.
+
+**`digUp`** `{ type: 'digUp', plot }`
+
+- Returns `null` unless `plot` is a valid index of a `growing` plot with `seeded: true` (Birds planted it).
+- The plot becomes `empty`. No draws.
+
 **`deliver`** `{ type: 'deliver', orderId }`
 
 - Finds the open order with that `id`. Returns `null` if there is none (unknown, already filled, or already failed).

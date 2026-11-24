@@ -6,7 +6,7 @@ Events come only from `step`. There is no event action, so the action log doesn'
 
 What each event does lives in **`src/data/events.json`**. The announced or running event lives in **`GameState.event`**, and lasting effects it started live in **`GameState.activeEffects`**, next to power-ups' effects.
 
-This spec covers the scheduler, news, fifteen events and their counter upgrades. Tradeoff events (Bee swarm, Festival, …) and the events that need new player actions or systems come later (see Open items).
+This spec covers the scheduler, news, sixteen events and their counter upgrades. Tradeoff events (Bee swarm, Festival, …) and the events that need new player actions or systems come later (see Open items).
 
 ## Concepts
 
@@ -90,14 +90,19 @@ All numbers are placeholders until playtesting.
 | `fog`              | Fog               | bad  | survival, timed | 15     | 3 s  | `fog`                  | 10 s  | –      | `durationStat: fogDurationPct`   |
 | `luckyClover`      | Lucky clover      | good | survival, timed | 15     | 5 s  | `luckyClover` 1 plot   | –     | –      | –                                |
 | `scarecrow`        | Scarecrow         | good | survival, timed | 15     | 3 s  | `scarecrow` 60 s       | –     | –      | –                                |
+| `drought`          | Drought           | bad  | survival, timed | 20     | 5 s  | `drought` 3 s a tap    | 10 s  | –      | `banStat: pestBan`               |
 
 News (all placeholders): Frost "Cold snap on the way", Fog "Fog rolling in", Rain shower "Rain in the forecast" and Sunny spell "Sunny skies ahead", each 10 s ahead. Crows and Birds have `scaredOff: true`.
 
 **Lucky clover** marks up to `amount` plots that hold a crop (one, plus Four-leaf's `cloverExtraPlots`). The next harvest of a marked plot gives double its usual crops (`yield + yieldBonus`, doubled; Bumper harvest and Worms are added on top, not doubled), then the mark is gone. A mark stays until that plot is harvested, even if its crop is lost or replaced first. Storage still caps the harvest, and a harvest refused for full storage keeps the mark.
 
+**Drought** stops every crop growing (Greenhouse plots excepted) for its length, unless the player waters it. `waterPlot { plot }` on a growing plot under the drought waters it for `waterSeconds + waterBonusSeconds` (Irrigation): a watered plot ignores the drought and grows at its usual speed. Watering again while still watered adds the same time again. Frost is different: tapping never helps.
+
+**Birds' seeds** are marked: a plot Birds planted is `seeded` while it grows. `digUp { plot }` empties a seeded plot that is still growing. Harvesting it, or anything that empties it, clears the mark.
+
 **Scarecrow** guards the field for `amount` seconds after it starts (`scarecrowUntil`). While it guards, events with `scaredOff` (Crows, Birds) are left out of `eligibleEvents`; other bad events still come. It is an instant event, so the next event is scheduled as usual and the guard can outlast it.
 
-Crows also have `banStat: crowBan` (Pest control). They land on up to 2 plots that hold a crop when they start, and stop each one being harvested until the player taps it to scare them off (`scareCrows`) or they leave on `endsAt`. They can't be scared during the warning, which is the player's chance to harvest first.
+Crows, Birds and Drought have `banStat: pestBan` (Pest control bans all three). They land on up to 2 plots that hold a crop when they start, and stop each one being harvested until the player taps it to scare them off (`scareCrows`) or they leave on `endsAt`. They can't be scared during the warning, which is the player's chance to harvest first.
 
 Generous customer was Survival only when it shipped, because Timed earned no coins then; now that Timed orders pay coins it is in both modes. Since the Day 8b design change it tips **one random open order** (`tipOrder`) instead of adding coins to every delivery for 20 s; the 10 coins are a placeholder, raised from 3 because one order now gets the whole bonus.
 
@@ -256,6 +261,7 @@ An instant event starts and ends on the same tick.
 | `blockHarvest` | Crows land: from the `growing` or `ready` plots not in `exclude`, `pick` up to `amount` plots one at a time from those still free, all from `rng.events`, then `startEffect(…, exclude, only)` with the chosen plots ascending. With no such plot nothing happens and nothing is drawn                                                                                                      |
 | `luckyClover`  | From the `growing` or `ready` plots not already in `cloverPlots`, `pick` up to `amount` plots one at a time from those still free, all from `rng.events`; they join `cloverPlots` (ascending). With no such plot nothing happens and nothing is drawn                                                                                                                                       |
 | `scarecrow`    | `scarecrowUntil = max(scarecrowUntil, tick + amount × TICKS_PER_SECOND)`. No draws                                                                                                                                                                                                                                                                                                          |
+| `drought`      | `startEffect(…, exclude)` as for any lasting bad event; `waterSeconds` stays in the effect for `waterPlot` to read                                                                                                                                                                                                                                                                          |
 | `rotStorage`   | Each stored crop loses `floor(amount_held × amount / 100)`; crops that reach 0 are removed (`rotStorage(inventory, pct)`)                                                                                                                                                                                                                                                                   |
 | `tipOrder`     | From the open orders not failing on this tick, in board order, `pick` one with `randomInt(rng.events, 0, n − 1)` and add `amount` to its `tip` (`tipOrder(state, coins)`). Filling it pays the tip on top of the usual coins (see [main.md](main.md)). With no open order nothing happens and nothing is drawn                                                                              |
 | other lasting  | `activeEffects = startEffect(activeEffects, id, effect, tick, endsAt − startsAt, exclude)`; `deliverBonus` and `harvestBonus` use `amount` as their coins or crops                                                                                                                                                                                                                          |
@@ -380,19 +386,33 @@ New stats:
 - Scarecrow sets `scarecrowUntil`; while `tick < scarecrowUntil`, Crows and Birds are never eligible and other bad events still are; afterwards they come back. A second Scarecrow never shortens the guard.
 - A run with events on, news, Lucky clover and Scarecrow replays equal (`verification.test.ts`).
 
+**Drought, digging up seeds and Pest control (Day 11)**
+
+- `validateEvents` accepts a `drought` effect and throws for `waterSeconds` below 1; `validatePowerUps` refuses it.
+- Drought holds every unwatered crop for its length and skips Greenhouse plots; a watered plot grows at its usual speed for `waterSeconds` ticks' worth, then stops again; watering again adds time; Irrigation makes a tap last longer.
+- `waterPlot` is refused with no drought, on a plot the drought doesn't cover (Greenhouse), on an empty or ready plot, and while an offer or the shop is open. It draws nothing.
+- Birds mark the plots they seed; `digUp` empties a seeded growing plot and is refused on any other plot; the mark is gone once the crop is ready.
+- Pest control keeps Drought, Birds and Crows from ever being eligible.
+- Crow decoy shortens Crows.
+- A run with Drought, watering and digging replays equal (`verification.test.ts`).
+
 ## Open items
 
 - [ ] Tune every number (weights, warnings, lengths, gaps, stat caps) after playtesting.
 - [x] Slow day, Worms, Helpful neighbor (good); Birds, Emergency order, Rot, Fog (bad).
 - [x] Scarecrow, Lucky clover and Four-leaf (Day 10).
-- [ ] Still to come: Drought and Raccoon (tap actions), Mix-up (re-rolling an open order), Fake merchant (the shop), Price crash (selling crops).
-- [ ] Should Birds' seeds be the crops orders want, or random as now? Should the player be able to dig a seeded plot up without Clean slate?
+- [ ] Still to come: Raccoon (a tap action), Mix-up (re-rolling an open order), Fake merchant (the shop), Price crash (selling crops).
+- [ ] Should Birds' seeds be the crops orders want, or random as now? (Digging a seeded plot up is built: `digUp`.)
 - [ ] Tradeoff events (Bee swarm, Market day, Festival, …), which need a choice from the player.
 - [x] News broadcasts: a ticker that announces some events earlier and in words (Day 10).
 - [ ] Which events get news, how far ahead, and the headlines are placeholders (the weather four, 10 s).
 - [ ] Scarecrow keeps away Crows and Birds for 60 s. Should it scare off Moles too, or every bad event for a shorter time?
 - [ ] Lucky clover doubles `yield + yieldBonus`. Should it double the whole harvest (Bumper, Worms) instead?
-- [x] Pest control, as a `banStat` (`crowBan`) on Crows instead of an `"event"` upgrade target. Banning Frost or Moles too would be one more stat each.
+- [x] Pest control, as a `banStat` (`pestBan`) on Crows instead of an `"event"` upgrade target. Banning Frost or Moles too would be one more stat each.
+- [x] Pest control bans Drought, Birds and Crows together (Day 11). Should it be three upgrades, one per event, instead?
+- [x] Drought, Irrigation, and digging up Birds' seeds (Day 11).
+- [ ] Drought numbers (10 s, 3 s a tap, weight 20) and Irrigation's (+1 to +3 s) are placeholders.
+- [ ] Calm skies lengthens the gap between every event, good ones too; the design doc says bad events should come less often. Good fortune already shifts the odds toward good events. Keep it, or make Calm skies cut only bad events?
 - [ ] Should a good event be allowed to overlap a bad one, or run back to back with no gap?
 - [x] Good omen power-up: announce a random good event now (`announceEvent` takes a forced kind).
 - [x] Generous customer tips one random open order (`tipOrder`, the order's `tip` field) instead of a 20 s bonus on every delivery (Day 8b design change).

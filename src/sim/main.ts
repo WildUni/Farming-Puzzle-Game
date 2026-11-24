@@ -47,7 +47,8 @@ import {
     harvestBonusAt,
     deliverBonusAt,
     comboShiftAt,
-    autoHarvestAt
+    autoHarvestAt,
+    droughtOn
 } from "./effects"
 import { EVENTS, announceEvent, gapTicks, startEvent } from "./events"
 import { POWER_UPS, rollDrop, canUsePowerUp, durationFor } from "./powerups"
@@ -351,6 +352,40 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
             const activeEffects = scareCrows(state.activeEffects, action.plot, state.tick)
             if (activeEffects === null) return null
             return { ...state, activeEffects }
+        }
+
+        case "waterPlot": {
+            // Drought: a growing plot under it ignores it for waterSeconds (+ Irrigation).
+            if (!isPlotIndex(state, action.plot)) return null
+            if (state.plots[action.plot].state !== "growing") return null
+            const drought = droughtOn(state.activeEffects, action.plot, state.tick)
+            if (drought === null || drought.effect.kind !== "drought") return null
+            const seconds =
+                drought.effect.waterSeconds + modifiersFor(state.upgrades).waterBonusSeconds
+            // A water effect that already ended is replaced rather than extended.
+            const live = state.activeEffects.filter(
+                (a) => !(a.effect.kind === "water" && a.endsAt < state.tick)
+            )
+            return {
+                ...state,
+                activeEffects: startEffect(
+                    live,
+                    `water:${action.plot}`,
+                    { kind: "water" },
+                    state.tick,
+                    seconds * TICKS_PER_SECOND,
+                    [],
+                    [action.plot]
+                )
+            }
+        }
+
+        case "digUp": {
+            // Birds' seeds: a seeded plot can be emptied while it grows.
+            if (!isPlotIndex(state, action.plot)) return null
+            const plot = state.plots[action.plot]
+            if (plot.state !== "growing" || plot.seeded !== true) return null
+            return { ...state, plots: replacePlot(state.plots, action.plot, { state: "empty" }) }
         }
 
         case "deliver": {

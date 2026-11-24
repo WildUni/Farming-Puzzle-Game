@@ -57,7 +57,7 @@
             "seconds": 6,
             "effect": { "kind": "blockHarvest", "plots": 2 },
             "durationStat": "crowDurationPct",
-            "banStat": "crowBan",
+            "banStat": "pestBan",
             "scaredOff": true
         },
         {
@@ -110,7 +110,8 @@
             "warnSeconds": 5,
             "effect": { "kind": "seedPlots", "plots": 3 },
             "amountStat": "birdPlotsPct",
-            "scaredOff": true
+            "scaredOff": true,
+            "banStat": "pestBan"
         },
         {
             "id": "emergencyOrder",
@@ -161,6 +162,17 @@
             "weight": 15,
             "warnSeconds": 3,
             "effect": { "kind": "scarecrow", "seconds": 60 }
+        },
+        {
+            "id": "drought",
+            "name": "Drought",
+            "kind": "bad",
+            "modes": ["survival", "timed"],
+            "weight": 20,
+            "warnSeconds": 5,
+            "seconds": 10,
+            "effect": { "kind": "drought", "waterSeconds": 3 },
+            "banStat": "pestBan"
         }
     ]
 }

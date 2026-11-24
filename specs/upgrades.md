@@ -147,7 +147,8 @@ Every upgrade from the design doc that works with the systems that exist now (or
 | `biggerBumper`  | Bigger bumper  | survival, timed | tiered | 3         | `bumperExtra` +1, +1, +1, +2, +3           | –      | yes      |
 | `smallOrder`    | Small order    | survival, timed | tiered | 5         | `smallOrderChance` +5, +8, +12, +18, +25   | –      | yes      |
 | `sneakPeek`     | Sneak peek     | survival, timed | rare   | 1         | `sneakPeek` +1                             | –      | yes      |
-| `pestControl`   | Pest control   | survival, timed | epic   | 1         | `crowBan` +1                               | events | yes      |
+| `pestControl`   | Pest control   | survival, timed | epic   | 1         | `pestBan` +1                               | events | yes      |
+| `irrigation`    | Irrigation     | survival, timed | tiered | 3         | `waterBonusSeconds` +1, +1, +2, +2, +3     | events | yes      |
 | `earlyBird`     | Early bird     | survival, timed | tiered | 5         | `earlyBirdCoins` +1, +2, +3, +5, +8        | –      | yes      |
 | `steadyPace`    | Steady pace    | survival        | tiered | 5         | `levelPacePct` +5, +8, +12, +18, +25       | –      | yes      |
 | `extraHeart`    | Extra heart    | survival        | rare   | 2         | `extraLives` +1 (max lives +1, filled)     | –      | no       |
@@ -170,7 +171,8 @@ Bigger bumper has `"requires": ["bumperHarvest"]`. Early bird is in both pools, 
 | `bumperExtra`            | 1    | 1   | 4   | Crops a Bumper harvest hit adds                                                                |
 | `smallOrderChance`       | 0    | 0   | 50  | % chance a new order asks for half as much                                                     |
 | `sneakPeek`              | 0    | 0   | 1   | 1: the next order is shown before it arrives                                                   |
-| `crowBan`                | 0    | 0   | 1   | 1: Crows are never announced (Crows' `banStat`)                                                |
+| `pestBan`                | 0    | 0   | 1   | 1: Drought, Birds and Crows are never announced (their `banStat`)                              |
+| `waterBonusSeconds`      | 0    | 0   | 6   | Seconds added to each Drought watering tap (Irrigation)                                        |
 | `earlyBirdCoins`         | 0    | 0   | 15  | Coins for filling an order with at least half its time left                                    |
 | `levelPacePct`           | 100  | 100 | 200 | % of filled orders a Survival level takes                                                      |
 | `extraLives`             | 0    | 0   | 2   | Added to the lives cap (`MODES.survival.maxLives`); each rise also adds a life                 |

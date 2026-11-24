@@ -16,6 +16,8 @@ import {
     fogged,
     comboShiftAt,
     autoHarvestAt,
+    isWatered,
+    droughtOn,
     finishAll,
     clearField
 } from "./effects"
@@ -497,5 +499,46 @@ describe("comboShiftAt / autoHarvestAt", () => {
         expect(autoHarvestAt([lasting(auto.effect, 10, 20, [2])], 1, 15)).toBe(false)
         expect(autoHarvestAt([lasting(auto.effect, 10, 20, [2])], 2, 15)).toBe(true)
         expect(autoHarvestAt([freeze], 0, 15)).toBe(false)
+    })
+})
+
+describe("drought and water", () => {
+    const drought: ActiveEffect = {
+        source: "drought",
+        effect: { kind: "drought", waterSeconds: 3 },
+        startedAt: 0,
+        endsAt: 100,
+        exclude: [1],
+        only: null
+    }
+    const water = (plot: number, startedAt: number, endsAt: number): ActiveEffect => ({
+        source: `water:${plot}`,
+        effect: { kind: "water" },
+        startedAt,
+        endsAt,
+        exclude: [],
+        only: [plot]
+    })
+
+    it("holds unwatered crops like rate 0, skips excluded plots, and spares watered ones", () => {
+        const plots = [growing(0, 50), growing(0, 50), growing(0, 50)]
+        const r = tickEffects([drought, water(2, 0, 10)], plots, [], 5)
+        expect((r.plots[0] as { readyAt: number }).readyAt).toBe(51)
+        expect(r.plots[1]).toBe(plots[1])
+        expect(r.plots[2]).toBe(plots[2])
+        const dry = tickEffects([drought, water(2, 0, 10)], plots, [], 11)
+        expect((dry.plots[2] as { readyAt: number }).readyAt).toBe(51)
+    })
+
+    it("isWatered covers startedAt + 1 … endsAt; droughtOn finds a working drought", () => {
+        const w = [water(0, 10, 20)]
+        expect(isWatered(w, 0, 10)).toBe(false)
+        expect(isWatered(w, 0, 11)).toBe(true)
+        expect(isWatered(w, 0, 20)).toBe(true)
+        expect(isWatered(w, 0, 21)).toBe(false)
+        expect(isWatered(w, 1, 15)).toBe(false)
+        expect(droughtOn([drought], 0, 50)).toBe(drought)
+        expect(droughtOn([drought], 1, 50)).toBeNull()
+        expect(droughtOn([drought], 0, 100)).toBeNull()
     })
 })

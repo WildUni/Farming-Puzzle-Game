@@ -262,5 +262,10 @@ Paid coins, bought with real money, carry over between runs and are separate fro
 - [ ] Sell price: for now every crop sells for 25% of its order value. Should each crop have its own sell price?
 - [ ] Fertilizer: for now it cuts a share of the crop's remaining growth time, works once per plot per planting, has no holding limit and doesn't count toward storage. Which of these should change?
 - [ ] Compost: for now it can't be sold, so fertilizer the player holds never becomes useless. Should it be sellable once the shop buys upgrades back?
-- [ ] Life price that scales with elapsed time instead of (or as well as) per life bought. Likely to be dropped.
+- [x] Life price that scales with elapsed time instead of (or as well as) per life bought. Dropped: the price rises per life bought only.
 - [ ] Should Timed orders pay coins, and how many? For now they pay the same as Survival (base pay, Big tips, Early bird). Revisit once the shop exists: Timed may want its own, lower rate.
+- [ ] Should Scarecrow be an upgrade, an event or a power-up? For now it is a good event that keeps Crows and Birds away for 60 s.
+- [ ] Tune how long Combo freeze and Auto harvest last. Both are 10 s for now.
+- [ ] Tune how hard orders are: amounts, time limits and how they change with difficulty.
+- [ ] Calm skies: for now it lengthens the gap between every event, good ones too, while Good fortune raises the share of good events. Should Calm skies cut only bad events instead?
+- [ ] Pest control: for now one upgrade bans Drought, Birds and Crows together. Should it be three upgrades, one per event?

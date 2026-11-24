@@ -79,6 +79,7 @@ A row of crop buttons on the play screen, always visible while the run is on, on
 - Clicking a crop selects it (white outline). One crop is selected at a time; the first crop is selected when the run starts. Clicking the selected crop again keeps it selected.
 - Clicking an empty plot sends `plant { plot, cropId }` with the selected crop through `act()`. The crop stays selected, so several plots can be planted in a row.
 - Clicking a ready plot harvests it and a plot with Crows scares them, whatever crop is selected, as before.
+- Clicking a growing plot Birds seeded (`SEEDS`) sends `digUp { plot }`. Clicking any other growing plot sends `waterPlot { plot }`, which only works during a Drought; otherwise nothing happens.
 - While a plot is being chosen for a power-up, fertilizer or Miracle grow, a plot click does that instead of planting.
 - The selected crop is screen state kept by the Game scene, never part of `GameState`, so it is not logged.
 
@@ -92,6 +93,7 @@ A panel along the bottom of the play screen that never pauses the clock. It star
 - **Fertilize** (`fertilizeText`: how many are held) starts choosing a plot: the plots in `fertilizerTargets` are outlined and the rest dimmed, as for a plot power-up, and the button says `Cancel`. Clicking a highlighted plot sends `useFertilizer`; clicking anything else, Esc, or starting a power-up cancels. Disabled with no fertilizer or nothing to fertilize.
 - A fertilized crop shows `FERT` along the top of its plot (`plotOverlays`).
 - A plot Lucky clover marked shows `CLOVER` until its next harvest (`plotOverlays`).
+- During a Drought, a growing crop it holds shows `DRY`, and one a tap is keeping watered shows `WET` (`plotOverlays`). A crop Birds planted shows `SEEDS` while it grows.
 - The drawer is off while paused, while an upgrade offer or the shop page is open, and after the run ends.
 
 ## Miracle grow (MiracleGrowView)

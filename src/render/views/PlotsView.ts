@@ -129,6 +129,12 @@ function markText(mark: PlotOverlay): string {
             return "FERT"
         case "clover":
             return "CLOVER"
+        case "dry":
+            return "DRY"
+        case "wet":
+            return "WET"
+        case "seeds":
+            return "SEEDS"
         case "target":
             return ""
     }

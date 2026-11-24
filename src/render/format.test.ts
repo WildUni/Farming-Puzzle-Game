@@ -535,6 +535,34 @@ describe("event text", () => {
         expect(scarecrowText(game("survival"))).toBeNull()
     })
 
+    it("plotOverlays marks dry, watered and seeded crops", () => {
+        const grow = { state: "growing" as const, cropId: "garlic", plantedAt: 0, readyAt: 500 }
+        const s: GameState = {
+            ...game("survival"),
+            tick: 20,
+            plots: [grow, grow, { ...grow, seeded: true }, { state: "empty" }],
+            activeEffects: [
+                {
+                    source: "drought",
+                    effect: { kind: "drought", waterSeconds: 3 },
+                    startedAt: 10,
+                    endsAt: 110,
+                    exclude: [],
+                    only: null
+                },
+                {
+                    source: "water:1",
+                    effect: { kind: "water" },
+                    startedAt: 15,
+                    endsAt: 45,
+                    exclude: [],
+                    only: [1]
+                }
+            ]
+        }
+        expect(plotOverlays(s)).toEqual([["dry"], ["wet"], ["dry", "seeds"], []])
+    })
+
     it("plotOverlays marks Lucky clover plots", () => {
         const s = { ...game("survival"), cloverPlots: [1, 3] }
         expect(plotOverlays(s)).toEqual([[], ["clover"], [], ["clover"]])

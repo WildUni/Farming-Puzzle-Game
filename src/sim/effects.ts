@@ -44,7 +44,8 @@ function mapSame<T>(list: T[], f: (item: T, i: number) => T): T[] {
 }
 
 // What lasting effects do on one tick: drop the ones that ended, then move each growing crop by
-// the growthRate shifts that apply to its plot, and every open order by the orderRate shifts.
+// the growthRate shifts that apply to its plot (and Drought's, unless the plot is watered on this
+// tick), and every open order by the orderRate shifts.
 // Action effects (blockHarvest, deliverBonus, harvestBonus, fog) move nothing.
 function tickEffects(
     active: ActiveEffect[],
@@ -56,19 +57,30 @@ function tickEffects(
     const running = active.filter((a) => a.endsAt >= now)
     const kept = running.length === active.length ? active : running
 
-    const growth: { shift: number; effect: ActiveEffect }[] = []
+    const growth: { shift: number; effect: ActiveEffect; drought: boolean }[] = []
     let order = 0
     for (const a of kept) {
         const { effect } = a
+        if (effect.kind === "drought") {
+            const shift = rateShift(0, a.startedAt, now)
+            if (shift !== 0) growth.push({ shift, effect: a, drought: true })
+            continue
+        }
         if (effect.kind !== "growthRate" && effect.kind !== "orderRate") continue
         const shift = rateShift(effect.pct, a.startedAt, now)
         if (shift === 0) continue
-        if (effect.kind === "growthRate") growth.push({ shift, effect: a })
+        if (effect.kind === "growthRate") growth.push({ shift, effect: a, drought: false })
         else order += shift
     }
 
     const plotShift = (i: number) =>
-        growth.reduce((sum, g) => (appliesTo(g.effect, i) ? sum + g.shift : sum), 0)
+        growth.reduce(
+            (sum, g) =>
+                appliesTo(g.effect, i) && !(g.drought && isWatered(kept, i, now))
+                    ? sum + g.shift
+                    : sum,
+            0
+        )
 
     return {
         active: kept,
@@ -222,6 +234,24 @@ function autoHarvestAt(active: ActiveEffect[], plot: number, now: number): boole
     )
 }
 
+// True when a water effect covers `plot` on tick `now`: the ticks a rate effect moves clocks on
+// (startedAt + 1 … endsAt). A watered plot ignores Drought.
+function isWatered(active: ActiveEffect[], plot: number, now: number): boolean {
+    return active.some(
+        (a) =>
+            a.effect.kind === "water" && a.startedAt < now && now <= a.endsAt && appliesTo(a, plot)
+    )
+}
+
+// The working Drought effect over `plot` on tick `now`, or null. waterPlot reads its
+// waterSeconds.
+function droughtOn(active: ActiveEffect[], plot: number, now: number): ActiveEffect | null {
+    return (
+        active.find((a) => a.effect.kind === "drought" && working(a, now) && appliesTo(a, plot)) ??
+        null
+    )
+}
+
 // True while a fog effect works: the screen hides growth and order timers.
 function fogged(active: ActiveEffect[], now: number): boolean {
     return active.some((a) => a.effect.kind === "fog" && working(a, now))
@@ -244,6 +274,8 @@ export {
     fogged,
     comboShiftAt,
     autoHarvestAt,
+    isWatered,
+    droughtOn,
     finishAll,
     clearField
 }
