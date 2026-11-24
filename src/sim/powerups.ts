@@ -14,10 +14,17 @@ import { TICKS_PER_SECOND } from "./game_constants"
 import { randomInt } from "./mulberry"
 import { modifiersFor, scalePct } from "./upgrades"
 import { isBankFull, isShopOpen } from "./shop"
+import { giantOpen } from "./orders"
 import rawPowerUps from "../data/powerups.json"
 
 const DROP_MODES: readonly GameMode[] = ["survival", "timed"]
-const LASTING_KINDS: readonly string[] = ["growthRate", "orderRate", "deliverBonus"]
+const LASTING_KINDS: readonly string[] = [
+    "growthRate",
+    "orderRate",
+    "comboRate",
+    "deliverBonus",
+    "autoHarvest"
+]
 const GAME_SYSTEMS: readonly GameSystem[] = ["powerUps", "events"]
 
 // ---------------------------------------------------------------------------------------------
@@ -53,7 +60,8 @@ function validateEffect(raw: unknown, at: string): Effect {
     if (!isObject(raw)) fail(at, "an object")
     switch (raw.kind) {
         case "growthRate":
-        case "orderRate": {
+        case "orderRate":
+        case "comboRate": {
             const pct = wholeAtLeast(raw.pct, 0, `${at}.pct`)
             if (pct === 100) fail(`${at}.pct`, "other than 100")
             return { kind: raw.kind, pct }
@@ -72,7 +80,14 @@ function validateEffect(raw: unknown, at: string): Effect {
         case "fillAllOrders":
         case "goodEvent":
         case "grantRestock":
+        case "autoHarvest":
             return { kind: raw.kind }
+        case "giantOrder":
+            return {
+                kind: "giantOrder",
+                coinsPct: wholeAtLeast(raw.coinsPct, 1, `${at}.coinsPct`),
+                timePct: wholeAtLeast(raw.timePct, 1, `${at}.timePct`)
+            }
         default:
             return fail(`${at}.kind`, "a known effect kind")
     }
@@ -244,6 +259,12 @@ function canUsePowerUp(
     if (def.effect.kind === "grantRestock" && isBankFull(state)) return false
     // Good omen calls an event now, so it waits while another event is announced or running.
     if (def.effect.kind === "goodEvent" && state.event !== null) return false
+    // Combo freeze needs a streak to hold.
+    if (def.effect.kind === "comboRate" && state.combo === 0) return false
+    // Giant order needs orders to merge, and only one giant order is open at a time.
+    if (def.effect.kind === "giantOrder" && (state.orders.length === 0 || giantOpen(state))) {
+        return false
+    }
     if (def.target === null) return target === null
     return target !== null && powerUpTargets(state, slot, config).includes(target)
 }

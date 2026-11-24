@@ -30,7 +30,8 @@ function order(value: number, left = 0): Order {
         timeLimit: 600,
         small: false,
         rush: false,
-        tip: 0
+        tip: 0,
+        giant: null
     }
 }
 

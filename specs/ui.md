@@ -149,6 +149,8 @@ An order Small order halved has `SMALL` after its number on the first line of it
 
 An order Generous customer tipped has `TIP +10` (its `tip`) after any other tags (`Order #4  SMALL TIP +10`).
 
+A Giant order has `GIANT x3` (how many orders it merged) before any other tags (`Order #6  GIANT x3 TIP +4`). Its card lists one line per crop, so it is taller than the usual 100 px: a card grows to fit its text above the countdown bar, and the cards under it in its column (and the Sneak peek card) move down. A Giant order is the only open order while it is open, so in practice it never pushes others.
+
 ## Rush waves (RushBanner, OrdersView)
 
 Timed only.
@@ -251,6 +253,7 @@ Three sections, top to bottom:
 
 ## Open items
 
+- [x] A Giant order that merged several crops overflowed its fixed 100 px card. Cards now grow to fit their text.
 - [ ] Day 8b layout choices made as defaults, to confirm: the first crop starts selected in the crop bar; the drawer starts open and holds the storage bar and Fertilize only (power-ups, Miracle grow and Buy life stay where they are); Buy life stays on the play screen as well as in the shop.
 
 - [ ] Plot upgrades: pick the plot on the board itself (valid plots highlighted, the rest greyed out) instead of a row of `Plot N` buttons, once a plot upgrade can be offered. Greenhouse is the first (see [events.md](events.md)).

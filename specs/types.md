@@ -55,8 +55,11 @@ type Order = {
     small: boolean
     rush: boolean
     tip: number
+    giant: { orders: number; coinsPct: number } | null
 }
 ```
+
+- `giant`: set on a Giant order: how many orders it merged and the % of their pay it gives when filled. `null` on every other order (see [powerups.md](powerups.md)).
 
 - `id`: unique within a run, taken from `GameState.nextOrderId`. Actions name orders by id, not by position in the list.
 - `required`: crop id → amount needed.
@@ -111,6 +114,7 @@ Everything that changes during a run. If `step` or `replay` would give a differe
 | `combo`                           | Timed: orders filled in a row; sets the score multiplier (`comboPct`)               |
 | `comboEndsAt`                     | Timed: last tick the streak survives without another fill; `0` with no streak       |
 | `bestCombo`                       | Timed: longest streak this run, for the summary                                     |
+| `giantPenaltyUntil`               | First tick after a failed Giant order's penalty (see [powerups.md](powerups.md)); 0 |
 | `fertilizer`                      | Fertilizer held. Doesn't count toward storage (see [economy.md](economy.md))        |
 | `rerollsThisOffer`                | Paid rerolls of the open offer; sets the next reroll's price. 0 on each new offer   |
 

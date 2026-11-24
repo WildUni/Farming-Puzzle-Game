@@ -90,10 +90,13 @@ describe("validatePowerUps", () => {
     it("accepts the shipped powerups.json", () => {
         expect(() => validatePowerUps(rawPowerUps)).not.toThrow()
         expect(Object.keys(POWER_UPS.powerUps).sort()).toEqual([
+            "autoHarvest",
             "cleanSlate",
             "coinBag",
+            "comboFreeze",
             "finishAll",
             "finishOne",
+            "giantOrder",
             "goldRush",
             "goodOmen",
             "growthBoost",
@@ -102,6 +105,18 @@ describe("validatePowerUps", () => {
             "readyAll",
             "readyOne"
         ])
+    })
+
+    it("accepts Combo freeze and Auto harvest as lasting kinds and Giant order as instant", () => {
+        expect(POWER_UPS.powerUps.comboFreeze.durationTicks).toBe(10 * TICKS_PER_SECOND)
+        expect(POWER_UPS.powerUps.comboFreeze.effect).toEqual({ kind: "comboRate", pct: 0 })
+        expect(POWER_UPS.powerUps.autoHarvest.durationTicks).toBe(10 * TICKS_PER_SECOND)
+        expect(POWER_UPS.powerUps.giantOrder.durationTicks).toBeNull()
+        expect(POWER_UPS.powerUps.giantOrder.effect).toEqual({
+            kind: "giantOrder",
+            coinsPct: 150,
+            timePct: 150
+        })
     })
 
     it("turns seconds into durationTicks and a missing target into null", () => {
@@ -135,7 +150,20 @@ describe("validatePowerUps", () => {
         ["an unknown target", (r) => (r.powerUps[0].target = "crop")],
         ["finishGrowth without a target", (r) => delete r.powerUps[0].target],
         ["a target on another effect", (r) => (r.powerUps[2].target = "plot")],
-        ["{seconds} on an instant power-up", (r) => (r.powerUps[2].text = "{seconds}")]
+        ["{seconds} on an instant power-up", (r) => (r.powerUps[2].text = "{seconds}")],
+        [
+            "a Giant order with coinsPct 0",
+            (r) => (r.powerUps[2].effect = { kind: "giantOrder", coinsPct: 0, timePct: 150 })
+        ],
+        [
+            "a Giant order without timePct",
+            (r) => (r.powerUps[2].effect = { kind: "giantOrder", coinsPct: 150 })
+        ],
+        [
+            "Combo freeze without seconds",
+            (r) => (r.powerUps[2].effect = { kind: "comboRate", pct: 0 })
+        ],
+        ["Auto harvest without seconds", (r) => (r.powerUps[2].effect = { kind: "autoHarvest" })]
     ]
     for (const [name, change] of bad) {
         it(`throws for ${name}`, () => {
@@ -147,20 +175,24 @@ describe("validatePowerUps", () => {
 })
 
 describe("dropTable", () => {
-    it("lists the run's ids, sorted; every shipped power-up is in both modes", () => {
+    it("lists the run's ids, sorted; all but Combo freeze are in both modes", () => {
         const both = [
+            "autoHarvest",
             "cleanSlate",
+            "coinBag",
             "finishAll",
             "finishOne",
+            "giantOrder",
+            "goldRush",
             "growthBoost",
             "merchantCall",
-            "orderFreeze"
+            "orderFreeze",
+            "readyAll",
+            "readyOne"
         ]
         const timed = state({ mode: "timed" })
-        expect(dropTable(state())).toEqual(
-            [...both, "coinBag", "goldRush", "readyAll", "readyOne"].sort()
-        )
-        expect(dropTable(timed)).toEqual(dropTable(state()))
+        expect(dropTable(state())).toEqual(both)
+        expect(dropTable(timed)).toEqual([...both, "comboFreeze"].sort())
         expect(dropTable(state(), config)).toEqual(["coins", "freeze", "ready"])
     })
 
@@ -352,7 +384,8 @@ describe("power-ups: second batch rules", () => {
             timeLimit: 500,
             small: false,
             rush: false,
-            tip: 0
+            tip: 0,
+            giant: null
         })
         const s = state({ orders: [order(7), order(2)], powerUps: ["finishOne", "readyAll"] })
         expect(powerUpTargets(s, 0)).toEqual([2, 7])

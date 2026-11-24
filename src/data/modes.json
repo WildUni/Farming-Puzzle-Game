@@ -2,7 +2,8 @@
     "survival": {
         "startLives": 3,
         "maxLives": 3,
-        "storageCap": 25
+        "storageCap": 25,
+        "giantPenalty": { "seconds": 30, "extraOrders": 1 }
     },
     "timed": {
         "runSeconds": 300,
@@ -10,6 +11,7 @@
         "storageCap": 30,
         "finaleSeconds": 30,
         "pairSeconds": 3,
+        "giantPenalty": { "seconds": 10 },
         "combo": {
             "stepPct": 25,
             "capPct": 300,

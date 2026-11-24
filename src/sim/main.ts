@@ -21,7 +21,7 @@ import {
     TIERS
 } from "./game_constants"
 import { plant, harvest, updateGrowth } from "./plot"
-import { createOrder, fulfill, isExpired, timeLeft } from "./orders"
+import { createOrder, fulfill, isExpired, timeLeft, ordersBlocked } from "./orders"
 import { DIFFICULTY, runLevel, orderRulesFor, lifePriceFor, maxLivesFor } from "./difficulty"
 import { MODES, rushWaveAt } from "./modes"
 import { isPairFill, orderPoints } from "./scoring"
@@ -45,7 +45,9 @@ import {
     harvestBlocked,
     scareCrows,
     harvestBonusAt,
-    deliverBonusAt
+    deliverBonusAt,
+    comboShiftAt,
+    autoHarvestAt
 } from "./effects"
 import { EVENTS, announceEvent, gapTicks, startEvent } from "./events"
 import { POWER_UPS, rollDrop, canUsePowerUp, durationFor } from "./powerups"
@@ -123,6 +125,7 @@ function createGame(seed: RNGSeed, config: GameConfig): GameState {
         comboMisses: 0,
         pairOpenUntil: 0,
         bestCombo: 0,
+        giantPenaltyUntil: 0,
         fertilizer: 0,
         rerollsThisOffer: 0,
         miracleReadyAt: 0,
@@ -141,7 +144,16 @@ function orderRules(state: GameState): OrderRules {
             ? { ...DEFAULT_ORDER_RULES, maxOpenOrders: MODES.timed.openOrders }
             : orderRulesFor(runLevel(state))
     const { orderTimePct } = modifiersFor(state.upgrades)
-    return { ...rules, orderTicks: scalePct(rules.orderTicks, orderTimePct) }
+    // A failed Giant order in Survival: more orders open at once until the penalty ends.
+    const extra =
+        state.mode === "survival" && state.tick < state.giantPenaltyUntil
+            ? MODES.survival.giantPenalty.extraOrders
+            : 0
+    return {
+        ...rules,
+        maxOpenOrders: rules.maxOpenOrders + extra,
+        orderTicks: scalePct(rules.orderTicks, orderTimePct)
+    }
 }
 
 // True when a buyLife action would succeed. The buy button uses this.
@@ -277,13 +289,15 @@ function harvestPlot(state: GameState, index: number, crops: CropTable): GameSta
     }
 }
 
-// Auto-harvester: every ready plot with autoHarvest at it harvests itself, in plot order.
-// Plots that can't be harvested (Crows, full storage) stay ready.
+// Auto-harvester and the Auto harvest power-up: every ready plot with autoHarvest at it, or
+// under a working Auto harvest effect, harvests itself, in plot order. Plots that can't be
+// harvested (Crows, full storage) stay ready.
 function autoHarvest(state: GameState, crops: CropTable): GameState {
     let s = state
     for (let i = 0; i < s.plots.length; i++) {
         if (s.plots[i].state !== "ready") continue
-        if (modifiersAt(s.upgrades, { plot: i, cropId: null }).autoHarvest <= 0) continue
+        const owned = modifiersAt(s.upgrades, { plot: i, cropId: null }).autoHarvest > 0
+        if (!owned && !autoHarvestAt(s.activeEffects, i, s.tick)) continue
         s = harvestPlot(s, i, crops) ?? s
     }
     return s
@@ -547,9 +561,18 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
                     if (event === null) return null
                     return { ...used, event, rng: { ...state.rng, events } }
                 }
+                case "giantOrder":
+                    // canUsePowerUp checked an order is open and none is giant.
+                    return {
+                        ...used,
+                        orders: [giantOrder(state, effect.coinsPct, effect.timePct)],
+                        nextOrderId: state.nextOrderId + 1
+                    }
                 case "growthRate":
                 case "orderRate":
+                case "comboRate":
                 case "deliverBonus":
+                case "autoHarvest":
                     return {
                         ...used,
                         activeEffects: startEffect(
@@ -570,6 +593,30 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
     }
 }
 
+// Giant order: every open order merged into one. Amounts, values and tips add up; its time is
+// timePct% of the orders' time left added up. Takes the next order id; draws nothing.
+function giantOrder(state: GameState, coinsPct: number, timePct: number): Order {
+    const required: Record<string, number> = {}
+    for (const o of state.orders) {
+        for (const [cropId, n] of Object.entries(o.required)) {
+            required[cropId] = (required[cropId] ?? 0) + n
+        }
+    }
+    const left = state.orders.reduce((sum, o) => sum + timeLeft(o, state.tick), 0)
+    const timeLimit = Math.max(1, scalePct(left, timePct))
+    return {
+        id: state.nextOrderId,
+        required,
+        value: state.orders.reduce((sum, o) => sum + o.value, 0),
+        expiresAt: state.tick + timeLimit,
+        timeLimit,
+        small: false,
+        rush: false,
+        tip: state.orders.reduce((sum, o) => sum + o.tip, 0),
+        giant: { orders: state.orders.length, coinsPct }
+    }
+}
+
 // Fills `order`: removes it, adds 1 to ordersCompleted, adds orderPoints to score when `scored`
 // (level, combo and speed bonuses, from the state before the fill), and pays coins (Survival and
 // Timed alike, for now): the base pay, Big tips, Gold rush, the order's tip (Generous customer),
@@ -581,12 +628,15 @@ function completeOrder(state: GameState, order: Order, scored: boolean): GameSta
     const points = scored ? orderPoints(state, order) : 0
     const m = modifiersFor(state.upgrades)
     const early = timeLeft(order, state.tick) * 2 >= order.timeLimit ? m.earlyBirdCoins : 0
-    const pay =
+    const each =
         DIFFICULTY.coinsPerOrder +
         m.coinsPerOrder +
         deliverBonusAt(state.activeEffects, state.tick) +
-        order.tip +
         early
+    // A Giant order pays coinsPct% of the pay of every order it merged.
+    const base =
+        order.giant === null ? each : scalePct(each * order.giant.orders, order.giant.coinsPct)
+    const pay = base + order.tip
     const filled: GameState = {
         ...state,
         orders: state.orders.filter((o) => o.id !== order.id),
@@ -742,6 +792,12 @@ function step(state: GameState, crops: CropTable): GameState {
     // 5. Failed orders
     const open = moved.orders.filter((o) => !isExpired(o, tick))
     const failed = moved.orders.length - open.length
+    // A failed Giant order starts the mode's penalty (see orderRules and ordersBlocked).
+    const giantFailed = moved.orders.some((o) => o.giant !== null && isExpired(o, tick))
+    const giantPenaltyUntil =
+        giantFailed && state.mode !== "puzzle"
+            ? tick + MODES[state.mode].giantPenalty.ticks
+            : ev.giantPenaltyUntil
     const ordersFailed = state.ordersFailed + failed
     // Survival: each failed order costs a life, never going below 0. Second chance rolls once
     // per failed order from rng.lives and saves the life when it hits. A lost life turns on
@@ -765,8 +821,11 @@ function step(state: GameState, crops: CropTable): GameState {
     }
     // Timed: a failed order breaks the combo, and so does a window with no order filled.
     // Combo keeper forgives up to comboMissesForgiven failed orders per streak.
+    // Combo freeze holds the window still first.
+    const comboEndsAt =
+        ev.combo > 0 ? ev.comboEndsAt + comboShiftAt(moved.active, tick) : ev.comboEndsAt
     let comboMisses = ev.comboMisses
-    let comboBroken = ev.combo > 0 && tick > ev.comboEndsAt
+    let comboBroken = ev.combo > 0 && tick > comboEndsAt
     if (ev.combo > 0 && failed > 0 && !comboBroken) {
         const forgiven = modifiersFor(state.upgrades).comboMissesForgiven
         if (comboMisses + failed <= forgiven) comboMisses += failed
@@ -783,7 +842,8 @@ function step(state: GameState, crops: CropTable): GameState {
         lives,
         secondWind,
         combo: comboBroken ? 0 : ev.combo,
-        comboEndsAt: comboBroken ? 0 : ev.comboEndsAt,
+        comboEndsAt: comboBroken ? 0 : comboEndsAt,
+        giantPenaltyUntil,
         comboMisses,
         rng: { ...harvested.rng, lives: livesRng },
         activeEffects: moved.active
@@ -800,9 +860,11 @@ function step(state: GameState, crops: CropTable): GameState {
     let rushRng = next.rng.rush
     let nextOrderId = next.nextOrderId
     let wind = next.secondWind
+    // No new orders at all while a Giant order is open or Timed's penalty runs.
+    const blocked = ordersBlocked(next)
     // Timed rush wave: short, well-paid orders from rng.rush, added past maxOpenOrders. They
     // count toward it, so regular orders wait until the board drops back below it.
-    if (next.mode === "timed" && rushWaveAt(tick) !== null) {
+    if (!blocked && next.mode === "timed" && rushWaveAt(tick) !== null) {
         const rush = MODES.timed.rush
         const rushRules = { ...rules, orderTicks: scalePct(rules.orderTicks, rush.timePct) }
         for (let i = 0; i < rush.orders; i++) {
@@ -822,7 +884,7 @@ function step(state: GameState, crops: CropTable): GameState {
             nextOrderId += 1
         }
     }
-    while (orders.length < rules.maxOpenOrders) {
+    while (!blocked && orders.length < rules.maxOpenOrders) {
         const [order, afterOrders, afterShrink] = makeOrder(
             next,
             nextOrderId,

@@ -8,13 +8,19 @@ Survival's difficulty curve, coins and life prices stay in `difficulty.json` (se
 
 ```json
 {
-    "survival": { "startLives": 3, "maxLives": 3, "storageCap": 25 },
+    "survival": {
+        "startLives": 3,
+        "maxLives": 3,
+        "storageCap": 25,
+        "giantPenalty": { "seconds": 30, "extraOrders": 1 }
+    },
     "timed": {
         "runSeconds": 300,
         "openOrders": 3,
         "storageCap": 30,
         "finaleSeconds": 30,
         "pairSeconds": 3,
+        "giantPenalty": { "seconds": 10 },
         "combo": { "stepPct": 25, "capPct": 300, "windowSeconds": 20 },
         "rush": {
             "atSeconds": [75, 160, 245],
@@ -27,24 +33,27 @@ Survival's difficulty curve, coins and life prices stay in `difficulty.json` (se
 }
 ```
 
-| Field                       | Meaning                                                                                   |
-| --------------------------- | ----------------------------------------------------------------------------------------- |
-| `survival.startLives`       | Lives a Survival run starts with. The run ends when lives reach 0                         |
-| `survival.maxLives`         | Most lives a Survival run can hold (Extra heart adds to it). Whole number `>= startLives` |
-| `survival.storageCap`       | Most crops a Survival run can hold (Bigger barn adds to it). Whole number `>= 1`          |
-| `timed.storageCap`          | Most crops a Timed run can hold. Separate from Survival's so the two can be tuned apart   |
-| `timed.runSeconds`          | Length of a Timed run. Timed has no lives and ends when this runs out                     |
-| `timed.openOrders`          | `step` keeps this many orders open in Timed, so a run starts with this many               |
-| `timed.finaleSeconds`       | Grand finale: the run's last stretch, in seconds, that scores more. `1` to `runSeconds`   |
-| `timed.pairSeconds`         | Double delivery: a fill this soon after an unpaired fill pairs with it. `>= 1`            |
-| `timed.combo.stepPct`       | Percent the score multiplier climbs for each order filled in a row                        |
-| `timed.combo.capPct`        | Highest multiplier, in percent. Whole number `>= 100`                                     |
-| `timed.combo.windowSeconds` | Time after a fill to fill the next order before the streak breaks                         |
-| `timed.rush.atSeconds`      | Times a rush wave starts, from the run start. Ascending, each `>= 1` and `< runSeconds`   |
-| `timed.rush.warnSeconds`    | Warning shown before each wave. `>= 0`, and shorter than the gap before every wave        |
-| `timed.rush.orders`         | Rush orders a wave adds at once                                                           |
-| `timed.rush.timePct`        | A rush order's time limit, in % of the usual order time (1 to 100)                        |
-| `timed.rush.valuePct`       | A rush order's value, in % of what the same order would be worth normally                 |
+| Field                               | Meaning                                                                                   |
+| ----------------------------------- | ----------------------------------------------------------------------------------------- |
+| `survival.startLives`               | Lives a Survival run starts with. The run ends when lives reach 0                         |
+| `survival.maxLives`                 | Most lives a Survival run can hold (Extra heart adds to it). Whole number `>= startLives` |
+| `survival.storageCap`               | Most crops a Survival run can hold (Bigger barn adds to it). Whole number `>= 1`          |
+| `survival.giantPenalty.seconds`     | A failed Giant order's penalty length in Survival. `>= 1`                                 |
+| `survival.giantPenalty.extraOrders` | More open orders allowed during that penalty. `>= 1`                                      |
+| `timed.giantPenalty.seconds`        | A failed Giant order's penalty in Timed: no new orders for this long. `>= 1`              |
+| `timed.storageCap`                  | Most crops a Timed run can hold. Separate from Survival's so the two can be tuned apart   |
+| `timed.runSeconds`                  | Length of a Timed run. Timed has no lives and ends when this runs out                     |
+| `timed.openOrders`                  | `step` keeps this many orders open in Timed, so a run starts with this many               |
+| `timed.finaleSeconds`               | Grand finale: the run's last stretch, in seconds, that scores more. `1` to `runSeconds`   |
+| `timed.pairSeconds`                 | Double delivery: a fill this soon after an unpaired fill pairs with it. `>= 1`            |
+| `timed.combo.stepPct`               | Percent the score multiplier climbs for each order filled in a row                        |
+| `timed.combo.capPct`                | Highest multiplier, in percent. Whole number `>= 100`                                     |
+| `timed.combo.windowSeconds`         | Time after a fill to fill the next order before the streak breaks                         |
+| `timed.rush.atSeconds`              | Times a rush wave starts, from the run start. Ascending, each `>= 1` and `< runSeconds`   |
+| `timed.rush.warnSeconds`            | Warning shown before each wave. `>= 0`, and shorter than the gap before every wave        |
+| `timed.rush.orders`                 | Rush orders a wave adds at once                                                           |
+| `timed.rush.timePct`                | A rush order's time limit, in % of the usual order time (1 to 100)                        |
+| `timed.rush.valuePct`               | A rush order's value, in % of what the same order would be worth normally                 |
 
 The combo and rush numbers are placeholders until a Timed tuning pass.
 
@@ -53,7 +62,12 @@ Lengths in the JSON are in seconds, like `powerups.json` and `events.json`; the 
 ## Types
 
 ```ts
-type SurvivalMode = { startLives: number; maxLives: number; storageCap: number }
+type SurvivalMode = {
+    startLives: number
+    maxLives: number
+    storageCap: number
+    giantPenalty: { ticks: number; extraOrders: number }
+}
 type ComboRules = { stepPct: number; capPct: number; windowTicks: number }
 type RushRules = {
     atTicks: number[]
@@ -68,6 +82,7 @@ type TimedMode = {
     storageCap: number
     finaleTicks: number
     pairTicks: number
+    giantPenalty: { ticks: number }
     combo: ComboRules
     rush: RushRules
 }
@@ -132,7 +147,7 @@ Both work from `tick` alone, so `GameState` stores nothing about waves.
 - Accepts the shipped `modes.json`, with `runTicks = runSeconds × TICKS_PER_SECOND`.
 - Ships 3 starting lives, a 300 s Timed run and 3 open Timed orders.
 - Accepts a valid config.
-- Throws for each bad field listed above.
+- Throws for each bad field listed above, `giantPenalty` (missing, or a number below 1 or not whole) included, and turns its seconds into ticks.
 - `comboPct` (in `main.test.ts`): 100 with no streak, climbs by `stepPct`, stops at `capPct`.
 - Ships rush waves inside the run, and accepts an empty `atSeconds`.
 - `rushWaveAt`: the wave's index on each start tick, `null` on the ticks either side.
@@ -140,12 +155,13 @@ Both work from `tick` alone, so `GameState` stores nothing about waves.
 
 ## Open items
 
-- [ ] Life price rule per mode: rises per life bought, or scales with elapsed time. Per life only for now; the time rule is likely to be dropped (see [economy.md](economy.md)).
+- [x] Life price rule per mode: dropped. The price rises per life bought only (see [economy.md](economy.md)).
 - [x] `survival.storageCap` and `timed.storageCap` (Day 6): each mode's storage limit, kept separate so they can be tuned apart (see [economy.md](economy.md)). Placeholders 25 and 30 until the Day 6 tuning pass.
 - [x] Timed combo numbers (placeholders: +25% per fill, up to ×3, 20 s window).
 - [x] Rush wave numbers (placeholders: 3 waves at 75 s, 160 s and 245 s, 5 s warning, 3 orders each at half time and 150% value).
 - [x] Rush pay (Timed upgrade): `rushValuePct` is added to `rush.valuePct` (see [main.md](main.md)).
 - [x] Combo builder and Head start: `comboPct` takes their bonuses. Combo keeper forgives failed orders in `step` (see [main.md](main.md)).
 - [x] `finaleSeconds` (Grand finale, placeholder 30 s, from the design doc) and `pairSeconds` (Double delivery, placeholder 3 s).
-- [ ] Combo freeze (Day 9): a lasting effect that pushes `comboEndsAt` back each tick, like Order freeze.
+- [x] Combo freeze (Day 9): a `comboRate` lasting effect that pushes `comboEndsAt` back each tick, like Order freeze (see [powerups.md](powerups.md)).
+- [x] `giantPenalty` (Day 9, Giant order): placeholders 30 s and +1 order in Survival, 10 s in Timed.
 - [ ] Puzzle's entry once it has an end rule.

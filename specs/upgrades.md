@@ -243,7 +243,7 @@ The JSON's `perTier` and `amount` both become `amounts` (five values or one), so
 
 | Constant             | Value | Meaning                                                         |
 | -------------------- | ----- | --------------------------------------------------------------- |
-| `ORDERS_PER_UPGRADE` | `10`  | An offer is made after every this many filled orders            |
+| `ORDERS_PER_UPGRADE` | `5`   | An offer is made after every this many filled orders            |
 | `UPGRADE_CHOICES`    | `3`   | Cards on one offer (fewer if fewer upgrades are eligible)       |
 | `TIERS`              | list  | `["common", "uncommon", "rare", "epic", "legendary"]`, in order |
 
@@ -379,7 +379,7 @@ Rules:
 | `upgradeOffer` | `null`                                                                                                               | The `OfferCard`s on offer while the player is choosing, else `null` |
 | `offersMade`   | `0`                                                                                                                  | Offers made so far this run                                         |
 
-1. **Offer due:** in Survival, when `ordersCompleted >= (offersMade + 1) × ORDERS_PER_UPGRADE`. So the 1st offer comes after the 10th filled order, the 2nd after the 20th, and so on.
+1. **Offer due:** in Survival and Timed, when `ordersCompleted >= (offersMade + 1) × ORDERS_PER_UPGRADE`. So the 1st offer comes after the 5th filled order, the 2nd after the 10th, and so on.
 2. **Making the offer:** at the end of a `step` (after new orders, and only if the run didn't end on that step), if an offer is due, `rollOffer(state, "survival", crops)` draws it from `rng.upgrades`, `upgradeOffer` is set and `offersMade` goes up by 1. If nothing is eligible, `offersMade` still goes up and `upgradeOffer` stays `null`, so the run continues.
 3. **The clock stops:** while `upgradeOffer` is not `null`, `step` returns the state unchanged (same object), and `applyAction` refuses every action except `chooseUpgrade`.
 4. **Picking:** `chooseUpgrade { upgradeId, target? }` is accepted only when:

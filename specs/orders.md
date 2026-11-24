@@ -70,6 +70,14 @@ Rules:
 - It is 0 on tick `expiresAt`, the last tick the order can still be filled. Use `isExpired`, not `timeLeft === 0`, to check whether an order has failed.
 - Used by the order card's countdown bar and by the speed bonus in scoring.
 
+### `giantOpen(state): boolean`
+
+`true` while an open order has `giant` set (a Giant order, see [powerups.md](powerups.md)).
+
+### `ordersBlocked(state): boolean`
+
+`true` while no new order may arrive: `giantOpen(state)`, or a Timed run with `tick < giantPenaltyUntil`. `step` and Emergency order read it.
+
 ## Tests (`orders.test.ts`)
 
 **`createOrder`**
@@ -102,6 +110,11 @@ Rules:
 
 - Open on `expiresAt − 1` and on `expiresAt`, expired on `expiresAt + 1` and after.
 - `timeLeft` counts down to 0 and stays at 0.
+
+**`giantOpen` / `ordersBlocked`**
+
+- `giantOpen` is `true` only with a giant order open.
+- `ordersBlocked` is `true` with a giant order open in either mode, and in Timed while `tick < giantPenaltyUntil`; a Survival penalty never blocks.
 
 ## Open items
 

@@ -360,7 +360,6 @@ The first `instant` upgrade: buying it changes an owned copy and is never stored
 - [ ] Should refunds follow what was paid (free picks paid nothing) instead of the tier's price?
 - [ ] Should Auto-harvester's harvests roll power-up drops? They do for now, the same as a manual harvest.
 - [ ] Timed orders pay the same coins as Survival. With a shop in Timed, revisit whether Timed needs its own rate (see [economy.md](economy.md)).
-- [ ] `game_constants.md` says `ORDERS_PER_UPGRADE` is 10, but the code uses 5. Fix whichever is wrong.
 - [x] Interest on its own clock: every 30 s of play, up to 15 coins, nothing while the shop is open (`withInterest`, `nextInterestAt`, `shop.json`'s `interest`). Done ahead of the rest of Day 8b.
 - [x] For the shop rework (needs the restock bank): replace `freeRestocks` with `freeRestockBonus` in `upgrades.json`, `Modifiers` and `restockPrice`, and change Free restock's text to "Free restocks come two at a time"; add `fastRestock` and `rainCheck` to `upgrades.json` with the stats `restockOrdersCut` and `restockBankBonus` (table above); Merchant call (see [powerups.md](powerups.md)).
 - [x] When the running shop goes, drop `withInterest`'s push-back branch (see Status) and its test; the open shop stops `step`, which is all Interest needs.

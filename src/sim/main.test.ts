@@ -90,6 +90,7 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
         small: false,
         rush: false,
         tip: 0,
+        giant: null,
         ...overrides
     }
 }
@@ -2208,6 +2209,214 @@ describe("Bigger barn, Premium produce and Miracle grow", () => {
             const open = { ...used, upgradeOffer: OFFER }
             expect(step(open, crops)).toBe(open)
             expect(canUseMiracleGrow({ ...used, tick: used.miracleReadyAt })).toBe(true)
+        })
+    })
+})
+
+describe("power-ups: Day 9", () => {
+    const readyPlot: Plot = { state: "ready", cropId: "garlic" }
+    const far = [0, 1, 2].map((id) => makeOrder({ id, expiresAt: 100_000 }))
+
+    // Steps `s` until its tick is `tick`.
+    function stepTo(s: GameState, tick: number): GameState {
+        let out = s
+        while (out.tick < tick) out = step(out, crops)
+        return out
+    }
+
+    describe("Combo freeze", () => {
+        const DURATION = POWER_UPS.powerUps.comboFreeze.durationTicks!
+
+        function streak(overrides: Partial<GameState> = {}): GameState {
+            return makeTimed({
+                allowPowerUps: true,
+                powerUps: ["comboFreeze"],
+                combo: 2,
+                comboEndsAt: 5,
+                orders: far,
+                nextOrderId: 3,
+                ...overrides
+            })
+        }
+
+        it("is refused with no streak", () => {
+            const s = streak({ combo: 0, comboEndsAt: 0 })
+            expect(applyAction(s, { type: "usePowerUp", slot: 0 }, crops)).toBeNull()
+        })
+
+        it("holds the combo window still for its length", () => {
+            const frozen = apply(streak(), { type: "usePowerUp", slot: 0 })
+            const held = stepTo(frozen, 5 + DURATION)
+            expect(held.combo).toBe(2)
+            expect(held.comboEndsAt).toBe(5 + DURATION)
+            expect(step(held, crops).combo).toBe(0)
+            // Without it the streak breaks on tick 6.
+            expect(stepTo(streak(), 6).combo).toBe(0)
+        })
+
+        it("does not stop order timers, so a failed order still breaks the streak", () => {
+            const orders = [...far.slice(0, 2), makeOrder({ id: 2, expiresAt: 2 })]
+            const frozen = apply(streak({ orders }), { type: "usePowerUp", slot: 0 })
+            const after = stepTo(frozen, 3)
+            expect(after.ordersFailed).toBe(1)
+            expect(after.combo).toBe(0)
+        })
+    })
+
+    describe("Auto harvest", () => {
+        const growingPlot: Plot = { state: "growing", cropId: "garlic", plantedAt: 0, readyAt: 3 }
+
+        function holding(overrides: Partial<GameState> = {}): GameState {
+            return makeState({
+                allowPowerUps: true,
+                powerUps: ["autoHarvest"],
+                plots: [readyPlot, growingPlot, { state: "empty" }, { state: "empty" }],
+                ...overrides
+            })
+        }
+
+        it("harvests ready crops on the next steps, and the harvests roll drops", () => {
+            const s = apply(holding(), { type: "usePowerUp", slot: 0 })
+            const first = step(s, crops)
+            expect(first.plots[0]).toEqual({ state: "empty" })
+            expect(first.inventory).toEqual({ garlic: 2 })
+            expect(first.rng.drops).not.toBe(s.rng.drops)
+            const later = stepTo(first, 3)
+            expect(later.plots[1]).toEqual({ state: "empty" })
+            expect(later.inventory).toEqual({ garlic: 4 })
+        })
+
+        it("leaves crops ready with storage full", () => {
+            const full = holding()
+            const s = apply(
+                { ...full, inventory: { garlic: storageCap(full) } },
+                { type: "usePowerUp", slot: 0 }
+            )
+            expect(step(s, crops).plots[0]).toEqual(readyPlot)
+        })
+
+        it("leaves crops alone once it ends", () => {
+            const s = apply(holding({ plots: [{ state: "empty" }] }), {
+                type: "usePowerUp",
+                slot: 0
+            })
+            const ended = stepTo(s, POWER_UPS.powerUps.autoHarvest.durationTicks!)
+            const next = step({ ...ended, plots: [readyPlot] }, crops)
+            expect(next.plots[0]).toEqual(readyPlot)
+        })
+    })
+
+    describe("Giant order", () => {
+        const GIANT = { orders: 2, coinsPct: 150 }
+
+        function holding(overrides: Partial<GameState> = {}): GameState {
+            return makeState({
+                allowPowerUps: true,
+                powerUps: ["giantOrder"],
+                tick: 100,
+                orders: [
+                    makeOrder({ id: 0, required: { carrot: 3 }, value: 24, expiresAt: 600 }),
+                    makeOrder({
+                        id: 1,
+                        required: { carrot: 2, garlic: 1 },
+                        value: 20,
+                        expiresAt: 300,
+                        tip: 4
+                    })
+                ],
+                nextOrderId: 2,
+                ...overrides
+            })
+        }
+
+        it("is refused with no order open and while a giant order is open", () => {
+            const none = holding({ orders: [] })
+            expect(applyAction(none, { type: "usePowerUp", slot: 0 }, crops)).toBeNull()
+            const once = apply(holding({ powerUps: ["giantOrder", "giantOrder"] }), {
+                type: "usePowerUp",
+                slot: 0
+            })
+            expect(applyAction(once, { type: "usePowerUp", slot: 0 }, crops)).toBeNull()
+        })
+
+        it("merges every open order into one, drawing nothing", () => {
+            const s = holding()
+            const next = apply(s, { type: "usePowerUp", slot: 0 })
+            // Time left: 500 + 200, times 150%.
+            expect(next.orders).toEqual([
+                {
+                    id: 2,
+                    required: { carrot: 5, garlic: 1 },
+                    value: 44,
+                    expiresAt: 100 + 1050,
+                    timeLimit: 1050,
+                    small: false,
+                    rush: false,
+                    tip: 4,
+                    giant: GIANT
+                }
+            ])
+            expect(next.nextOrderId).toBe(3)
+            expect(next.rng).toBe(s.rng)
+        })
+
+        it("merges rush orders too", () => {
+            const rush = makeOrder({ id: 1, rush: true, value: 36, expiresAt: 400 })
+            const s = holding({ orders: [makeOrder({ id: 0 }), rush] })
+            const giant = apply(s, { type: "usePowerUp", slot: 0 }).orders[0]
+            expect(giant.rush).toBe(false)
+            expect(giant.value).toBe(24 + 36)
+            expect(giant.required).toEqual({ carrot: 6 })
+        })
+
+        it("blocks new orders while open, and the board fills again after it is filled", () => {
+            const s = apply(holding(), { type: "usePowerUp", slot: 0 })
+            const waited = stepTo(s, 200)
+            expect(waited.orders).toHaveLength(1)
+            expect(waited.rng.orders).toBe(s.rng.orders)
+
+            const stocked = { ...waited, inventory: { carrot: 5, garlic: 1 } }
+            const filled = apply(stocked, { type: "deliver", orderId: 2 })
+            expect(filled.ordersCompleted).toBe(1)
+            expect(filled.coins).toBe(scalePct(DIFFICULTY.coinsPerOrder * 2, 150) + 4)
+            const refilled = step(filled, crops)
+            expect(refilled.orders).toHaveLength(orderRules(refilled).maxOpenOrders)
+        })
+
+        it("skips a rush wave that comes due while it is open", () => {
+            const WAVE = MODES.timed.rush.atTicks[0]
+            const giant = makeOrder({ id: 4, expiresAt: 100_000, giant: GIANT })
+            const s = makeTimed({ tick: WAVE - 1, orders: [giant], nextOrderId: 5 })
+            const next = step(s, crops)
+            expect(next.orders).toEqual([giant])
+            expect(next.rng.rush).toBe(s.rng.rush)
+        })
+
+        it("failed in Survival: one life, then one more open order until the penalty ends", () => {
+            const giant = makeOrder({ id: 4, expiresAt: 100, giant: GIANT })
+            const s = makeState({ tick: 100, orders: [giant], nextOrderId: 5 })
+            const next = step(s, crops)
+            const PENALTY = MODES.survival.giantPenalty
+            expect(next.ordersFailed).toBe(1)
+            expect(next.lives).toBe(s.lives - 1)
+            expect(next.giantPenaltyUntil).toBe(101 + PENALTY.ticks)
+            const base = orderRulesFor(runLevel(next)).maxOpenOrders
+            expect(next.orders).toHaveLength(base + PENALTY.extraOrders)
+            const at = (tick: number) => orderRules({ ...next, tick }).maxOpenOrders
+            expect(at(100 + PENALTY.ticks)).toBe(base + PENALTY.extraOrders)
+            expect(at(101 + PENALTY.ticks)).toBe(base)
+        })
+
+        it("failed in Timed: no order arrives for the penalty, then the board fills again", () => {
+            const giant = makeOrder({ id: 4, expiresAt: 100, giant: GIANT })
+            const s = makeTimed({ tick: 100, orders: [giant], nextOrderId: 5 })
+            const next = step(s, crops)
+            const until = 101 + MODES.timed.giantPenalty.ticks
+            expect(next.ordersFailed).toBe(1)
+            expect(next.orders).toEqual([])
+            expect(next.giantPenaltyUntil).toBe(until)
+            expect(stepTo(next, until - 1).orders).toEqual([])
+            expect(stepTo(next, until).orders).toHaveLength(MODES.timed.openOrders)
         })
     })
 })

@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest"
-import { createOrder, canFulfill, fulfill, isExpired, timeLeft } from "./orders"
+import {
+    createOrder,
+    canFulfill,
+    fulfill,
+    isExpired,
+    timeLeft,
+    giantOpen,
+    ordersBlocked
+} from "./orders"
+import { createGame } from "./main"
 import { buildCropTable } from "./plot"
 import { seedRNG, nextValue } from "./mulberry"
 import {
@@ -140,7 +149,8 @@ const garlicOrder: Order = {
     timeLimit: 600,
     small: false,
     rush: false,
-    tip: 0
+    tip: 0,
+    giant: null
 }
 const mixedOrder: Order = {
     id: 1,
@@ -150,7 +160,8 @@ const mixedOrder: Order = {
     timeLimit: 600,
     small: false,
     rush: false,
-    tip: 0
+    tip: 0,
+    giant: null
 }
 
 describe("canFulfill", () => {
@@ -208,5 +219,25 @@ describe("isExpired and timeLeft", () => {
         expect(timeLeft(garlicOrder, 599)).toBe(1)
         expect(timeLeft(garlicOrder, 600)).toBe(0)
         expect(timeLeft(garlicOrder, 700)).toBe(0)
+    })
+})
+
+describe("giantOpen / ordersBlocked", () => {
+    const plain = garlicOrder
+    const giant = { ...garlicOrder, id: 2, giant: { orders: 2, coinsPct: 150 } }
+    const survival = createGame(1, { mode: "survival", allowPowerUps: true, allowEvents: false })
+    const timed = createGame(1, { mode: "timed", allowPowerUps: true, allowEvents: false })
+
+    it("giantOpen is true only with a giant order open", () => {
+        expect(giantOpen({ ...survival, orders: [plain] })).toBe(false)
+        expect(giantOpen({ ...survival, orders: [plain, giant] })).toBe(true)
+    })
+
+    it("blocks with a giant order open, and in Timed while the penalty runs", () => {
+        expect(ordersBlocked({ ...survival, orders: [giant] })).toBe(true)
+        expect(ordersBlocked({ ...timed, orders: [giant] })).toBe(true)
+        expect(ordersBlocked({ ...timed, tick: 9, giantPenaltyUntil: 10 })).toBe(true)
+        expect(ordersBlocked({ ...timed, tick: 10, giantPenaltyUntil: 10 })).toBe(false)
+        expect(ordersBlocked({ ...survival, tick: 9, giantPenaltyUntil: 10 })).toBe(false)
     })
 })

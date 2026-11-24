@@ -14,6 +14,8 @@ import {
     deliverBonusAt,
     harvestBonusAt,
     fogged,
+    comboShiftAt,
+    autoHarvestAt,
     finishAll,
     clearField
 } from "./effects"
@@ -34,7 +36,8 @@ function order(expiresAt: number, timeLimit = 100): Order {
         timeLimit,
         small: false,
         rush: false,
-        tip: 0
+        tip: 0,
+        giant: null
     }
 }
 
@@ -442,5 +445,57 @@ describe("finishAll / clearField / harvestBonusAt / fogged", () => {
         const r = tickEffects([worms(0, 3), fog], plots, [], 2)
         expect(r.plots).toBe(plots)
         expect(tickEffects([worms(0, 3), fog], plots, [], 4).active).toEqual([])
+    })
+})
+
+describe("comboShiftAt / autoHarvestAt", () => {
+    function lasting(
+        effect: ActiveEffect["effect"],
+        startedAt: number,
+        endsAt: number,
+        only: number[] | null = null,
+        exclude: number[] = []
+    ): ActiveEffect {
+        return { source: effect.kind, effect, startedAt, endsAt, exclude, only }
+    }
+    const freeze = lasting({ kind: "comboRate", pct: 0 }, 10, 20)
+
+    it("comboShiftAt gives +1 on ticks startedAt + 1 … endsAt for comboRate 0", () => {
+        expect(comboShiftAt([freeze], 10)).toBe(0)
+        expect(comboShiftAt([freeze], 11)).toBe(1)
+        expect(comboShiftAt([freeze], 20)).toBe(1)
+        expect(comboShiftAt([freeze], 21)).toBe(0)
+        let total = 0
+        for (let t = 0; t <= 30; t++) total += comboShiftAt([freeze], t)
+        expect(total).toBe(10)
+    })
+
+    it("comboShiftAt adds two effects and is 0 with none or with other kinds", () => {
+        const other = { ...freeze, source: "other" }
+        expect(comboShiftAt([freeze, other], 15)).toBe(2)
+        expect(comboShiftAt([], 15)).toBe(0)
+        expect(comboShiftAt([effect("orderRate", 0, 10, 20)], 15)).toBe(0)
+    })
+
+    it("tickEffects moves no plot or order for comboRate and autoHarvest, and drops them", () => {
+        const auto = lasting({ kind: "autoHarvest" }, 10, 20)
+        const plots = [growing(0, 50)]
+        const orders = [order(60)]
+        const r = tickEffects([freeze, auto], plots, orders, 15)
+        expect(r.plots).toBe(plots)
+        expect(r.orders).toBe(orders)
+        expect(tickEffects([freeze, auto], plots, orders, 21).active).toEqual([])
+    })
+
+    it("autoHarvestAt works from startedAt to endsAt − 1 and respects exclude and only", () => {
+        const auto = lasting({ kind: "autoHarvest" }, 10, 20)
+        expect(autoHarvestAt([auto], 0, 9)).toBe(false)
+        expect(autoHarvestAt([auto], 0, 10)).toBe(true)
+        expect(autoHarvestAt([auto], 3, 19)).toBe(true)
+        expect(autoHarvestAt([auto], 0, 20)).toBe(false)
+        expect(autoHarvestAt([lasting(auto.effect, 10, 20, null, [1])], 1, 15)).toBe(false)
+        expect(autoHarvestAt([lasting(auto.effect, 10, 20, [2])], 1, 15)).toBe(false)
+        expect(autoHarvestAt([lasting(auto.effect, 10, 20, [2])], 2, 15)).toBe(true)
+        expect(autoHarvestAt([freeze], 0, 15)).toBe(false)
     })
 })

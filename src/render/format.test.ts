@@ -121,7 +121,8 @@ describe("orderText", () => {
             timeLimit: 600,
             small: false,
             rush: false,
-            tip: 0
+            tip: 0,
+            giant: null
         }
         const state = { ...game("timed"), tick: 100, inventory: { garlic: 2 } }
         expect(orderText(order, state)).toBe("Order #3\ngarlic x4  (have 2)\nvalue 8   0:50")
@@ -380,7 +381,8 @@ describe("orderTimeFraction and isOrderUrgent", () => {
         timeLimit: ORDER_TICKS,
         small: false,
         rush: false,
-        tip: 0
+        tip: 0,
+        giant: null
     }
 
     it("runs from 1 when the order opens to 0 on its last tick", () => {
@@ -599,7 +601,8 @@ describe("second batch text: fog, worms, sneak peek, steady pace", () => {
             timeLimit: 600,
             small: false,
             rush: false,
-            tip: 0
+            tip: 0,
+            giant: null
         }
         expect(orderText(order, fogged(12))).toBe("Order #2\ngarlic x3  (have 0)\nvalue 6   ?:??")
     })
@@ -613,7 +616,8 @@ describe("second batch text: fog, worms, sneak peek, steady pace", () => {
             timeLimit: 600,
             small: true,
             rush: false,
-            tip: 0
+            tip: 0,
+            giant: null
         }
         expect(orderText(order, game("survival")).split("\n")[0]).toBe("Order #4  SMALL")
         expect(nextOrderText(order).split("\n")[0]).toBe("Next order  SMALL")
@@ -628,7 +632,8 @@ describe("second batch text: fog, worms, sneak peek, steady pace", () => {
             timeLimit: 600,
             small: true,
             rush: false,
-            tip: 10
+            tip: 10,
+            giant: null
         }
         expect(orderText(order, game("survival")).split("\n")[0]).toBe("Order #4  SMALL TIP +10")
         expect(orderText({ ...order, small: false, tip: 0 }, game("survival"))).not.toContain("TIP")
@@ -643,7 +648,8 @@ describe("second batch text: fog, worms, sneak peek, steady pace", () => {
             timeLimit: 1,
             small: false,
             rush: false,
-            tip: 0
+            tip: 0,
+            giant: null
         }
         expect(nextOrderText(order)).toBe("Next order\ncarrot x2\nvalue 16")
     })
@@ -683,7 +689,8 @@ describe("rush wave text", () => {
         timeLimit: 300,
         small: false,
         rush: true,
-        tip: 0
+        tip: 0,
+        giant: null
     })
 
     it("marks a rush order, before SMALL", () => {
@@ -691,6 +698,11 @@ describe("rush wave text", () => {
         expect(orderText(order, game("timed")).split("\n")[0]).toBe("Order #5  RUSH")
         const both = { ...order, small: true }
         expect(orderText(both, game("timed")).split("\n")[0]).toBe("Order #5  RUSH SMALL")
+    })
+
+    it("marks a Giant order with how many orders it merged, first", () => {
+        const giant = { ...rushOrder(6), rush: false, tip: 4, giant: { orders: 3, coinsPct: 150 } }
+        expect(orderText(giant, game("timed")).split("\n")[0]).toBe("Order #6  GIANT x3 TIP +4")
     })
 
     it("counts down the warning in whole seconds, rounding up", () => {

@@ -120,6 +120,44 @@
             }
         },
         {
+            "id": "comboFreeze",
+            "name": "Combo freeze",
+            "text": "The combo timer stops for {seconds} s",
+            "modes": ["timed"],
+            "weight": 10,
+            "seconds": 10,
+            "shopPrice": 10,
+            "effect": {
+                "kind": "comboRate",
+                "pct": 0
+            }
+        },
+        {
+            "id": "autoHarvest",
+            "name": "Auto harvest",
+            "text": "Ripe crops harvest themselves for {seconds} s",
+            "modes": ["survival", "timed"],
+            "weight": 8,
+            "seconds": 10,
+            "shopPrice": 12,
+            "effect": {
+                "kind": "autoHarvest"
+            }
+        },
+        {
+            "id": "giantOrder",
+            "name": "Giant order",
+            "text": "Merge every order into one that pays more",
+            "modes": ["survival", "timed"],
+            "weight": 4,
+            "shopPrice": 15,
+            "effect": {
+                "kind": "giantOrder",
+                "coinsPct": 150,
+                "timePct": 150
+            }
+        },
+        {
             "id": "merchantCall",
             "name": "Merchant call",
             "text": "One free shop restock",

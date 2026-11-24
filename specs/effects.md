@@ -12,7 +12,7 @@ Like the other rule modules, `effects.ts` never reads or returns a whole `GameSt
 - **Instant effect.** Happens once, when it is used. Never stored.
 - **Source.** The id of what started a lasting effect: a power-up id or an event id. The two lists never share an id. One active effect per source: starting it again while it is active adds time instead of a second copy.
 - **Rate.** A lasting effect's `pct`: how fast its clock runs while it is active, as a % of normal. `0` stops the clock, `50` is half speed, `150` is one and a half times as fast.
-- **Working ticks.** A lasting effect started on tick `s` with length `d` has `endsAt = s + d`. Rate effects move clocks on ticks `s + 1 … endsAt` (in `step`). Action effects (`blockHarvest`, `deliverBonus`) apply to actions on ticks `s … endsAt − 1`. Both cover exactly `d` ticks.
+- **Working ticks.** A lasting effect started on tick `s` with length `d` has `endsAt = s + d`. Rate effects move clocks on ticks `s + 1 … endsAt` (in `step`). Action effects (`blockHarvest`, `deliverBonus`, `autoHarvest`) apply to actions on ticks `s … endsAt − 1`. Both cover exactly `d` ticks.
 - **Excluded plots.** A lasting effect can leave some plots out (`exclude`). Bad events leave out Greenhouse plots; everything else excludes nothing.
 - **Only plots.** A lasting effect can instead work on a chosen list of plots (`only`). `null` means every plot. Crows use it: they land on a few plots, and each one is cleared when the player scares the crows off it. A plot is under an effect when `only` is `null` or lists it, and `exclude` doesn't list it (`appliesTo`).
 
@@ -22,10 +22,12 @@ Like the other rule modules, `effects.ts` never reads or returns a whole `GameSt
 type LastingEffect =
     | { kind: "growthRate"; pct: number } // growing crops' clocks
     | { kind: "orderRate"; pct: number } // open orders' timers
+    | { kind: "comboRate"; pct: number } // the Timed combo window (comboEndsAt; Combo freeze)
     | { kind: "blockHarvest"; plots: number } // harvest is refused on the plots in `only` (Crows land on up to `plots` plots)
     | { kind: "deliverBonus"; coins: number } // each delivery pays this many more coins (Gold rush)
     | { kind: "harvestBonus"; crops: number } // each harvest adds this many more crops (Worms)
     | { kind: "fog" } // the screen hides growth and order timers; no rule changes
+    | { kind: "autoHarvest" } // ready crops harvest themselves in step (Auto harvest)
 
 type InstantEffect =
     | { kind: "cutGrowth"; ticks: number } // every growing crop gets this many ticks closer to ready
@@ -42,6 +44,8 @@ type InstantEffect =
     | { kind: "addOrder"; timePct: number } // one extra order with timePct% of the usual time (Emergency order)
     | { kind: "rotStorage"; pct: number } // this % of each stored crop is lost, rounded down (Rot)
     | { kind: "tipOrder"; coins: number } // one random open order pays this many more coins when filled (Generous customer)
+    | { kind: "grantRestock" } // one free shop restock, up to the bank cap (Merchant call)
+    | { kind: "giantOrder"; coinsPct: number; timePct: number } // every open order merges into one giant order (Giant order)
 
 type Effect = LastingEffect | InstantEffect
 
@@ -55,9 +59,9 @@ type ActiveEffect = {
 }
 ```
 
-`pct`, `ticks`, `amount`, `coins`, `crops`, `plots` and `timePct` are whole numbers. A rate's `pct >= 0` and `pct !== 100`; `ticks`, `amount`, `coins`, `crops` and `plots` (both `seedPlots`' and `blockHarvest`'s) are `>= 1`; `addOrder`'s `timePct` and `rotStorage`'s `pct` are from 1 to 100. The files that use effects (`powerups.json`, `events.json`) check this when they load, and each says which kinds it allows.
+`pct`, `ticks`, `amount`, `coins`, `crops`, `plots` and `timePct` are whole numbers. A rate's `pct >= 0` and `pct !== 100`; `ticks`, `amount`, `coins`, `crops` and `plots` (both `seedPlots`' and `blockHarvest`'s) are `>= 1`; `addOrder`'s `timePct` and `rotStorage`'s `pct` are from 1 to 100; `giantOrder`'s `coinsPct` and `timePct` are `>= 1` (above 100 is the usual case). The files that use effects (`powerups.json`, `events.json`) check this when they load, and each says which kinds it allows.
 
-`growthRate` and `orderRate` are **rate effects**; `blockHarvest`, `deliverBonus`, `harvestBonus` and `fog` are **action effects**. The instant kinds that need the whole game state (`fillOrder`, `fillAllOrders`, `goodEvent`, `harvestAll`, `seedPlots`, `addOrder`, `rotStorage`, `tipOrder`) are carried out in `main.ts` or `events.ts`; `effects.ts` has helpers only for the ones that work on plots or effect lists alone.
+`growthRate`, `orderRate` and `comboRate` are **rate effects**; `blockHarvest`, `deliverBonus`, `harvestBonus`, `fog` and `autoHarvest` are **action effects**. `comboRate` moves no plot or order: `tickEffects` leaves it alone and `step` reads its shift through `comboShiftAt`. The instant kinds that need the whole game state (`fillOrder`, `fillAllOrders`, `goodEvent`, `harvestAll`, `seedPlots`, `addOrder`, `rotStorage`, `tipOrder`, `grantRestock`, `giantOrder`) are carried out in `main.ts` or `events.ts`; `effects.ts` has helpers only for the ones that work on plots or effect lists alone.
 
 ## The rate rule
 
@@ -174,6 +178,14 @@ The sum of `coins` over `deliverBonus` effects with `startedAt <= now < endsAt`;
 
 The sum of `crops` over `harvestBonus` effects with `startedAt <= now < endsAt` that don't list `plot` in `exclude`; `0` when there are none. `harvest` adds it (Worms).
 
+### `comboShiftAt(active: ActiveEffect[], now: number): number`
+
+The sum of `rateShift(pct, startedAt, now)` over `comboRate` effects with `endsAt >= now` (the same ticks a rate effect moves clocks on, `startedAt + 1 … endsAt`); `0` when there are none. `step` adds it to `comboEndsAt` while a streak is running, before checking whether the window has run out, so Combo freeze (`comboRate 0`) holds the window still.
+
+### `autoHarvestAt(active: ActiveEffect[], plot: number, now: number): boolean`
+
+`true` when some `autoHarvest` effect with `startedAt <= now < endsAt` `appliesTo` `plot`. `step`'s auto-harvest pass uses it next to the Auto-harvester upgrade.
+
 ### `fogged(active: ActiveEffect[], now: number): boolean`
 
 `true` while some `fog` effect has `startedAt <= now < endsAt`. Only the screen reads it.
@@ -259,9 +271,16 @@ Every plot becomes `{ state: "empty" }`. Returns the same array when every plot 
 - Leaves other effects untouched and never changes its input.
 - `deliverBonusAt` sums working bonuses, is `0` on `endsAt`, and `0` with none.
 
+**`comboShiftAt` / `autoHarvestAt`**
+
+- `comboShiftAt` gives `+1` on ticks `startedAt + 1 … endsAt` for `comboRate 0`, `0` on `startedAt` and after `endsAt`, adds two effects' shifts, and is `0` with none or with only other kinds.
+- `tickEffects` moves no plot or order for `comboRate` and `autoHarvest`, and drops them once they end.
+- `autoHarvestAt` is `true` from `startedAt` to `endsAt − 1`, `false` on `endsAt`, and respects `exclude` and `only`.
+
 ## Open items
 
 - [x] Leaving plots out of an effect (`exclude`), for Greenhouse plots under bad events.
 - [x] Effects that hit only chosen plots: an `only` list next to `exclude`. Crows are the first; Frost on one plot and Lucky clover could use it too.
 - [x] Effect kinds for the first events: `blockHarvest` (Crows), `stealCrop` (Moles), `deliverBonus` (Generous customer at first; Gold rush since Day 8b's change made Generous customer a `tipOrder`).
 - [ ] Should a lasting effect started again reset to its full length instead of adding time? Adding time is simpler to explain on a button ("+10 s").
+- [x] Effect kinds for Day 9's last power-ups: `comboRate` (Combo freeze), `autoHarvest` (Auto harvest), `giantOrder` (Giant order).

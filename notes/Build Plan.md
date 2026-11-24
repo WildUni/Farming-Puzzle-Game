@@ -274,7 +274,7 @@ Cap how many crops the player can hold, and give in-run coins all three of their
 ### Rerolls and lives (about 1.5 hours)
 
 - [x] `reroll` action: pay coins to redraw the 3 free upgrade choices; each reroll of the same offer costs more than the last, and the price resets on the next offer
-- [ ] Life price rule per mode in `modes.json`: rises per life bought, or scales with elapsed time (deferred: per life only for now; the time rule is an open question)
+- [x] ~~Life price rule per mode in `modes.json`: rises per life bought, or scales with elapsed time~~ (dropped: the price rises per life bought only)
 - [x] Test: coins and the reroll price reset when a new run starts
 
 ### Tuning (about 1.5 hours)
@@ -290,28 +290,28 @@ Replace Day 4's 6 flat upgrades with the design's tiered system, then add every 
 
 ### Tier system (about 3 hours)
 
-- [ ] Rewrite `upgrades.json`: id, stat, pool (Survival, Timed, both, or shop only), and either 5 tier values or one fixed tier
-- [ ] Move Day 4's upgrades onto the new format: Fast growth, Bumper harvest, Patient customers, Big tips, Life discount; Extra plot becomes shop only
-- [ ] Tier roll odds in config, with placeholder values until the design sets them
-- [ ] Stat caps: an upgrade that would pass the cap adds only what is left
-- [ ] Offer filter: skip upgrades whose stat is capped or that reached their max copies
-- [ ] The free pick draws from the current mode's pool
-- [ ] Tier name and color on each pick card
-- [ ] Test: once a stat hits its cap, its upgrades are never offered again
+- [x] Rewrite `upgrades.json`: id, stat, pool (Survival, Timed, both, or shop only), and either 5 tier values or one fixed tier
+- [x] Move Day 4's upgrades onto the new format: Fast growth, Bumper harvest, Patient customers, Big tips, Life discount; Extra plot becomes shop only
+- [x] Tier roll odds in config, with placeholder values until the design sets them
+- [x] Stat caps: an upgrade that would pass the cap adds only what is left
+- [x] Offer filter: skip upgrades whose stat is capped or that reached their max copies
+- [x] The free pick draws from the current mode's pool
+- [x] Tier name and color on each pick card
+- [x] Test: once a stat hits its cap, its upgrades are never offered again
 
 ### Upgrades for both modes (about 3 hours)
 
-- [ ] Growth and yield: Fast growth, Bumper harvest, Bigger bumper, Favorite crop
-- [ ] Orders: Patient customers, Small order, Sneak peek, Early bird
-- [ ] Coins and storage: Big tips, Premium produce, Bigger barn
-- [ ] Miracle grow: a button that finishes one plot, then recharges
-- [ ] Greenhouse: one chosen plot is safe from bad events (works on Day 4's three events now)
+- [x] Growth and yield: Fast growth, Bumper harvest, Bigger bumper, Favorite crop
+- [x] Orders: Patient customers, Small order, Sneak peek, Early bird
+- [x] Coins and storage: Big tips, Premium produce, Bigger barn
+- [x] Miracle grow: a button that finishes one plot, then recharges
+- [x] Greenhouse: one chosen plot is safe from bad events (works on Day 4's three events now)
 
 ### Mode upgrades (about 2 hours)
 
-- [ ] Survival: Second chance, Life discount, Steady pace, Extra heart, Last stand, Second wind
-- [ ] Timed: Combo keeper, Combo builder, Rush pay, Head start, Grand finale, Double delivery
-- [ ] Test: a fixed-seed run in each mode with 10 picks replays exactly
+- [x] Survival: Second chance, Life discount, Steady pace, Extra heart, Last stand, Second wind
+- [x] Timed: Combo keeper, Combo builder, Rush pay, Head start, Grand finale, Double delivery
+- [x] Test: a fixed-seed run in each mode with 10 picks replays exactly
 
 **Gate:** every upgrade listed today can be offered and picked, caps and copy limits hold, and a run with 10 picks replays exactly.
 
@@ -350,21 +350,21 @@ The design changed after Day 8 (see the Design Doc's Shop and Screen layout): th
 
 ### Shop rules (about 3 hours)
 
-- [ ] `openShop` / `closeShop` as logged actions; the open shop stops `step`, and only shop and storage actions work
-- [ ] Remove the opening schedule and the running shop; first stock drawn on first open
-- [ ] Free restocks: one per 7 filled orders (per mode in config), bank of 2, nothing counted while full; paid restock at a fixed price
-- [ ] Price rise by filled orders instead of visits; Interest every 30 s of play, up to 15 coins
-- [ ] Free restock (two per cycle), Fast restock (fewer orders) and Rain check (bigger bank)
-- [ ] Maxed cards stay in stock and can't be bought
-- [ ] Test: a run that opens the shop, restocks free and paid, and sells crops replays exactly
+- [x] `openShop` / `closeShop` as logged actions; the open shop stops `step`, and only shop and storage actions work
+- [x] Remove the opening schedule and the running shop; first stock drawn on first open
+- [x] Free restocks: one per 7 filled orders (per mode in config), bank of 2, nothing counted while full; paid restock at a fixed price
+- [x] Price rise by filled orders instead of visits; Interest every 30 s of play, up to 15 coins
+- [x] Free restock (two per cycle), Fast restock (fewer orders) and Rain check (bigger bank)
+- [x] Maxed cards stay in stock and can't be bought
+- [x] Test: a run that opens the shop, restocks free and paid, and sells crops replays exactly
 
 ### Screens (about 4 hours)
 
-- [ ] Shop page as a scene launched over the Game scene, with Shop, Storage and Your upgrades sections and section buttons
-- [ ] Storage section takes the barn's selling and fertilizer-making, with −/+ buttons instead of the HTML box
-- [ ] Drawer at the bottom of the play screen: storage bar and Fertilize, never pauses
-- [ ] Crop bar always visible: select a crop, click plots to plant; remove the plant picker
-- [ ] Shop button with the free restocks banked
+- [x] Shop page as a scene launched over the Game scene, with Shop, Storage and Your upgrades sections and section buttons
+- [x] Storage section takes the barn's selling and fertilizer-making, with −/+ buttons instead of the HTML box
+- [x] Drawer at the bottom of the play screen: storage bar and Fertilize, never pauses
+- [x] Crop bar always visible: select a crop, click plots to plant; remove the plant picker
+- [x] Shop button with the free restocks banked
 
 **Gate:** the shop opens and closes at any time in both modes with the clock stopped, free restocks arrive every 7 orders, several plots can be planted with one crop selection, and the run replays exactly.
 
@@ -374,32 +374,32 @@ Grow Day 4's two power-ups into the design's full set of 14, split into lasting 
 
 ### Framework (about 2 hours)
 
-- [ ] `powerups.json`: id, lasting or instant, duration or amount, drop weight, shop price
-- [ ] Lasting power-ups keep a timer, shown as an icon with time left in the heads-up display
-- [ ] Weighted drop roll on harvest, plus buying in the shop (Day 8)
-- [ ] Number of held slots in config, starting at 2
-- [ ] A per-mode flag to turn power-ups off, ready for the Daily Challenge later
+- [x] `powerups.json`: id, lasting or instant, duration or amount, drop weight, shop price
+- [x] Lasting power-ups keep a timer, shown with time left in the heads-up display (as text; icons come with the Day 13 art)
+- [x] Weighted drop roll on harvest, plus buying in the shop (Day 8)
+- [x] Number of held slots in config, starting at 2
+- [x] A per-mode flag to turn power-ups off, ready for the Daily Challenge later (a per-run `allowPowerUps` in the game config)
 
 ### Lasting power-ups (about 1.5 hours)
 
-- [ ] Order freeze (replaces Day 4's freeze; the run timer keeps running)
-- [ ] Combo freeze (Timed only; pauses the combo timer from Day 5)
-- [ ] Auto harvest (storage limits still apply)
-- [ ] Good omen, behind a flag until good events land on Day 10
+- [x] Order freeze (replaces Day 4's freeze; the run timer keeps running)
+- [x] Combo freeze (Timed only; pauses the combo timer from Day 5)
+- [x] Auto harvest (storage limits still apply)
+- [x] Good omen, behind a flag until good events land on Day 10
 
 ### Instant power-ups (about 3.5 hours)
 
-- [ ] Crop timing: Growth boost, Ready one (replaces Day 4's finish-one-plot), Ready all
-- [ ] Orders: Finish one, and Finish all (rare, or with no combo or points bonus; set in config while the design decides)
-- [ ] Coins: Gold rush, Coin bag
-- [ ] Merchant call: grants one free shop restock, up to the bank cap
-- [ ] Giant order: clears current orders into one large order; failing it adds the mode penalty (more orders in Survival, a gap with no orders in Timed)
-- [ ] Clean slate: clears the field so the player can replant
+- [x] Crop timing: Growth boost, Ready one (replaces Day 4's finish-one-plot), Ready all
+- [x] Orders: Finish one, and Finish all (rare, or with no combo or points bonus; set in config while the design decides)
+- [x] Coins: Gold rush, Coin bag
+- [x] Merchant call: grants one free shop restock, up to the bank cap
+- [x] Giant order: clears current orders into one large order; failing it adds the mode penalty (more orders in Survival, a gap with no orders in Timed)
+- [x] Clean slate: clears the field so the player can replant
 
 ### Related upgrades (about 1 hour)
 
-- [ ] Lucky drops, Long-lasting, Big pockets
-- [ ] Test: one fixed-seed test per power-up
+- [x] Lucky drops, Long-lasting, Big pockets
+- [x] Test: one fixed-seed test per power-up
 
 **Gate:** every power-up can drop, be bought and be used in both modes, and a run that uses them replays exactly.
 

@@ -12,7 +12,7 @@ Tuning numbers that are the same for every run. Changing one should never requir
 | `ORDER_MIN_AMOUNT`    | `2`          | Smallest amount an order asks for                                                                                                                     |
 | `ORDER_MAX_AMOUNT`    | `6`          | Largest amount an order asks for                                                                                                                      |
 | `MAX_OPEN_ORDERS`     | `2`          | Puzzle keeps this many orders open (Timed uses `MODES.timed.openOrders`, Survival its level row)                                                      |
-| `ORDERS_PER_UPGRADE`  | `10`         | Survival offers an upgrade after every this many filled orders (see [upgrades.md](upgrades.md))                                                       |
+| `ORDERS_PER_UPGRADE`  | `5`          | Survival and Timed offer an upgrade after every this many filled orders (see [upgrades.md](upgrades.md))                                              |
 | `UPGRADE_CHOICES`     | `3`          | Upgrades shown on one offer                                                                                                                           |
 | `TIERS`               | list         | Upgrade tiers in order: `common`, `uncommon`, `rare`, `epic`, `legendary`                                                                             |
 | `DEFAULT_ORDER_RULES` | `OrderRules` | The four order constants above as one object. Puzzle uses it as is and Timed with `maxOpenOrders` from `modes.json`; Survival reads `difficulty.json` |

@@ -6,13 +6,19 @@ import shipped from "../data/modes.json"
 
 // A small valid config, as it appears in modes.json (seconds, not ticks).
 const raw = {
-    survival: { startLives: 2, maxLives: 4, storageCap: 15 },
+    survival: {
+        startLives: 2,
+        maxLives: 4,
+        storageCap: 15,
+        giantPenalty: { seconds: 20, extraOrders: 2 }
+    },
     timed: {
         runSeconds: 60,
         openOrders: 2,
         storageCap: 18,
         finaleSeconds: 10,
         pairSeconds: 2,
+        giantPenalty: { seconds: 5 },
         combo: { stepPct: 50, capPct: 200, windowSeconds: 5 },
         rush: { atSeconds: [10, 30], warnSeconds: 3, orders: 2, timePct: 40, valuePct: 200 }
     }
@@ -34,13 +40,22 @@ describe("validateModes", () => {
     it("accepts the shipped modes.json and turns seconds into ticks", () => {
         expect(() => validateModes(shipped)).not.toThrow()
         expect(MODES).toEqual({
-            survival: shipped.survival,
+            survival: {
+                startLives: shipped.survival.startLives,
+                maxLives: shipped.survival.maxLives,
+                storageCap: shipped.survival.storageCap,
+                giantPenalty: {
+                    ticks: shipped.survival.giantPenalty.seconds * TICKS_PER_SECOND,
+                    extraOrders: shipped.survival.giantPenalty.extraOrders
+                }
+            },
             timed: {
                 runTicks: shipped.timed.runSeconds * TICKS_PER_SECOND,
                 openOrders: shipped.timed.openOrders,
                 storageCap: shipped.timed.storageCap,
                 finaleTicks: shipped.timed.finaleSeconds * TICKS_PER_SECOND,
                 pairTicks: shipped.timed.pairSeconds * TICKS_PER_SECOND,
+                giantPenalty: { ticks: shipped.timed.giantPenalty.seconds * TICKS_PER_SECOND },
                 combo: {
                     stepPct: shipped.timed.combo.stepPct,
                     capPct: shipped.timed.combo.capPct,
@@ -65,13 +80,19 @@ describe("validateModes", () => {
 
     it("accepts a valid config", () => {
         expect(validateModes(raw)).toEqual({
-            survival: { startLives: 2, maxLives: 4, storageCap: 15 },
+            survival: {
+                startLives: 2,
+                maxLives: 4,
+                storageCap: 15,
+                giantPenalty: { ticks: 20 * TICKS_PER_SECOND, extraOrders: 2 }
+            },
             timed: {
                 runTicks: 60 * TICKS_PER_SECOND,
                 openOrders: 2,
                 storageCap: 18,
                 finaleTicks: 10 * TICKS_PER_SECOND,
                 pairTicks: 2 * TICKS_PER_SECOND,
+                giantPenalty: { ticks: 5 * TICKS_PER_SECOND },
                 combo: { stepPct: 50, capPct: 200, windowTicks: 5 * TICKS_PER_SECOND },
                 rush: {
                     atTicks: [10 * TICKS_PER_SECOND, 30 * TICKS_PER_SECOND],
@@ -113,6 +134,20 @@ describe("validateModes", () => {
         ["timed.finaleSeconds past the run", broken((c) => (c.timed.finaleSeconds = 61))],
         ["timed.pairSeconds missing", broken((c) => delete c.timed.pairSeconds)],
         ["timed.pairSeconds 0", broken((c) => (c.timed.pairSeconds = 0))],
+        ["survival.giantPenalty missing", broken((c) => delete c.survival.giantPenalty)],
+        [
+            "survival.giantPenalty.seconds 0",
+            broken((c) => ((c.survival.giantPenalty as Record<string, unknown>).seconds = 0))
+        ],
+        [
+            "survival.giantPenalty.extraOrders 0",
+            broken((c) => ((c.survival.giantPenalty as Record<string, unknown>).extraOrders = 0))
+        ],
+        ["timed.giantPenalty missing", broken((c) => delete c.timed.giantPenalty)],
+        [
+            "timed.giantPenalty.seconds fractional",
+            broken((c) => ((c.timed.giantPenalty as Record<string, unknown>).seconds = 2.5))
+        ],
         ["combo missing", broken((c) => delete c.timed.combo)],
         [
             "combo.stepPct 0",

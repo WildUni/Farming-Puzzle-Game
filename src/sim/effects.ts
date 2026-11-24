@@ -203,6 +203,25 @@ function harvestBonusAt(active: ActiveEffect[], plot: number, now: number): numb
     )
 }
 
+// How far comboRate effects move the Timed combo window (comboEndsAt) on tick `now`: the rate
+// rule, on the same ticks a rate effect moves clocks (startedAt + 1 … endsAt). Combo freeze.
+function comboShiftAt(active: ActiveEffect[], now: number): number {
+    return active.reduce(
+        (sum, a) =>
+            a.effect.kind === "comboRate" && a.endsAt >= now
+                ? sum + rateShift(a.effect.pct, a.startedAt, now)
+                : sum,
+        0
+    )
+}
+
+// True when a working autoHarvest effect applies to `plot` (Auto harvest).
+function autoHarvestAt(active: ActiveEffect[], plot: number, now: number): boolean {
+    return active.some(
+        (a) => a.effect.kind === "autoHarvest" && working(a, now) && appliesTo(a, plot)
+    )
+}
+
 // True while a fog effect works: the screen hides growth and order timers.
 function fogged(active: ActiveEffect[], now: number): boolean {
     return active.some((a) => a.effect.kind === "fog" && working(a, now))
@@ -223,6 +242,8 @@ export {
     deliverBonusAt,
     harvestBonusAt,
     fogged,
+    comboShiftAt,
+    autoHarvestAt,
     finishAll,
     clearField
 }

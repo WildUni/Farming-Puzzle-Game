@@ -7,6 +7,7 @@ type SurvivalMode = {
     startLives: number
     maxLives: number // Survival lives can't go above this, plus Extra heart
     storageCap: number // most crops storage holds, before Bigger barn
+    giantPenalty: { ticks: number; extraOrders: number } // a failed Giant order: more orders
 }
 
 // Timed combo: each order filled in a row adds stepPct to the score multiplier, up to capPct.
@@ -33,6 +34,7 @@ type TimedMode = {
     storageCap: number // most crops storage holds, before Bigger barn
     finaleTicks: number // Grand finale: the run's last finaleTicks score more
     pairTicks: number // Double delivery: a fill within pairTicks of an unpaired one pairs with it
+    giantPenalty: { ticks: number } // a failed Giant order: no new orders for this long
     combo: ComboRules
     rush: RushRules
 }
@@ -73,6 +75,20 @@ function validateModes(raw: unknown): ModesConfig {
     const startLives = wholeAtLeast(survival, "startLives", 1, "survival.startLives")
     const maxLives = wholeAtLeast(survival, "maxLives", startLives, "survival.maxLives")
     const survivalCap = wholeAtLeast(survival, "storageCap", 1, "survival.storageCap")
+    const survivalPenalty = survival.giantPenalty
+    if (!isObject(survivalPenalty)) fail("survival.giantPenalty", "an object")
+    const survivalPenaltySeconds = wholeAtLeast(
+        survivalPenalty,
+        "seconds",
+        1,
+        "survival.giantPenalty.seconds"
+    )
+    const extraOrders = wholeAtLeast(
+        survivalPenalty,
+        "extraOrders",
+        1,
+        "survival.giantPenalty.extraOrders"
+    )
 
     const timed = raw.timed
     if (!isObject(timed)) fail("timed", "an object")
@@ -82,6 +98,14 @@ function validateModes(raw: unknown): ModesConfig {
     const finaleSeconds = wholeAtLeast(timed, "finaleSeconds", 1, "timed.finaleSeconds")
     if (finaleSeconds > runSeconds) fail("timed.finaleSeconds", "at most timed.runSeconds")
     const pairSeconds = wholeAtLeast(timed, "pairSeconds", 1, "timed.pairSeconds")
+    const timedPenalty = timed.giantPenalty
+    if (!isObject(timedPenalty)) fail("timed.giantPenalty", "an object")
+    const timedPenaltySeconds = wholeAtLeast(
+        timedPenalty,
+        "seconds",
+        1,
+        "timed.giantPenalty.seconds"
+    )
 
     const combo = timed.combo
     if (!isObject(combo)) fail("timed.combo", "an object")
@@ -90,13 +114,19 @@ function validateModes(raw: unknown): ModesConfig {
     const windowSeconds = wholeAtLeast(combo, "windowSeconds", 1, "timed.combo.windowSeconds")
 
     return {
-        survival: { startLives, maxLives, storageCap: survivalCap },
+        survival: {
+            startLives,
+            maxLives,
+            storageCap: survivalCap,
+            giantPenalty: { ticks: survivalPenaltySeconds * TICKS_PER_SECOND, extraOrders }
+        },
         timed: {
             runTicks: runSeconds * TICKS_PER_SECOND,
             openOrders,
             storageCap: timedCap,
             finaleTicks: finaleSeconds * TICKS_PER_SECOND,
             pairTicks: pairSeconds * TICKS_PER_SECOND,
+            giantPenalty: { ticks: timedPenaltySeconds * TICKS_PER_SECOND },
             combo: { stepPct, capPct, windowTicks: windowSeconds * TICKS_PER_SECOND },
             rush: validateRush(timed.rush, runSeconds)
         }

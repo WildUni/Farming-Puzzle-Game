@@ -627,6 +627,24 @@ describe("replay: power-ups", () => {
         }
     })
 
+    it("replays runs where the bot holds and tries Combo freeze, Auto harvest and Giant order", () => {
+        const used = new Set<string>()
+        for (const cfg of [survivalOn, timedOn]) {
+            for (let seed = 1; seed <= 30; seed++) {
+                const { state, log } = play(seed, cfg, 3000, (s) => {
+                    for (const id of s.powerUps) used.add(`${cfg.mode}:${id}`)
+                    return powerUser(s)
+                })
+                expect(replayState(seed, cfg, log, state.tick, crops)).toEqual(state)
+            }
+        }
+        expect(used).toContain("timed:comboFreeze")
+        expect(used).toContain("survival:autoHarvest")
+        expect(used).toContain("timed:autoHarvest")
+        expect(used).toContain("survival:giantOrder")
+        expect(used).toContain("timed:giantOrder")
+    })
+
     it("refuses a usePowerUp on an empty slot, and any use with power-ups off", () => {
         const empty = replay(
             1,

@@ -1,4 +1,4 @@
-import type { Order, OrderRules, CropTable, RNGState, Inventory } from "./types"
+import type { Order, OrderRules, CropTable, RNGState, Inventory, GameState } from "./types"
 import { pick, randomInt } from "./mulberry"
 import { DEFAULT_ORDER_RULES } from "./game_constants"
 
@@ -26,7 +26,8 @@ function createOrder(
         timeLimit: rules.orderTicks,
         small: false,
         rush: false,
-        tip: 0
+        tip: 0,
+        giant: null
     }
     return [order, afterAmount]
 }
@@ -60,4 +61,15 @@ function timeLeft(order: Order, now: number): number {
     return Math.max(0, order.expiresAt - now)
 }
 
-export { createOrder, canFulfill, fulfill, isExpired, timeLeft }
+// True while a Giant order is open.
+function giantOpen(state: GameState): boolean {
+    return state.orders.some((o) => o.giant !== null)
+}
+
+// True when step and Emergency order make no new orders: a Giant order is open, or Timed's
+// failed-Giant-order penalty is running.
+function ordersBlocked(state: GameState): boolean {
+    return giantOpen(state) || (state.mode === "timed" && state.tick < state.giantPenaltyUntil)
+}
+
+export { createOrder, canFulfill, fulfill, isExpired, timeLeft, giantOpen, ordersBlocked }

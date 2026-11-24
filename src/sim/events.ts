@@ -30,7 +30,7 @@ import { eventGapTicks, runLevel } from "./difficulty"
 import { POWER_UPS } from "./powerups"
 import { cutGrowth, startEffect, stealCrop } from "./effects"
 import { plant } from "./plot"
-import { createOrder, isExpired } from "./orders"
+import { createOrder, isExpired, ordersBlocked } from "./orders"
 import { storageFree } from "./economy"
 import rawEvents from "../data/events.json"
 
@@ -463,6 +463,8 @@ function addOrder(
     crops: CropTable,
     rules: OrderRules
 ): GameState {
+    // No new orders while a Giant order is open, or during Timed's Giant order penalty.
+    if (ordersBlocked(state)) return state
     const short = { ...rules, orderTicks: scalePct(rules.orderTicks, timePct) }
     const [order, events] = createOrder(
         state.nextOrderId,

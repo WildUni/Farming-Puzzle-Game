@@ -1,10 +1,10 @@
 # powerups.ts
 
-Power-ups: one-shot items the player holds and uses when they choose. They drop at random from harvests, sit in a few slots, and are used with the `usePowerUp` action. Each one fires one effect from [effects.md](effects.md), either instant (Ready one, Growth boost, Coin bag, …) or lasting (Order freeze, Gold rush).
+Power-ups: one-shot items the player holds and uses when they choose. They drop at random from harvests, sit in a few slots, and are used with the `usePowerUp` action. Each one fires one effect from [effects.md](effects.md), either instant (Ready one, Growth boost, Coin bag, Giant order, …) or lasting (Order freeze, Gold rush, Combo freeze, Auto harvest).
 
 What each power-up does lives in **`src/data/powerups.json`**. Which ones the player holds lives in **`GameState.powerUps`**, and lasting effects they started live in **`GameState.activeEffects`**.
 
-This spec covers ten power-ups, harvest drops and held slots. Buying them in the shop and pre-run power-ups come later, as do the power-ups that need a system that doesn't exist yet (see Open items).
+This spec covers all fourteen power-ups of the design doc, harvest drops and held slots. Buying them in the shop is in [shop.md](shop.md); pre-run power-ups come later (see Open items).
 
 ## Concepts
 
@@ -60,8 +60,11 @@ All numbers are placeholders until playtesting.
 | `goldRush`    | Gold rush    | survival, timed | 10     | `deliverBonus` 5 coins     | 15 s  | –      |
 | `cleanSlate`  | Clean slate  | survival, timed | 8      | `clearField`               | –     | –      |
 | `goodOmen`    | Good omen    | survival, timed | 10     | `goodEvent` (needs events) | –     | –      |
+| `comboFreeze` | Combo freeze | timed           | 10     | `comboRate` 0%             | 10 s  | –      |
+| `autoHarvest` | Auto harvest | survival, timed | 8      | `autoHarvest`              | 10 s  | –      |
+| `giantOrder`  | Giant order  | survival, timed | 4      | `giantOrder` 150%, 150%    | –     | –      |
 
-Every power-up is in both modes. Coin bag and Gold rush were Survival only when they shipped, because coins had no use in Timed then. Gold rush is a **lasting** power-up, as the design doc now has it: every order filled in its 15 s pays +5 coins (a `deliverBonus` effect, which no event uses any more since Generous customer became a one-order tip). Finish all is the rarest and gives no score (the design doc's "skips the puzzle" concern); it still counts the orders as filled and pays their coins.
+Every power-up is in both modes except Combo freeze, which is Timed only (Survival has no combo). Coin bag and Gold rush were Survival only when they shipped, because coins had no use in Timed then. Gold rush is a **lasting** power-up, as the design doc now has it: every order filled in its 15 s pays +5 coins (a `deliverBonus` effect, which no event uses any more since Generous customer became a one-order tip). Finish all is the rarest and gives no score (the design doc's "skips the puzzle" concern); it still counts the orders as filled and pays their coins.
 
 ### Merchant call (with the shop rework)
 
@@ -76,6 +79,41 @@ Built with the Day 8b shop rework, since it needs the restock bank (see [shop.md
 - It is never stocked in the shop (buying a restock with coins is what Restock already does), like Coin bag: `rollStock` leaves out `grantRestock` as well as `grantCoins`. It still needs a `shopPrice` to load; give it one, it is unused.
 - No draw, no tick change. Filled orders still count toward the next free restock as usual.
 - Tests (`powerups.test.ts`): it adds one free restock; it is refused with the bank full and kept; Rain check's bigger bank lets it add past 2; it is never stocked.
+
+### Combo freeze, Auto harvest and Giant order (Day 9)
+
+**Combo freeze** (`comboRate 0`, Timed only, lasting 10 s). While it runs, the combo window stands still: `step` adds `comboShiftAt(activeEffects, tick)` to `comboEndsAt` while `combo > 0`, before it checks whether the window ran out (see [effects.md](effects.md)). Failed orders still break the streak (Combo keeper still forgives them). It does not stop order timers or the run timer.
+
+- Refused while `combo` is 0, so it is never wasted on no streak.
+- Using it again while one runs adds its length, as for every lasting power-up. Long-lasting scales it.
+
+**Auto harvest** (`autoHarvest`, lasting 10 s). While it runs, `step`'s auto-harvest pass (4a in [main.md](main.md)) harvests every ready plot, as Auto-harvester does for its own plot: through `harvestPlot`, in plot order, so Crows and full storage still stop it (the plot stays ready), Bumper harvest and Worms apply, and each harvest rolls a power-up drop.
+
+- Allowed with nothing ready (it waits for crops to ripen).
+- A plot with both Auto-harvester and Auto harvest is harvested once.
+
+**Giant order** (`giantOrder`, coinsPct 150, timePct 150, instant). Every open order merges into one giant order:
+
+| Field       | Value                                                                                    |
+| ----------- | ---------------------------------------------------------------------------------------- |
+| `id`        | `nextOrderId` (which then goes up by 1)                                                  |
+| `required`  | each crop's amounts added up over the open orders                                        |
+| `value`     | the open orders' values added up                                                         |
+| `tip`       | the open orders' tips added up                                                           |
+| `timeLimit` | `max(1, scalePct(Σ timeLeft(order, tick), timePct))`, and `expiresAt = tick + timeLimit` |
+| `small`     | `false`                                                                                  |
+| `rush`      | `false` (rush orders merged in keep their raised `value`)                                |
+| `giant`     | `{ orders: N, coinsPct }`, N being how many orders were merged; `null` on other orders   |
+
+- Refused with no order open, or while a giant order is open (`giantOpen`).
+- Works during a rush wave: the wave's orders are merged too.
+- No draws: the orders' streams are untouched.
+- **While it is open**, `step` makes no new orders: no top-up, and a rush wave due on one of those ticks is skipped (its orders never come; `rng.rush` is not drawn). Emergency order (`addOrder`) adds nothing while it is open.
+- **Filled** (by `deliver`, Finish one or Finish all), it counts as one filled order (one step of the combo, one toward the next upgrade offer and free restock). Its points are `orderPoints` on its `value`, as for any order. Its coins are the per-order pay (base pay, Big tips, Gold rush, Early bird on the giant order's own time) × `orders` × `coinsPct` %, plus its `tip`.
+- **Failed**, it counts as one failed order (one life in Survival, a combo break in Timed, as usual), and the mode's penalty starts: `giantPenaltyUntil = tick + MODES[mode].giantPenalty.ticks`. While `tick < giantPenaltyUntil`:
+    - **Survival:** `orderRules` allows `MODES.survival.giantPenalty.extraOrders` (1) more open orders, so more orders arrive.
+    - **Timed:** no new orders at all, regular or rush (a wave due then is skipped).
+- The penalty numbers live in `modes.json` (see [modes.md](modes.md)): 30 s and +1 order in Survival, 10 s in Timed.
 
 ## Types (in [types.md](types.md))
 
@@ -106,7 +144,7 @@ Checks a parsed JSON value and returns it in the typed shape. Throws an `Error` 
 - `id`, `name` or `text` is not a non-empty string, or an `id` is used twice.
 - `modes` is empty, has a repeat, or has a value other than `survival` or `timed`.
 - `weight` is not a whole number `>= 1`.
-- `effect` is not an object with a known `kind`, is one only events use (`blockHarvest`, `stealCrop`, `harvestBonus`, `fog`, `harvestAll`, `seedPlots`, `addOrder`, `rotStorage`), or its numbers break the rules in [effects.md](effects.md#types-in-typesmd).
+- `effect` is not an object with a known `kind`, is one only events use (`blockHarvest`, `stealCrop`, `harvestBonus`, `fog`, `harvestAll`, `seedPlots`, `addOrder`, `rotStorage`, `tipOrder`), or its numbers break the rules in [effects.md](effects.md#types-in-typesmd).
 - `seconds` is missing for a lasting effect, present for an instant one, or not a whole number `>= 1`.
 - `target` is not `"plot"` or `"order"` when present; `"plot"` is missing on a `finishGrowth` power-up or present on any other; `"order"` is missing on a `fillOrder` power-up or present on any other.
 - `needs` has a repeat or a value that is not a `GameSystem`, or leaves out `"events"` on a `goodEvent` power-up.
@@ -164,6 +202,8 @@ Returns `null` when:
 - `slot` is not a whole number from `0` to `powerUps.length − 1`;
 - a system in its `needs` is off;
 - it is Good omen and an event is announced or running, or no good event is eligible;
+- it is Combo freeze and `combo` is 0;
+- it is Giant order and no order is open, or a giant order already is;
 - the power-up has a target and `target` is not in `powerUpTargets(state, slot)`, or it has no target and `target` is given (other than `null`).
 
 Otherwise it removes `powerUps[slot]` (a new array) and fires the effect:
@@ -178,7 +218,8 @@ Otherwise it removes `powerUps[slot]` (a new array) and fires the effect:
 | `fillOrder`     | The order with id `target` is filled as by `deliver`, but takes no crops: removed, `value` added to `score`, `ordersCompleted + 1`, and in Survival the usual coins (base, Big tips, `deliverBonus` effects, Early bird) |
 | `fillAllOrders` | Every open order is filled the same way, in list order, but adds **no** score                                                                                                                                            |
 | `goodEvent`     | `announceEvent(state, EVENTS, "good")`: a good event is announced now, with its usual warning. Stores `rng.events`                                                                                                       |
-| lasting         | `activeEffects = startEffect(activeEffects, id, effect, tick, durationFor(def, upgrades))` (Order freeze, Gold rush)                                                                                                     |
+| lasting         | `activeEffects = startEffect(activeEffects, id, effect, tick, durationFor(def, upgrades))` (Order freeze, Gold rush, Combo freeze, Auto harvest)                                                                         |
+| `giantOrder`    | Every open order is replaced by one giant order (see Giant order above); `nextOrderId` goes up by 1                                                                                                                      |
 | `grantRestock`  | Merchant call (below). `shop.freeRestocks = min(restockBankCap(state), freeRestocks + 1)`. Refused (the power-up is kept) while the bank is full                                                                         |
 
 Only Good omen draws a random number (from `rng.events`, like any announcement); no power-up changes `tick`. Using the same lasting power-up while it is active adds its length to the running effect instead of stacking a second one.
@@ -264,6 +305,17 @@ All three are marked `"needs": ["powerUps"]`, so they are never offered in a run
 - `validatePowerUps` accepts a `grantRestock` power-up; `validateEvents` refuses it as an event effect.
 - It adds one free restock without opening the shop, drawing nothing; it is refused with the bank full and kept; Rain check's bigger bank lets it add past 2; it is never stocked.
 
+**Combo freeze, Auto harvest and Giant order (`powerups.test.ts`, `main.test.ts`)**
+
+- `validatePowerUps` accepts `comboRate` and `autoHarvest` as lasting kinds (they need `seconds`) and `giantOrder` as instant; it throws for `giantOrder` with a `coinsPct` or `timePct` below 1, and `validateEvents` refuses all three.
+- `dropTable` lists Combo freeze in Timed only.
+- Combo freeze: refused with no streak; with a streak, the combo survives past its old `comboEndsAt` for the freeze's length; a failed order still breaks it; order timers keep running.
+- Auto harvest: ready crops are harvested on the next steps without a harvest action; full storage leaves them ready; after it ends they are left alone; the harvests roll drops.
+- Giant order: refused with no order open and while a giant order is open; merges every open order (rush orders included) into one with the summed amounts, value and tips, `timeLimit` 150% of the summed time left, `giant.orders` set, a new id, and no draws.
+- No new order (regular, rush or Emergency) arrives while it is open; the board fills again on the tick after it is filled.
+- Filled, it pays `coinsPct` % of `orders` per-order pays plus its tip, and counts as one filled order.
+- Failed in Survival: one life, then one more open order than the level allows until the penalty ends. Failed in Timed: no order arrives for 10 s, then the board fills again.
+
 **Replay (`verification.test.ts`)**
 
 - Scripted runs with power-ups on, where the player uses every power-up as soon as it can (Ready one on the first valid plot), replay equal in Survival and Timed, and their logs contain `usePowerUp` entries.
@@ -272,7 +324,10 @@ All three are marked `"needs": ["powerUps"]`, so they are never offered in a run
 
 - [ ] Tune drop chance, weights, slot count, lengths and amounts after playtesting.
 - [x] Ready all, Finish one, Finish all, Gold rush, Clean slate, Good omen.
-- [ ] Still to come: Combo freeze (Timed combos), Giant order (needs a "no new orders until this one is done" rule and its mode penalties).
+- [x] Combo freeze, Auto harvest and Giant order (Day 9).
+- [ ] Giant order numbers (150% coins, 150% time, weight 4, 30 s and +1 order in Survival, 10 s in Timed) are placeholders. Is skipping a rush wave that comes due while a giant order is open too harsh?
+- [ ] Should Giant order also raise the score, not just coins? It sums the orders' values for now, so its only gain is coins (and the longer time).
+- [ ] Should Auto harvest's harvests roll power-up drops? They do for now, like Auto-harvester's.
 - [ ] Gold rush: keep "+5 coins per order for 15 s", or double coins for 15 s instead? (Also in the design doc's open questions.)
 - [x] Gold rush is Lasting (the design doc changed from "the current order pays extra"); nothing to change, it already was.
 - [x] Coin bag and Gold rush are in both modes, now that Timed orders pay coins.

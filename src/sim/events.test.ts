@@ -187,6 +187,12 @@ describe("validateEvents", () => {
         ["warnSeconds 0", (r) => (r.events[0].warnSeconds = 0)],
         ["a power-up-only effect", (r) => (r.events[0].effect = { kind: "grantCoins", amount: 1 })],
         ["the Merchant call effect", (r) => (r.events[0].effect = { kind: "grantRestock" })],
+        ["the Combo freeze effect", (r) => (r.events[1].effect = { kind: "comboRate", pct: 0 })],
+        ["the Auto harvest effect", (r) => (r.events[1].effect = { kind: "autoHarvest" })],
+        [
+            "the Giant order effect",
+            (r) => (r.events[0].effect = { kind: "giantOrder", coinsPct: 150, timePct: 150 })
+        ],
         ["finishGrowth", (r) => (r.events[0].effect = { kind: "finishGrowth" })],
         ["a rate of 100", (r) => (r.events[1].effect = { kind: "growthRate", pct: 100 })],
         ["0 bonus coins", (r) => (r.events[1].effect = { kind: "deliverBonus", coins: 0 })],
@@ -766,6 +772,15 @@ describe("new events in step", () => {
         )
         const longer = step(calm, crops)
         expect(longer.orders[longer.orders.length - 1].timeLimit).toBe(scalePct(full, 75))
+    })
+
+    it("Emergency order adds nothing, and draws nothing, while a Giant order is open", () => {
+        const s = step(game(), crops)
+        const giant = { ...s.orders[0], giant: { orders: s.orders.length, coinsPct: 150 } }
+        const held = builtNext({ ...s, orders: [giant] }, "emergencyOrder")
+        const next = step(held, crops)
+        expect(next.orders).toEqual([giant])
+        expect(next.nextOrderId).toBe(held.nextOrderId)
     })
 
     it("Rot removes a share of each stored crop, rounding down; Root cellar saves some", () => {

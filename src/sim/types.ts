@@ -49,6 +49,7 @@ type Order = {
     small: boolean // Small order halved its amounts
     rush: boolean // a Timed rush wave added it
     tip: number // extra coins filling it pays (Generous customer)
+    giant: { orders: number; coinsPct: number } | null // Giant order: orders merged, % of their pay
 }
 
 // How step creates orders at the current difficulty.
@@ -87,6 +88,7 @@ type GameState = {
     combo: number // Timed: orders filled in a row; sets the score multiplier (comboPct)
     comboEndsAt: number // Timed: last tick the streak survives without another fill (0 with no streak)
     bestCombo: number // Timed: longest streak this run
+    giantPenaltyUntil: number // first tick after a failed Giant order's penalty (0 when none)
     comboMisses: number // Timed: failed orders Combo keeper has forgiven in the current streak
     pairOpenUntil: number // Timed: last tick a fill pairs with the one before (Double delivery); 0 = none
     fertilizer: number // fertilizer held; doesn't count toward storage
@@ -245,10 +247,12 @@ type ShopState = {
 type LastingEffect =
     | { kind: "growthRate"; pct: number } // growing crops' clocks run at pct% of normal
     | { kind: "orderRate"; pct: number } // open orders' timers run at pct% of normal
+    | { kind: "comboRate"; pct: number } // the Timed combo window runs at pct% of normal
     | { kind: "blockHarvest"; plots: number } // harvest is refused on `only` (Crows land on up to `plots`)
     | { kind: "deliverBonus"; coins: number } // each delivery pays this many more coins (Survival)
     | { kind: "harvestBonus"; crops: number } // each harvest adds this many more crops
     | { kind: "fog" } // growth and order timers are hidden on screen; no rule changes
+    | { kind: "autoHarvest" } // ready crops harvest themselves in step
 
 type InstantEffect =
     | { kind: "cutGrowth"; ticks: number } // every growing crop gets this many ticks closer
@@ -266,6 +270,7 @@ type InstantEffect =
     | { kind: "rotStorage"; pct: number } // this % of each stored crop is lost, rounded down
     | { kind: "tipOrder"; coins: number } // one random open order pays this many more coins
     | { kind: "grantRestock" } // one free shop restock, up to the bank cap
+    | { kind: "giantOrder"; coinsPct: number; timePct: number } // open orders merge into one
 
 type Effect = LastingEffect | InstantEffect
 

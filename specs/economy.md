@@ -172,7 +172,7 @@ No action here reads the clock or moves the tick, so replays work as before: a r
 - [ ] Held fertilizer does not count toward storage for now, and has no limit. Should it count, or have a cap?
 - [x] Making fertilizer as a basic action or behind an upgrade (`fertilizer.unlock`): behind Compost (epic).
 - [ ] Compost is not sellable for now, so held fertilizer never becomes useless. Revisit when the shop buys upgrades back (Day 8).
-- [ ] Life price that scales with elapsed time (as well as, or instead of, per life bought). Likely to be dropped; not planned.
+- [x] Life price that scales with elapsed time: dropped. The price rises per life bought only.
 - [ ] Should a reroll avoid repeating the cards it replaces? Should rerolls roll better tiers (see [upgrades.md](upgrades.md))?
 - [ ] Timed orders pay the same coins as Survival for now (base pay, Big tips, Early bird). Open question: should Timed have its own, lower rate (for example `timed.coinsPerOrder` in `modes.json`) once the shop exists? See the design doc.
 - [x] Bigger barn and Premium produce (Day 7) set `storageBonus` and `sellPricePct` (see [upgrades.md](upgrades.md)).
