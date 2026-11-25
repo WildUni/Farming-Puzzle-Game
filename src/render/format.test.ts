@@ -11,6 +11,7 @@ import {
     plotOverlays,
     newsText,
     scarecrowText,
+    raccoonText,
     timerText,
     plotText,
     orderText,
@@ -557,6 +558,23 @@ describe("event text", () => {
         expect(scarecrowText(s)).toBe("Scarecrow 46s")
         expect(scarecrowText({ ...s, tick: 551 })).toBeNull()
         expect(scarecrowText(game("survival"))).toBeNull()
+    })
+
+    it("raccoonText shows the seconds left while a raccoon works, rounding up", () => {
+        const raccoon = {
+            source: "raccoon",
+            effect: { kind: "raccoon" as const, pct: 40 },
+            startedAt: 100,
+            endsAt: 160,
+            exclude: [],
+            only: null
+        }
+        const s = { ...game("survival"), tick: 101, activeEffects: [raccoon] }
+        expect(raccoonText(s)).toBe("Raccoon in the barn!\nTap to shoo  6s")
+        expect(raccoonText({ ...s, tick: 159 })).toBe("Raccoon in the barn!\nTap to shoo  1s")
+        expect(raccoonText({ ...s, tick: 99 })).toBeNull()
+        expect(raccoonText({ ...s, tick: 160 })).toBeNull()
+        expect(raccoonText(game("survival"))).toBeNull()
     })
 
     it("plotOverlays marks dry, watered and seeded crops", () => {

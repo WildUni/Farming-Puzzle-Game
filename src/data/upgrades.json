@@ -200,6 +200,11 @@
             "min": 0,
             "max": 75
         },
+        "raccoonDurationPct": {
+            "base": 100,
+            "min": 100,
+            "max": 200
+        },
         "storageBonus": {
             "base": 0,
             "min": 0,
@@ -927,6 +932,21 @@
                 {
                     "stat": "mixKeepPct",
                     "perTier": [10, 15, 25, 35, 50]
+                }
+            ],
+            "needs": ["events"]
+        },
+        {
+            "id": "guardDog",
+            "name": "Guard dog",
+            "text": "Raccoons stay {0}% longer, so they're easier to shoo",
+            "pools": ["survival", "timed"],
+            "maxCopies": 3,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "raccoonDurationPct",
+                    "perTier": [15, 25, 40, 60, 100]
                 }
             ],
             "needs": ["events"]

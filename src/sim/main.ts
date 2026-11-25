@@ -48,9 +48,10 @@ import {
     deliverBonusAt,
     comboShiftAt,
     autoHarvestAt,
-    droughtOn
+    droughtOn,
+    raccoonAt
 } from "./effects"
-import { EVENTS, announceEvent, gapTicks, startEvent } from "./events"
+import { EVENTS, announceEvent, endEvent, gapTicks, startEvent } from "./events"
 import { POWER_UPS, rollDrop, canUsePowerUp, durationFor } from "./powerups"
 import {
     storageFree,
@@ -352,6 +353,17 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
             const activeEffects = scareCrows(state.activeEffects, action.plot, state.tick)
             if (activeEffects === null) return null
             return { ...state, activeEffects }
+        }
+
+        case "shooRaccoon": {
+            // Raccoon: tapped away while it is in the barn, it takes nothing and the event ends.
+            if (raccoonAt(state.activeEffects, state.tick) === null) return null
+            return {
+                ...state,
+                activeEffects: state.activeEffects.filter((a) => a.effect.kind !== "raccoon"),
+                event: null,
+                nextEventAt: state.tick + gapTicks(state)
+            }
         }
 
         case "waterPlot": {
@@ -814,6 +826,7 @@ function step(state: GameState, crops: CropTable): GameState {
     const ticked: GameState = { ...state, tick }
     let ev = startEvent(ticked, crops, orderRules(ticked))
     if (ev.event !== null && tick >= ev.event.endsAt) {
+        ev = endEvent(ev)
         ev = { ...ev, event: null, nextEventAt: tick + gapTicks(ev) }
     }
 

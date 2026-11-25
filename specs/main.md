@@ -126,6 +126,11 @@ Returns a **new** state, or `null` if the move is not allowed. A `null` result m
 - Calls `scareCrows(activeEffects, plot, tick)` and stores the result. Returns `null` if that does (no crows on that plot right now).
 - Draws nothing and changes nothing else. The plot can be harvested by the next action on the same tick (see [events.md](events.md)).
 
+**`shooRaccoon`** `{ type: 'shooRaccoon' }`
+
+- Returns `null` unless `raccoonAt(activeEffects, tick)` finds a raccoon (see [events.md](events.md)).
+- Removes every `raccoon` effect, and ends the running event: `event = null`, `nextEventAt = tick + gapTicks(state)`. Nothing is taken from storage. Draws nothing.
+
 **`sellCrop`, `makeFertilizer`, `useFertilizer`, `rerollOffer`** — the in-run economy, specified in [economy.md](economy.md). `canReroll(state)` and `rerollPriceFor(state)` are exported for the reroll button.
 
 **`useMiracleGrow`** `{ type: 'useMiracleGrow', plot }`
@@ -188,7 +193,7 @@ Moves the game forward one tick. This is the only way time passes in a run.
 Returns a **new** state. The steps run in this order, each one using the result of the one before:
 
 1. **Tick:** `tick` becomes `state.tick + 1`. Every later step uses this new tick.
-2. **Events start and end:** if the announced event's `startsAt` is this tick it starts (`startEvent(state, crops, orderRules(state))`: an instant effect fires, or a lasting one goes through `startEffect`; Moles may draw its block roll, and Birds and Emergency order their picks, from `rng.events`). Then, if its `endsAt` is this tick or earlier, `event` becomes `null` and `nextEventAt = tick + gapTicks(state)`. See [events.md](events.md).
+2. **Events start and end:** if the announced event's `startsAt` is this tick it starts (`startEvent(state, crops, orderRules(state))`: an instant effect fires, or a lasting one goes through `startEffect`; Moles may draw its block roll, and Birds and Emergency order their picks, from `rng.events`). Then, if its `endsAt` is this tick or earlier, `endEvent` runs (a Raccoon still in the barn takes its share of storage), `event` becomes `null` and `nextEventAt = tick + gapTicks(state)`. See [events.md](events.md).
 3. **Effects:** `tickEffects(activeEffects, plots, orders, tick)` drops lasting effects that have ended and moves crops' and orders' deadlines for the ones still active (see [effects.md](effects.md)). It runs before growth and failed orders, so a crop pulled to this tick turns ready now, and an order pushed past this tick doesn't fail.
 4. **Growth:** every plot is passed through `updateGrowth(plot, tick)`. A growing plot becomes `'ready'` on its `readyAt` tick (_p + growTicks_ for a crop planted on tick _p_). Empty and ready plots don't change.
 5. **Failed orders:** every order where `isExpired(order, tick)` (`tick > expiresAt`) is removed, and `ordersFailed` goes up by 1 for each. The other orders keep their order in the list.

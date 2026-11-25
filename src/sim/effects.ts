@@ -252,6 +252,11 @@ function droughtOn(active: ActiveEffect[], plot: number, now: number): ActiveEff
     )
 }
 
+// The working raccoon effect on tick `now`, or null. shooRaccoon and the screen read it.
+function raccoonAt(active: ActiveEffect[], now: number): ActiveEffect | null {
+    return active.find((a) => a.effect.kind === "raccoon" && working(a, now)) ?? null
+}
+
 // % of the usual sell price crops fetch on tick `now`: 100, times each working sellRate effect's
 // pct, rounding down after each (Price crash).
 function sellRateAt(active: ActiveEffect[], now: number): number {
@@ -285,6 +290,7 @@ export {
     harvestBonusAt,
     fogged,
     sellRateAt,
+    raccoonAt,
     comboShiftAt,
     autoHarvestAt,
     isWatered,

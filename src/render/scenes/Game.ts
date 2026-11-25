@@ -21,6 +21,7 @@ import { EventBanner } from "../views/EventBanner"
 import { RushBanner } from "../views/RushBanner"
 import { DebugPanel } from "../views/DebugPanel"
 import { DrawerView } from "../views/DrawerView"
+import { RaccoonView } from "../views/RaccoonView"
 import { ShopButtonView } from "../views/ShopButtonView"
 import type { ShopData } from "./Shop"
 import { POWER_UPS, powerUpTargets } from "../../sim/powerups"
@@ -61,6 +62,7 @@ export class Game extends Scene {
     private eventBanner: EventBanner
     private rushBanner: RushBanner
     private drawer: DrawerView
+    private raccoon: RaccoonView
     private shopButton: ShopButtonView
     private debugPanel: DebugPanel | null // dev builds only
     private debugged: boolean // the debug menu changed this run, so its log won't replay
@@ -137,6 +139,7 @@ export class Game extends Scene {
         this.eventBanner = new EventBanner(this)
         this.rushBanner = new RushBanner(this)
         this.drawer = new DrawerView(this, () => this.toggleFertilizing())
+        this.raccoon = new RaccoonView(this, () => this.act({ type: "shooRaccoon" }))
         this.debugPanel = import.meta.env.DEV
             ? new DebugPanel(this.crops, (change) => this.applyDebug(change))
             : null
@@ -223,6 +226,7 @@ export class Game extends Scene {
             !isShopOpen(this.state)
         this.cropBar.update(this.selectedCrop, boardFree)
         this.drawer.update(this.state, boardFree, this.fertilizing)
+        this.raccoon.update(this.state, boardFree)
         this.shopButton.update(this.state, this.paused)
         this.powerUpBar.update(this.state, this.choosingSlot)
         this.miracle.update(this.state, this.miracling)

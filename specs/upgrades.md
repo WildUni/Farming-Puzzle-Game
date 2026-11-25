@@ -142,29 +142,30 @@ Added with [events.md](events.md), which lists the ten upgrades (Early warning, 
 
 Every upgrade from the design doc that works with the systems that exist now (orders, plots, coins, lives, events and power-ups). The rest wait for their systems (see [Later phases](#later-phases)).
 
-| id              | name           | pools           | tier   | maxCopies | effects (common → legendary)               | needs  | sellable |
-| --------------- | -------------- | --------------- | ------ | --------- | ------------------------------------------ | ------ | -------- |
-| `biggerBumper`  | Bigger bumper  | survival, timed | tiered | 3         | `bumperExtra` +1, +1, +1, +2, +3           | –      | yes      |
-| `smallOrder`    | Small order    | survival, timed | tiered | 5         | `smallOrderChance` +5, +8, +12, +18, +25   | –      | yes      |
-| `sneakPeek`     | Sneak peek     | survival, timed | rare   | 1         | `sneakPeek` +1                             | –      | yes      |
-| `pestControl`   | Pest control   | survival, timed | epic   | 1         | `pestBan` +1                               | events | yes      |
-| `irrigation`    | Irrigation     | survival, timed | tiered | 3         | `waterBonusSeconds` +1, +1, +2, +2, +3     | events | yes      |
-| `earlyBird`     | Early bird     | survival, timed | tiered | 5         | `earlyBirdCoins` +1, +2, +3, +5, +8        | –      | yes      |
-| `steadyPace`    | Steady pace    | survival        | tiered | 5         | `levelPacePct` +5, +8, +12, +18, +25       | –      | yes      |
-| `extraHeart`    | Extra heart    | survival        | rare   | 2         | `extraLives` +1 (max lives +1, filled)     | –      | no       |
-| `lastStand`     | Last stand     | survival        | tiered | 3         | `lastStandGrowthPct` −5, −8, −12, −18, −25 | –      | yes      |
-| `secondChance`  | Second chance  | survival        | tiered | 5         | `secondChance` +5, +8, +12, +18, +25       | –      | yes      |
-| `secondWind`    | Second wind    | survival        | tiered | 3         | `secondWindPct` +10, +15, +25, +35, +50    | –      | yes      |
-| `wormFarm`      | Worm farm      | survival, timed | tiered | 3         | `wormBonusPct` +50, +100, +100, +150, +200 | events | yes      |
-| `goodNeighbors` | Good neighbors | survival, timed | rare   | 1         | `neighborReplant` +1                       | events | yes      |
-| `fourLeaf`      | Four-leaf      | survival, timed | rare   | 2         | `cloverExtraPlots` +1                      | events | yes      |
-| `compost`       | Compost        | survival, timed | epic   | 1         | `fertilizerUnlocked` +1                    | –      | no       |
-| `birdNet`       | Bird net       | survival, timed | tiered | 3         | `birdPlotsPct` −10, −15, −20, −25, −33     | events | yes      |
-| `rootCellar`    | Root cellar    | survival, timed | tiered | 3         | `rotPct` −10, −15, −25, −35, −50           | events | yes      |
-| `lantern`       | Lantern        | survival, timed | tiered | 3         | `fogDurationPct` −10, −15, −25, −35, −50   | events | yes      |
-| `calmNerves`    | Calm nerves    | survival, timed | tiered | 3         | `emergencyTimePct` +10, +15, +25, +35, +50 | events | yes      |
-| `priceFloor`    | Price floor    | survival, timed | tiered | 3         | `crashPricePct` +20, +30, +50, +70, +90    | events | yes      |
-| `clearOrders`   | Clear orders   | survival, timed | tiered | 3         | `mixKeepPct` +10, +15, +25, +35, +50       | events | yes      |
+| id              | name           | pools           | tier   | maxCopies | effects (common → legendary)                  | needs  | sellable |
+| --------------- | -------------- | --------------- | ------ | --------- | --------------------------------------------- | ------ | -------- |
+| `biggerBumper`  | Bigger bumper  | survival, timed | tiered | 3         | `bumperExtra` +1, +1, +1, +2, +3              | –      | yes      |
+| `smallOrder`    | Small order    | survival, timed | tiered | 5         | `smallOrderChance` +5, +8, +12, +18, +25      | –      | yes      |
+| `sneakPeek`     | Sneak peek     | survival, timed | rare   | 1         | `sneakPeek` +1                                | –      | yes      |
+| `pestControl`   | Pest control   | survival, timed | epic   | 1         | `pestBan` +1                                  | events | yes      |
+| `irrigation`    | Irrigation     | survival, timed | tiered | 3         | `waterBonusSeconds` +1, +1, +2, +2, +3        | events | yes      |
+| `earlyBird`     | Early bird     | survival, timed | tiered | 5         | `earlyBirdCoins` +1, +2, +3, +5, +8           | –      | yes      |
+| `steadyPace`    | Steady pace    | survival        | tiered | 5         | `levelPacePct` +5, +8, +12, +18, +25          | –      | yes      |
+| `extraHeart`    | Extra heart    | survival        | rare   | 2         | `extraLives` +1 (max lives +1, filled)        | –      | no       |
+| `lastStand`     | Last stand     | survival        | tiered | 3         | `lastStandGrowthPct` −5, −8, −12, −18, −25    | –      | yes      |
+| `secondChance`  | Second chance  | survival        | tiered | 5         | `secondChance` +5, +8, +12, +18, +25          | –      | yes      |
+| `secondWind`    | Second wind    | survival        | tiered | 3         | `secondWindPct` +10, +15, +25, +35, +50       | –      | yes      |
+| `wormFarm`      | Worm farm      | survival, timed | tiered | 3         | `wormBonusPct` +50, +100, +100, +150, +200    | events | yes      |
+| `goodNeighbors` | Good neighbors | survival, timed | rare   | 1         | `neighborReplant` +1                          | events | yes      |
+| `fourLeaf`      | Four-leaf      | survival, timed | rare   | 2         | `cloverExtraPlots` +1                         | events | yes      |
+| `compost`       | Compost        | survival, timed | epic   | 1         | `fertilizerUnlocked` +1                       | –      | no       |
+| `birdNet`       | Bird net       | survival, timed | tiered | 3         | `birdPlotsPct` −10, −15, −20, −25, −33        | events | yes      |
+| `rootCellar`    | Root cellar    | survival, timed | tiered | 3         | `rotPct` −10, −15, −25, −35, −50              | events | yes      |
+| `lantern`       | Lantern        | survival, timed | tiered | 3         | `fogDurationPct` −10, −15, −25, −35, −50      | events | yes      |
+| `calmNerves`    | Calm nerves    | survival, timed | tiered | 3         | `emergencyTimePct` +10, +15, +25, +35, +50    | events | yes      |
+| `priceFloor`    | Price floor    | survival, timed | tiered | 3         | `crashPricePct` +20, +30, +50, +70, +90       | events | yes      |
+| `clearOrders`   | Clear orders   | survival, timed | tiered | 3         | `mixKeepPct` +10, +15, +25, +35, +50          | events | yes      |
+| `guardDog`      | Guard dog      | survival, timed | tiered | 3         | `raccoonDurationPct` +15, +25, +40, +60, +100 | events | yes      |
 
 Bigger bumper has `"requires": ["bumperHarvest"]`. Early bird is in both pools, since Timed orders pay coins too (for now); Steady pace, Extra heart, Last stand, Second chance and Second wind are Survival only by design. Extra heart is not sellable because it adds lives, like Extra plot adds plots.
 
@@ -195,6 +196,7 @@ Bigger bumper has `"requires": ["bumperHarvest"]`. Early bird is in both pools, 
 | `emergencyTimePct`       | 100  | 100 | 200 | Emergency order's `amountStat` (its share of the usual time, capped at 100% by events.json)    |
 | `crashPricePct`          | 100  | 100 | 190 | Price crash's `amountStat` (its share of the usual price, capped at 100%)                      |
 | `mixKeepPct`             | 0    | 0   | 75  | % of a mixed order's amount that stays the original crop (Mix-up)                              |
+| `raccoonDurationPct`     | 100  | 100 | 200 | Raccoon's `durationStat`: it stays longer, so there is more time to tap it away                |
 
 Changes from the old six: `bigHarvest` (flat +1 yield) is replaced by `bumperHarvest`, a chance of 1 extra crop per harvest (see [The harvest roll](#the-harvest-roll)). `haggler` becomes `lifeDiscount` (the new Haggler belongs to the Bulk buyer event). `tips` becomes `bigTips`. `extraPlot` is shop-only, so it is not offered until the shop exists. `"timed"` is already listed in the pools so that turning Timed offers on later is a code change only.
 
@@ -588,7 +590,7 @@ Each later phase adds to this design without changing the stored shapes above.
 1. **Timed offers and rerolls.** Done: `offerPool` gives the mode's pool (`survival` or `timed`; Puzzle makes none), so `isOfferDue` and `rollOffer` work in both modes. Rerolls shipped on Day 6 (see [economy.md](economy.md)); in Timed they are paid from order and selling coins.
 2. **Shop.** Done: see [shop.md](shop.md), which also adds the shop-only upgrades and stats (Day 8b: Free restock's stat is `freeRestockBonus`, so each free restock earned from orders comes as two; Fast restock, `restockOrdersCut`, and Rain check, `restockBankBonus`, work on the restock bank. Interest pays every 30 s of play, up to 15 coins, on a clock that stops while the shop is open), Lucky stars (`luckyWeights` in `rollOffer`), Promotion (`kind: "instant"`, `promotionTargets`) and `plantCutTicks`. `eligibleUpgrades` takes one pool or a list of pools; `rollOffer`'s draw is shared with the shop's stock as `rollCards`.
 3. **More upgrade kinds**, behind a `kind` field: `instant` (Promotion: changes an owned copy's tier and is not stored), `active` (Miracle grow: owning it unlocks a `useAbility` action, its recharge is a stat), `economy` (Interest, Discount card, Free restock: stats read by the shop).
-4. **Upgrades for events, power-ups and storage** ship with those systems. Still waiting: Haggler (selling); Keen eye (Fake merchant); Guard dog (Raccoon); Festival spirit, Weed killer, Loaded coin (tradeoff events). Price floor and Clear orders shipped with Price crash and Mix-up (Day 12). The Timed pool's six are in (see [Timed pool](#timed-pool)). The power-up upgrades are in (see [Shipped with power-ups](#shipped-with-power-ups)); they use `needs` rather than `requires`, since they depend on a system being on, not on another upgrade. The event upgrades use `"events"` the same way. Other chance-based upgrades (Second chance, Lucky drops) draw from a stream of their own, as Bumper harvest does.
+4. **Upgrades for events, power-ups and storage** ship with those systems. Still waiting: Haggler (selling); Keen eye (Fake merchant); Festival spirit, Weed killer, Loaded coin (tradeoff events). Price floor, Clear orders and Guard dog shipped with Price crash, Mix-up and Raccoon (Day 12). The Timed pool's six are in (see [Timed pool](#timed-pool)). The power-up upgrades are in (see [Shipped with power-ups](#shipped-with-power-ups)); they use `needs` rather than `requires`, since they depend on a system being on, not on another upgrade. The event upgrades use `"events"` the same way. Other chance-based upgrades (Second chance, Lucky drops) draw from a stream of their own, as Bumper harvest does.
 
 ## Open items
 

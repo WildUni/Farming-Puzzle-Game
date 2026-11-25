@@ -32,7 +32,7 @@ import {
 } from "../sim/shop"
 import { POWER_UPS, durationFor } from "../sim/powerups"
 import { EVENTS, shieldedPlots } from "../sim/events"
-import { appliesTo, fogged } from "../sim/effects"
+import { appliesTo, fogged, raccoonAt } from "../sim/effects"
 import { comboPctFor, scoreBreakdown } from "../sim/scoring"
 import type { ScoreLineKind } from "../sim/scoring"
 
@@ -457,7 +457,16 @@ function plotOverlays(state: GameState): PlotOverlay[][] {
 }
 
 export { powerUpButtonText, shownEffects, activeEffectText, ordersFrozen }
+// The raccoon button over the storage bar: "Raccoon in the barn!" and the whole seconds until it
+// leaves (rounding up) while one is in the barn, else null.
+function raccoonText(state: GameState): string | null {
+    const raccoon = raccoonAt(state.activeEffects, state.tick)
+    if (raccoon === null) return null
+    return `Raccoon in the barn!\nTap to shoo  ${secondsUntil(raccoon.endsAt, state.tick)}s`
+}
+
 export { eventBannerText, eventIsGood, rushBannerText, plotOverlays, newsText, scarecrowText }
+export { raccoonText }
 export type { PlotOverlay }
 
 // The storage bar's label: crops held out of the cap, e.g. "Storage 12 / 25".

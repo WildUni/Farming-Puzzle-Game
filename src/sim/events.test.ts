@@ -158,6 +158,7 @@ describe("validateEvents", () => {
             "mixUp",
             "moles",
             "priceCrash",
+            "raccoon",
             "rainShower",
             "rot",
             "scarecrow",
@@ -265,6 +266,7 @@ describe("shieldedPlots / eventTargets / eligibleEvents", () => {
             "frost",
             "mixUp",
             "priceCrash",
+            "raccoon",
             "rot"
         ]
         expect(eligibleEvents(game(), "bad")).toEqual(always)
@@ -622,7 +624,8 @@ describe("validateEvents: new effect kinds and banStat", () => {
             { effect: { kind: "tipOrder", coins: 5 }, amountStat: "deliverBonusPct" },
             { effect: { kind: "blockHarvest", plots: 2 }, seconds: 2, banStat: "pestBan" },
             { effect: { kind: "sellRate", pct: 50 }, seconds: 2, amountStat: "crashPricePct" },
-            { effect: { kind: "mixOrder" } }
+            { effect: { kind: "mixOrder" } },
+            { effect: { kind: "raccoon", pct: 40 }, seconds: 2, durationStat: "fogDurationPct" }
         ]
         for (const k of kinds) expect(() => validateEvents(withEvent(k))).not.toThrow()
     })
@@ -641,6 +644,9 @@ describe("validateEvents: new effect kinds and banStat", () => {
         ["sellRate of 100%", { effect: { kind: "sellRate", pct: 100 }, seconds: 2 }],
         ["sellRate without seconds", { effect: { kind: "sellRate", pct: 50 } }],
         ["mixOrder with seconds", { effect: { kind: "mixOrder" }, seconds: 2 }],
+        ["raccoon of 0%", { effect: { kind: "raccoon", pct: 0 }, seconds: 2 }],
+        ["raccoon over 100%", { effect: { kind: "raccoon", pct: 101 }, seconds: 2 }],
+        ["raccoon without seconds", { effect: { kind: "raccoon", pct: 40 } }],
         ["an amountStat on mixOrder", { effect: { kind: "mixOrder" }, amountStat: "rotPct" }],
         ["fog without seconds", { effect: { kind: "fog" } }],
         ["an amountStat on fog", { effect: { kind: "fog" }, seconds: 2, amountStat: "rotPct" }],
@@ -851,6 +857,95 @@ describe("new events in step", () => {
             crops
         )
         expect(floored.activeEffects[0].effect).toEqual({ kind: "sellRate", pct: 95 })
+    })
+
+    describe("Raccoon", () => {
+        const held = { inventory: { garlic: 10, pumpkin: 3 } }
+        const length = EVENTS.events.raccoon.durationTicks!
+        const shoo = { type: "shooRaccoon" } as const
+
+        // Steps until the event has cleared.
+        function runOut(s: GameState): GameState {
+            while (s.event !== null) s = step(s, crops)
+            return s
+        }
+
+        it("left alone, takes 40% of each stored crop when it leaves", () => {
+            const s = step(builtNext(game(held), "raccoon"), crops)
+            expect(s.activeEffects.map((a) => a.effect)).toEqual([{ kind: "raccoon", pct: 40 }])
+            expect(s.activeEffects[0].endsAt - s.tick).toBe(length)
+            expect(s.inventory).toEqual(held.inventory) // nothing taken yet
+            const end = runOut(s)
+            expect(end.tick).toBe(s.activeEffects[0].endsAt)
+            expect(end.inventory).toEqual({ garlic: 6, pumpkin: 2 })
+            expect(end.nextEventAt).toBe(end.tick + gapTicks(end))
+        })
+
+        it("shooed, takes nothing and the event ends on the tap", () => {
+            const s = step(step(builtNext(game(held), "raccoon"), crops), crops)
+            const shooed = applyAction(s, shoo, crops)!
+            expect(shooed.activeEffects).toEqual([])
+            expect(shooed.event).toBeNull()
+            expect(shooed.nextEventAt).toBe(s.tick + gapTicks(s))
+            expect(shooed.rng).toBe(s.rng)
+            let later = shooed
+            for (let i = 0; i < length + 2; i++) later = step(later, crops)
+            expect(later.inventory).toEqual(held.inventory)
+        })
+
+        it("can't be shooed during the warning, or once it has left", () => {
+            const warned = debugEvent(game(held), "raccoon", { plot: null, skipWarning: false })!
+            expect(applyAction(warned, shoo, crops)).toBeNull()
+            const end = runOut(step(builtNext(game(held), "raccoon"), crops))
+            expect(applyAction(end, shoo, crops)).toBeNull()
+            expect(applyAction(game(held), shoo, crops)).toBeNull()
+        })
+
+        it("Guard dog makes it stay longer", () => {
+            const dog = game({ ...held, upgrades: [own("guardDog", "legendary")] })
+            const s = step(builtNext(dog, "raccoon"), crops)
+            expect(s.activeEffects[0].endsAt - s.tick).toBe(scalePct(length, 200))
+        })
+
+        it("with empty storage it takes nothing", () => {
+            const end = runOut(step(builtNext(game(), "raccoon"), crops))
+            expect(end.inventory).toEqual({})
+        })
+
+        it("a run that shoos a raccoon replays equal", () => {
+            let found = false
+            for (let seed = 1; seed <= 80 && !found; seed++) {
+                let s = createGame(seed, on)
+                const log: LogEntry[] = []
+                const act = (action: LogEntry["action"]) => {
+                    const next = applyAction(s, action, crops)
+                    if (next === null) return false
+                    s = next
+                    log.push({ tick: s.tick, action })
+                    return true
+                }
+                while (s.tick < 6000 && s.status === "running") {
+                    if (s.upgradeOffer !== null) {
+                        act({ type: "chooseUpgrade", upgradeId: s.upgradeOffer[0].id })
+                    }
+                    for (let plot = 0; plot < s.plots.length; plot++) {
+                        if (s.plots[plot].state === "ready") act({ type: "harvest", plot })
+                        if (s.plots[plot].state === "empty") {
+                            act({ type: "plant", plot, cropId: "garlic" })
+                        }
+                    }
+                    for (const o of [...s.orders]) act({ type: "deliver", orderId: o.id })
+                    if (act(shoo)) found = true
+                    if (found || s.upgradeOffer !== null) break
+                    s = step(s, crops)
+                }
+                if (!found) continue
+                const result = replay(seed, on, log, s.tick, crops)
+                expect(result.ok).toBe(true)
+                if (result.ok) expect(result.state).toEqual(s)
+            }
+            expect(found).toBe(true)
+        })
     })
 
     describe("Mix-up", () => {

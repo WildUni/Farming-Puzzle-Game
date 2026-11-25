@@ -194,6 +194,17 @@
             "weight": 15,
             "warnSeconds": 5,
             "effect": { "kind": "mixOrder" }
+        },
+        {
+            "id": "raccoon",
+            "name": "Raccoon",
+            "kind": "bad",
+            "modes": ["survival", "timed"],
+            "weight": 15,
+            "warnSeconds": 3,
+            "seconds": 6,
+            "effect": { "kind": "raccoon", "pct": 40 },
+            "durationStat": "raccoonDurationPct"
         }
     ]
 }

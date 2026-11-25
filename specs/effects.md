@@ -31,6 +31,7 @@ type LastingEffect =
     | { kind: "drought"; waterSeconds: number } // growing crops stop, except watered ones (Drought)
     | { kind: "water" } // its plots ignore drought (one per plot, source "water:<plot>")
     | { kind: "sellRate"; pct: number } // crops sell for pct% of their price (Price crash)
+    | { kind: "raccoon"; pct: number } // takes pct% of storage when it ends, unless shooed (Raccoon)
 
 type InstantEffect =
     | { kind: "cutGrowth"; ticks: number } // every growing crop gets this many ticks closer to ready
@@ -66,7 +67,7 @@ type ActiveEffect = {
 
 `pct`, `ticks`, `amount`, `coins`, `crops`, `plots` and `timePct` are whole numbers. A rate's `pct >= 0` and `pct !== 100`; `ticks`, `amount`, `coins`, `crops` and `plots` (both `seedPlots`' and `blockHarvest`'s) are `>= 1`; `addOrder`'s `timePct` and `rotStorage`'s `pct` are from 1 to 100; `giantOrder`'s `coinsPct` and `timePct` are `>= 1` (above 100 is the usual case); `luckyClover`'s `plots` and `scarecrow`'s `seconds` are `>= 1`. The files that use effects (`powerups.json`, `events.json`) check this when they load, and each says which kinds it allows.
 
-`growthRate`, `orderRate`, `comboRate` and `drought` are **rate effects** (`drought` moves growth as rate 0, on every plot it applies to that no working `water` effect covers on that tick); `water` is a marker that moves nothing itself; `blockHarvest`, `deliverBonus`, `harvestBonus`, `fog`, `autoHarvest` and `sellRate` are **action effects**. `comboRate` moves no plot or order: `tickEffects` leaves it alone and `step` reads its shift through `comboShiftAt`. The instant kinds that need the whole game state (`fillOrder`, `fillAllOrders`, `goodEvent`, `harvestAll`, `seedPlots`, `addOrder`, `rotStorage`, `tipOrder`, `grantRestock`, `giantOrder`, `luckyClover`, `scarecrow`) are carried out in `main.ts` or `events.ts`; `effects.ts` has helpers only for the ones that work on plots or effect lists alone.
+`growthRate`, `orderRate`, `comboRate` and `drought` are **rate effects** (`drought` moves growth as rate 0, on every plot it applies to that no working `water` effect covers on that tick); `water` is a marker that moves nothing itself; `blockHarvest`, `deliverBonus`, `harvestBonus`, `fog`, `autoHarvest`, `sellRate` and `raccoon` are **action effects**. `comboRate` moves no plot or order: `tickEffects` leaves it alone and `step` reads its shift through `comboShiftAt`. The instant kinds that need the whole game state (`fillOrder`, `fillAllOrders`, `goodEvent`, `harvestAll`, `seedPlots`, `addOrder`, `rotStorage`, `tipOrder`, `grantRestock`, `giantOrder`, `luckyClover`, `scarecrow`) are carried out in `main.ts` or `events.ts`; `effects.ts` has helpers only for the ones that work on plots or effect lists alone.
 
 ## The rate rule
 
@@ -201,6 +202,10 @@ The sum of `rateShift(pct, startedAt, now)` over `comboRate` effects with `endsA
 
 `true` while some `fog` effect has `startedAt <= now < endsAt`. Only the screen reads it.
 
+### `raccoonAt(active: ActiveEffect[], now: number): ActiveEffect | null`
+
+The working `raccoon` effect on tick `now` (`startedAt <= now < endsAt`), or `null`. `shooRaccoon` and the screen read it.
+
 ### `sellRateAt(active: ActiveEffect[], now: number): number`
 
 The % of the usual sell price crops fetch on tick `now`: 100, times each working `sellRate` effect's `pct` (`startedAt <= now < endsAt`), rounding down after each. 100 with none. `sellValueFor` reads it (see [economy.md](economy.md)).
@@ -272,6 +277,7 @@ Every plot becomes `{ state: "empty" }`. Returns the same array when every plot 
 - `finishAll` readies growing crops only; `clearField` empties everything; both return the same array when nothing changes.
 - `harvestBonusAt` sums working bonuses from `startedAt` to `endsAt − 1` and skips excluded plots; `fogged` follows the same working ticks.
 - `tickEffects` moves nothing for `harvestBonus` and `fog`, and drops them once they end.
+- `raccoonAt` finds a `raccoon` effect from `startedAt` to `endsAt − 1`, and `null` before, on `endsAt`, and with none.
 - `sellRateAt` is 100 with no effect, the effect's `pct` on its working ticks (`startedAt` to `endsAt − 1`) and 100 again on `endsAt`; two working effects multiply, rounding down.
 
 **`stealCrop` / `harvestBlocked` / `deliverBonusAt`**

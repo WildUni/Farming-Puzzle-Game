@@ -15,6 +15,7 @@ import {
     harvestBonusAt,
     fogged,
     sellRateAt,
+    raccoonAt,
     comboShiftAt,
     autoHarvestAt,
     isWatered,
@@ -460,6 +461,22 @@ describe("finishAll / clearField / harvestBonusAt / fogged", () => {
         expect(sellRateAt([crash(50, 5, 8)], 8)).toBe(100)
         // 100 × 50% = 50, × 33% = 16.5, rounded down.
         expect(sellRateAt([crash(50, 0, 9), crash(33, 0, 9)], 1)).toBe(16)
+    })
+
+    it("raccoonAt finds a raccoon only while it works", () => {
+        const raccoon: ActiveEffect = {
+            source: "raccoon",
+            effect: { kind: "raccoon", pct: 40 },
+            startedAt: 5,
+            endsAt: 8,
+            exclude: [],
+            only: null
+        }
+        expect(raccoonAt([], 5)).toBeNull()
+        expect(raccoonAt([raccoon], 4)).toBeNull()
+        expect(raccoonAt([worms(0, 99), raccoon], 5)).toBe(raccoon)
+        expect(raccoonAt([raccoon], 7)).toBe(raccoon)
+        expect(raccoonAt([raccoon], 8)).toBeNull()
     })
 
     it("tickEffects moves nothing for harvestBonus and fog, and drops them once ended", () => {

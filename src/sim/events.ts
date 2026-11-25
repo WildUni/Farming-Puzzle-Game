@@ -44,7 +44,8 @@ const LASTING_KINDS: readonly string[] = [
     "harvestBonus",
     "fog",
     "drought",
-    "sellRate"
+    "sellRate",
+    "raccoon"
 ]
 const AMOUNT_KINDS: readonly string[] = [
     "cutGrowth",
@@ -139,6 +140,8 @@ function validateEffect(raw: unknown, at: string): Effect {
             return { kind: "sellRate", pct: wholeBetween(raw.pct, 1, 99, `${at}.pct`) }
         case "mixOrder":
             return { kind: "mixOrder" }
+        case "raccoon":
+            return { kind: "raccoon", pct: wholeBetween(raw.pct, 1, 100, `${at}.pct`) }
         case "drought":
             return {
                 kind: "drought",
@@ -727,6 +730,7 @@ function startEvent(
         case "orderRate":
         case "fog":
         case "drought":
+        case "raccoon":
             return {
                 ...next,
                 activeEffects: startEffect(next.activeEffects, def.id, effect, now, length, exclude)
@@ -734,6 +738,18 @@ function startEvent(
         default:
             return next // power-up-only effects are refused by validateEvents
     }
+}
+
+// Runs on the tick the event ends, before step clears it. Only Raccoon does anything: still in
+// the barn (not shooed), it takes its share of each stored crop. Draws nothing.
+function endEvent(state: GameState): GameState {
+    const event = state.event
+    if (event === null) return state
+    const left = state.activeEffects.find(
+        (a) => a.source === event.id && a.effect.kind === "raccoon"
+    )
+    if (left === undefined || left.effect.kind !== "raccoon") return state
+    return { ...state, inventory: rotStorage(state.inventory, left.effect.pct) }
 }
 
 export {
@@ -746,6 +762,7 @@ export {
     announceEvent,
     buildEvent,
     startEvent,
+    endEvent,
     rotStorage,
     tipOrder,
     mixOrder

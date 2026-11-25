@@ -154,6 +154,7 @@ type Action =
     | { type: "chooseUpgrade"; upgradeId: string; target?: number | string }
     | { type: "usePowerUp"; slot: number; target?: number }
     | { type: "scareCrows"; plot: number }
+    | { type: "shooRaccoon" }
     | { type: "sellCrop"; cropId: string; amount: number }
     | { type: "makeFertilizer"; cropId: string }
     | { type: "useFertilizer"; plot: number }

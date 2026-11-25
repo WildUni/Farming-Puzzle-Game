@@ -144,6 +144,7 @@ type Modifiers = {
     emergencyTimePct: number // % of an Emergency order's time share
     crashPricePct: number // % of a Price crash's share of the sell price (Price floor)
     mixKeepPct: number // % of a mixed order's amount that stays the original crop (Clear orders)
+    raccoonDurationPct: number // % of how long a Raccoon stays before it takes crops (Guard dog)
     storageBonus: number // crops storage holds on top of the mode's cap (Bigger barn)
     fertilizerUnlocked: number // 1: fertilizer can be made and used when economy.json locks it
     comboMissesForgiven: number // Timed: failed orders per streak that don't break the combo
@@ -215,6 +216,7 @@ type Action =
     | { type: "chooseUpgrade"; upgradeId: string; target?: number | string }
     | { type: "usePowerUp"; slot: number; target?: number } // plot index, or order id
     | { type: "scareCrows"; plot: number }
+    | { type: "shooRaccoon" }
     | { type: "waterPlot"; plot: number }
     | { type: "digUp"; plot: number }
     | { type: "sellCrop"; cropId: string; amount: number }
@@ -266,6 +268,7 @@ type LastingEffect =
     | { kind: "drought"; waterSeconds: number } // crops stop growing unless watered
     | { kind: "water" } // its plots ignore drought (source "water:<plot>", only: [plot])
     | { kind: "sellRate"; pct: number } // crops sell for pct% of their price (Price crash)
+    | { kind: "raccoon"; pct: number } // takes pct% of storage when it ends, unless shooed
 
 type InstantEffect =
     | { kind: "cutGrowth"; ticks: number } // every growing crop gets this many ticks closer

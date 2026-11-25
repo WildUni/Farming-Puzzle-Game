@@ -153,6 +153,10 @@ Drawn by `PlotsView` from the state, on top of the plot's own colour:
 | Worms running, on each plot not excluded   | A `WORMS` marker                                                                                      |
 | Greenhouse plot (`shieldedPlots`)          | A small shield marker, always                                                                         |
 
+### Raccoon (RaccoonView)
+
+While `raccoonAt` finds a raccoon, a red button covers the drawer's storage bar (which is shown even when the drawer is folded) with `raccoonText`: `Raccoon in the barn!` and `Tap to shoo  4s` on a second line (whole seconds until it leaves, rounding up). Clicking it sends `shooRaccoon` through `act()`. It is hidden otherwise, and doesn't work while paused, while an upgrade offer or the shop is open, or after the run ends.
+
 ### Fog
 
 While `isFogged(state)` (a `fog` effect is working): growing plots show `?` instead of their percentage and their growth bar is hidden (`plotText(plot, now, fog)`), and order cards show `?:??` instead of the time left and hide their countdown bar. Crop names, amounts and values stay visible.
@@ -268,6 +272,7 @@ Three sections, top to bottom:
 - Storage, selling, fertilizer and reroll text: see the "Screen text" tests in [economy.md](economy.md). `sellButtonText` shows Premium produce's boosted price, and a Price crash's lower one while it works.
 - `miracleGrowText` reads `ready` with no recharge left (and on `miracleReadyAt` itself), and the time left otherwise.
 - Shop: `shopItemText` for an upgrade, Promotion, a power-up and a life slot (and `Lives full`); `shopPriceText` follows `itemPrice` (with Discount card) and shows `SOLD` and `Maxed`; `sellRefundText` follows `sellRefund` and gives each refusal's label; `restockText` shows `free` with the count left while a free restock is banked, else the price; `freeRestockText` counts the orders left, and says full when the bank is; `shopButtonText` shows the banked count; `promotionTargetText` shows the tier now and after. (`shopTimerText` went with the running shop.)
+- `raccoonText` gives the text and seconds left, rounding up, while a raccoon works, and `null` before it starts and on its `endsAt`.
 - `modeBestText`, `bestScoreText` (new best, not, debugged) and `soundButtonText`.
 
 ## Open items
