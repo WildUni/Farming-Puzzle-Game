@@ -643,7 +643,7 @@ describe("replay: power-ups", () => {
         expect(used).toContain("timed:autoHarvest")
         expect(used).toContain("survival:giantOrder")
         expect(used).toContain("timed:giantOrder")
-    })
+    }, 30_000) // 60 runs of up to 3000 ticks, played and replayed: near the 5 s default on a busy machine
 
     it("refuses a usePowerUp on an empty slot, and any use with power-ups off", () => {
         const empty = replay(

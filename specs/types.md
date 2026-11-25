@@ -63,9 +63,12 @@ type Order = {
     small: boolean
     rush: boolean
     tip: number
+    mixed: boolean
     giant: { orders: number; coinsPct: number } | null
 }
 ```
+
+- `mixed`: `true` once a Mix-up has changed the order's crops (see [events.md](events.md)); the card shows `MIXED`.
 
 - `giant`: set on a Giant order: how many orders it merged and the % of their pay it gives when filled. `null` on every other order (see [powerups.md](powerups.md)).
 

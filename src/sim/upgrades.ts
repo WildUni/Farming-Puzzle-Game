@@ -65,6 +65,7 @@ const MODIFIER_STATS: readonly ModifierStat[] = [
     "fogDurationPct",
     "emergencyTimePct",
     "crashPricePct",
+    "mixKeepPct",
     "storageBonus",
     "fertilizerUnlocked",
     "comboMissesForgiven",

@@ -90,6 +90,7 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
         small: false,
         rush: false,
         tip: 0,
+        mixed: false,
         giant: null,
         ...overrides
     }
@@ -2353,6 +2354,7 @@ describe("power-ups: Day 9", () => {
                     small: false,
                     rush: false,
                     tip: 4,
+                    mixed: false,
                     giant: GIANT
                 }
             ])

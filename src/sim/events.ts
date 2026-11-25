@@ -137,6 +137,8 @@ function validateEffect(raw: unknown, at: string): Effect {
             }
         case "sellRate":
             return { kind: "sellRate", pct: wholeBetween(raw.pct, 1, 99, `${at}.pct`) }
+        case "mixOrder":
+            return { kind: "mixOrder" }
         case "drought":
             return {
                 kind: "drought",
@@ -557,6 +559,40 @@ function addOrder(
     }
 }
 
+// Mix-up: one open order (not failing on this tick, not Giant, asking for one crop), picked from
+// rng.events in board order, switches to a different crop, also picked from rng.events: two
+// draws. Clear orders keeps mixKeepPct of the amount as the original crop. The value is worked
+// out again from the new crops; deadline, time limit, small, rush and tip stay. With no such
+// order, or no other crop, nothing happens and nothing is drawn.
+function mixOrder(state: GameState, crops: CropTable): GameState {
+    const open = state.orders.filter(
+        (o) => !isExpired(o, state.tick) && o.giant === null && Object.keys(o.required).length === 1
+    )
+    const ids = Object.keys(crops).sort()
+    if (open.length === 0 || ids.length < 2) return state
+    const [roll, afterOrder] = randomInt(state.rng.events, 0, open.length - 1)
+    const target = open[roll]
+    const [oldCrop, total] = Object.entries(target.required)[0]
+    const [newCrop, events] = pick(
+        afterOrder,
+        ids.filter((id) => id !== oldCrop)
+    )
+    const keep = Math.floor((total * modifiersFor(state.upgrades).mixKeepPct) / 100)
+    const required: Record<string, number> = { [newCrop]: total - keep }
+    if (keep > 0) required[oldCrop] = keep
+    const value = Object.entries(required).reduce(
+        (sum, [cropId, amount]) => sum + amount * crops[cropId].value,
+        0
+    )
+    return {
+        ...state,
+        rng: { ...state.rng, events },
+        orders: state.orders.map((o) =>
+            o.id === target.id ? { ...o, required, value, mixed: true } : o
+        )
+    }
+}
+
 // Rot: each stored crop loses `pct`% of its amount, rounded down. Crops that reach 0 are removed.
 function rotStorage(inventory: Inventory, pct: number): Inventory {
     const out: Inventory = {}
@@ -636,6 +672,8 @@ function startEvent(
             return { ...next, inventory: rotStorage(next.inventory, event.amount!) }
         case "tipOrder":
             return tipOrder(next, event.amount!)
+        case "mixOrder":
+            return mixOrder(next, crops)
         case "luckyClover":
             return markClover(next, event.amount!)
         case "scarecrow":
@@ -709,5 +747,6 @@ export {
     buildEvent,
     startEvent,
     rotStorage,
-    tipOrder
+    tipOrder,
+    mixOrder
 }

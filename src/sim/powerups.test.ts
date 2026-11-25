@@ -385,6 +385,7 @@ describe("power-ups: second batch rules", () => {
             small: false,
             rush: false,
             tip: 0,
+            mixed: false,
             giant: null
         })
         const s = state({ orders: [order(7), order(2)], powerUps: ["finishOne", "readyAll"] })

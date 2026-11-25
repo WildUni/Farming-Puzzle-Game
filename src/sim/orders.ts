@@ -27,6 +27,7 @@ function createOrder(
         small: false,
         rush: false,
         tip: 0,
+        mixed: false,
         giant: null
     }
     return [order, afterAmount]

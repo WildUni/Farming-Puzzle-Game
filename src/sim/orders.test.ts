@@ -150,6 +150,7 @@ const garlicOrder: Order = {
     small: false,
     rush: false,
     tip: 0,
+    mixed: false,
     giant: null
 }
 const mixedOrder: Order = {
@@ -161,6 +162,7 @@ const mixedOrder: Order = {
     small: false,
     rush: false,
     tip: 0,
+    mixed: false,
     giant: null
 }
 

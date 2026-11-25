@@ -70,6 +70,7 @@ function rawConfig(): Record<string, unknown> {
             fogDurationPct: { base: 100, min: 25, max: 100 },
             emergencyTimePct: { base: 100, min: 100, max: 200 },
             crashPricePct: { base: 100, min: 100, max: 190 },
+            mixKeepPct: { base: 0, min: 0, max: 75 },
             storageBonus: { base: 0, min: 0, max: 30 },
             fertilizerUnlocked: { base: 0, min: 0, max: 1 },
             comboMissesForgiven: { base: 0, min: 0, max: 3 },
@@ -416,6 +417,7 @@ describe("modifiersFor", () => {
             fogDurationPct: 100,
             emergencyTimePct: 100,
             crashPricePct: 100,
+            mixKeepPct: 0,
             storageBonus: 0,
             fertilizerUnlocked: 0,
             comboMissesForgiven: 0,
@@ -624,7 +626,7 @@ describe("eligibleUpgrades", () => {
         const ids = Object.values(UPGRADES.upgrades)
             .filter((d) => d.needs.includes("events"))
             .map((d) => d.id)
-        expect(ids).toHaveLength(20)
+        expect(ids).toHaveLength(21)
         for (const id of ids) {
             expect(off).not.toContain(id)
             expect(on).toContain(id)

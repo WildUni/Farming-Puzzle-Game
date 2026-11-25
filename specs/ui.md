@@ -163,6 +163,8 @@ An order Small order halved has `SMALL` after its number on the first line of it
 
 An order Generous customer tipped has `TIP +10` (its `tip`) after any other tags (`Order #4  SMALL TIP +10`).
 
+An order a Mix-up changed has `MIXED` after its other tags, before any tip (`Order #4  SMALL MIXED TIP +10`), so the player sees which order wants something new. It keeps the tag until it is filled or fails.
+
 A Giant order has `GIANT x3` (how many orders it merged) before any other tags (`Order #6  GIANT x3 TIP +4`). Its card lists one line per crop, so it is taller than the usual 100 px: a card grows to fit its text above the countdown bar, and the cards under it in its column (and the Sneak peek card) move down. A Giant order is the only open order while it is open, so in practice it never pushes others.
 
 ## Rush waves (RushBanner, OrdersView)
@@ -259,7 +261,7 @@ Three sections, top to bottom:
 - `activeEffectText` shows the name and seconds left, rounding up: `1s` with one tick left, `10s` with 100.
 - `isFogged` follows the fog effect's working ticks; `plotText` shows `?` for a growing crop in fog; `orderText` shows `?:??` in fog.
 - `nextOrderText` lists the next order's crops and value.
-- `orderText` and `nextOrderText` add `SMALL` to the title of a halved order; `orderText` adds `TIP +N` after it for a tipped order, and nothing with no tip.
+- `orderText` and `nextOrderText` add `SMALL` to the title of a halved order; `orderText` adds `TIP +N` after it for a tipped order, and nothing with no tip; `MIXED` comes before the tip on a mixed order.
 - `heartsText(lives, max)` shows a full heart per life and an empty one up to the cap; `buyLifeText` says `Lives full` at the cap.
 - `plotOverlays` marks every plot Worms are working on.
 - The Level row and the game-over level follow `runLevel` (Steady pace).

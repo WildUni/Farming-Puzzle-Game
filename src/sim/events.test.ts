@@ -8,14 +8,15 @@ import {
     eligibleEvents,
     announceEvent,
     buildEvent,
-    rotStorage
+    rotStorage,
+    mixOrder
 } from "./events"
 import { debugEvent } from "./debug"
 import { replay } from "./verification"
 import { harvestBlocked, sellRateAt } from "./effects"
 import { createGame, applyAction, step, orderRules } from "./main"
 import { buildCropTable } from "./plot"
-import { nextValue } from "./mulberry"
+import { nextValue, randomInt } from "./mulberry"
 import { TICKS_PER_SECOND } from "./game_constants"
 import { DIFFICULTY } from "./difficulty"
 import { MODES } from "./modes"
@@ -29,6 +30,7 @@ import type {
     GameState,
     OwnedUpgrade,
     LogEntry,
+    Order,
     Plot,
     RunEvent,
     Tier
@@ -153,6 +155,7 @@ describe("validateEvents", () => {
             "generousCustomer",
             "helpfulNeighbor",
             "luckyClover",
+            "mixUp",
             "moles",
             "priceCrash",
             "rainShower",
@@ -260,6 +263,7 @@ describe("shieldedPlots / eventTargets / eligibleEvents", () => {
             "emergencyOrder",
             "fog",
             "frost",
+            "mixUp",
             "priceCrash",
             "rot"
         ]
@@ -617,7 +621,8 @@ describe("validateEvents: new effect kinds and banStat", () => {
             { effect: { kind: "rotStorage", pct: 30 }, amountStat: "rotPct" },
             { effect: { kind: "tipOrder", coins: 5 }, amountStat: "deliverBonusPct" },
             { effect: { kind: "blockHarvest", plots: 2 }, seconds: 2, banStat: "pestBan" },
-            { effect: { kind: "sellRate", pct: 50 }, seconds: 2, amountStat: "crashPricePct" }
+            { effect: { kind: "sellRate", pct: 50 }, seconds: 2, amountStat: "crashPricePct" },
+            { effect: { kind: "mixOrder" } }
         ]
         for (const k of kinds) expect(() => validateEvents(withEvent(k))).not.toThrow()
     })
@@ -635,6 +640,8 @@ describe("validateEvents: new effect kinds and banStat", () => {
         ["sellRate of 0%", { effect: { kind: "sellRate", pct: 0 }, seconds: 2 }],
         ["sellRate of 100%", { effect: { kind: "sellRate", pct: 100 }, seconds: 2 }],
         ["sellRate without seconds", { effect: { kind: "sellRate", pct: 50 } }],
+        ["mixOrder with seconds", { effect: { kind: "mixOrder" }, seconds: 2 }],
+        ["an amountStat on mixOrder", { effect: { kind: "mixOrder" }, amountStat: "rotPct" }],
         ["fog without seconds", { effect: { kind: "fog" } }],
         ["an amountStat on fog", { effect: { kind: "fog" }, seconds: 2, amountStat: "rotPct" }],
         ["a banStat not ending in Ban", { effect: { kind: "fog" }, seconds: 2, banStat: "rotPct" }],
@@ -844,6 +851,114 @@ describe("new events in step", () => {
             crops
         )
         expect(floored.activeEffects[0].effect).toEqual({ kind: "sellRate", pct: 95 })
+    })
+
+    describe("Mix-up", () => {
+        // One open order for 5 garlic (value 10) with a tip, at tick 0.
+        const order = (id: number, overrides: Partial<Order> = {}): Order => ({
+            id,
+            required: { garlic: 5 },
+            value: 10,
+            expiresAt: 500,
+            timeLimit: 500,
+            small: false,
+            rush: false,
+            tip: 3,
+            mixed: false,
+            giant: null,
+            ...overrides
+        })
+
+        it("switches one order to the other crop, same amount, new value; keeps the rest", () => {
+            const s = builtNext(game({ orders: [order(0)] }), "mixUp")
+            const next = step(s, crops)
+            expect(next.orders).toEqual([
+                {
+                    ...order(0),
+                    required: { pumpkin: 5 },
+                    value: 5 * crops.pumpkin.value,
+                    mixed: true
+                }
+            ])
+            // Two draws, from the events stream only.
+            const [, afterOrder] = randomInt(s.rng.events, 0, 0)
+            expect(next.rng.events).toBe(nextValue(afterOrder)[1])
+            expect(next.rng.orders).toBe(s.rng.orders)
+        })
+
+        it("Clear orders keeps a share of the original crop", () => {
+            const s = builtNext(
+                game({ orders: [order(0)], upgrades: [own("clearOrders", "legendary")] }),
+                "mixUp"
+            )
+            const mixed = step(s, crops).orders[0]
+            // 50% of 5 is 2 (rounded down) kept as garlic; 3 become pumpkin.
+            expect(mixed.required).toEqual({ pumpkin: 3, garlic: 2 })
+            expect(mixed.value).toBe(3 * crops.pumpkin.value + 2 * crops.garlic.value)
+        })
+
+        it("only picks open, non-Giant, one-crop orders", () => {
+            const giant = order(1, { giant: { orders: 2, coinsPct: 150 } })
+            const two = order(2, { required: { garlic: 2, pumpkin: 1 } })
+            for (const orders of [[], [giant], [two]]) {
+                const s = builtNext(game({ orders }), "mixUp")
+                const next = step(s, crops)
+                // An empty board gets a new order on this step, but nothing is mixed.
+                expect(next.orders.slice(0, orders.length)).toEqual(orders)
+                expect(next.orders.some((o) => o.mixed)).toBe(false)
+                expect(next.rng.events).toBe(s.rng.events)
+            }
+            // With a one-crop order beside them, that one is the only choice.
+            const next = step(builtNext(game({ orders: [giant, order(3)] }), "mixUp"), crops)
+            expect(next.orders[0]).toEqual(giant)
+            expect(next.orders[1].mixed).toBe(true)
+        })
+
+        it("does nothing, and draws nothing, with only one crop in the table", () => {
+            const s = { ...game(), orders: [order(0)] }
+            const one = buildCropTable([crops.garlic])
+            expect(mixOrder(s, one)).toBe(s)
+        })
+
+        it("a run that has a Mix-up replays equal", () => {
+            let found = false
+            for (let seed = 1; seed <= 80 && !found; seed++) {
+                let s = createGame(seed, on)
+                const log: LogEntry[] = []
+                const act = (action: LogEntry["action"]) => {
+                    const next = applyAction(s, action, crops)
+                    if (next !== null) {
+                        s = next
+                        log.push({ tick: s.tick, action })
+                    }
+                }
+                while (s.tick < 6000 && s.status === "running") {
+                    if (s.upgradeOffer !== null) {
+                        act({ type: "chooseUpgrade", upgradeId: s.upgradeOffer[0].id })
+                    }
+                    for (let plot = 0; plot < s.plots.length; plot++) {
+                        if (s.plots[plot].state === "ready") act({ type: "harvest", plot })
+                        if (s.plots[plot].state === "empty") {
+                            const want = s.orders.length > 0 ? s.orders[0] : null
+                            const cropId = want === null ? "garlic" : Object.keys(want.required)[0]
+                            act({ type: "plant", plot, cropId })
+                        }
+                    }
+                    for (const o of [...s.orders]) act({ type: "deliver", orderId: o.id })
+                    if (s.orders.some((o) => o.mixed)) {
+                        found = true
+                        break
+                    }
+                    if (s.upgradeOffer !== null) break
+                    s = step(s, crops)
+                }
+                if (!found) continue
+                const result = replay(seed, on, log, s.tick, crops)
+                expect(result.ok).toBe(true)
+                if (result.ok) expect(result.state).toEqual(s)
+            }
+            expect(found).toBe(true)
+        })
     })
 
     it("Price floor can't turn a crash into a rise", () => {

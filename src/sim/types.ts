@@ -50,6 +50,7 @@ type Order = {
     small: boolean // Small order halved its amounts
     rush: boolean // a Timed rush wave added it
     tip: number // extra coins filling it pays (Generous customer)
+    mixed: boolean // a Mix-up changed which crops it wants
     giant: { orders: number; coinsPct: number } | null // Giant order: orders merged, % of their pay
 }
 
@@ -142,6 +143,7 @@ type Modifiers = {
     fogDurationPct: number // % of Fog's length
     emergencyTimePct: number // % of an Emergency order's time share
     crashPricePct: number // % of a Price crash's share of the sell price (Price floor)
+    mixKeepPct: number // % of a mixed order's amount that stays the original crop (Clear orders)
     storageBonus: number // crops storage holds on top of the mode's cap (Bigger barn)
     fertilizerUnlocked: number // 1: fertilizer can be made and used when economy.json locks it
     comboMissesForgiven: number // Timed: failed orders per streak that don't break the combo
@@ -284,6 +286,7 @@ type InstantEffect =
     | { kind: "giantOrder"; coinsPct: number; timePct: number } // open orders merge into one
     | { kind: "luckyClover"; plots: number } // up to this many crop plots harvest double next
     | { kind: "scarecrow"; seconds: number } // scaredOff events stay away this long
+    | { kind: "mixOrder" } // one open order switches to a different crop (Mix-up)
 
 type Effect = LastingEffect | InstantEffect
 

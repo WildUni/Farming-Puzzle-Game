@@ -92,6 +92,7 @@ All numbers are placeholders until playtesting.
 | `scarecrow`        | Scarecrow         | good | survival, timed | 15     | 3 s  | `scarecrow` 60 s       | –     | –      | –                                |
 | `drought`          | Drought           | bad  | survival, timed | 20     | 5 s  | `drought` 3 s a tap    | 10 s  | –      | `banStat: pestBan`               |
 | `priceCrash`       | Price crash       | bad  | survival, timed | 15     | 5 s  | `sellRate` 50%         | 20 s  | –      | `amountStat: crashPricePct`      |
+| `mixUp`            | Mix-up            | bad  | survival, timed | 15     | 5 s  | `mixOrder`             | –     | –      | –                                |
 
 News (all placeholders): Frost "Cold snap on the way", Fog "Fog rolling in", Rain shower "Rain in the forecast", Sunny spell "Sunny skies ahead" and Price crash "Market prices wobbling", each 10 s ahead. Crows and Birds have `scaredOff: true`.
 
@@ -102,6 +103,8 @@ News (all placeholders): Frost "Cold snap on the way", Fog "Fog rolling in", Rai
 **Birds' seeds** are marked: a plot Birds planted is `seeded` while it grows. `digUp { plot }` empties a seeded plot that is still growing. Harvesting it, or anything that empties it, clears the mark.
 
 **Price crash** makes crops sell for `pct`% of their usual price while it works (`sellRateAt`, see [effects.md](effects.md)); Premium produce still applies on top. Price floor raises `crashPricePct`, which scales the `pct`; the result is capped at 100, so a crash can be softened but never turned into a rise. `validateEvents` takes a `sellRate` `pct` from 1 to 99. It is a bad event, but it touches no plot, so Greenhouse doesn't matter to it.
+
+**Mix-up** changes what one open order wants (`mixOrder(state, crops)`). The order is picked when the event starts, not at announcement, so the warning is the player's chance to fill what they can. It only picks orders that are open on this tick (not failing), not a Giant order, and that ask for one crop; a crop table with one crop gives it nothing to switch to. The order wants the same total amount of a different crop; with Clear orders, `floor(total × mixKeepPct / 100)` of it stays the original crop, so the order can end up asking for two. Its `value` is worked out again from the new crops (`amount × crop.value`, added up); its deadline, time limit, `small`, `rush` and `tip` stay. It is marked `mixed`.
 
 **Scarecrow** guards the field for `amount` seconds after it starts (`scarecrowUntil`). While it guards, events with `scaredOff` (Crows, Birds) are left out of `eligibleEvents`; other bad events still come. It is an instant event, so the next event is scheduled as usual and the guard can outlast it.
 
@@ -266,6 +269,7 @@ An instant event starts and ends on the same tick.
 | `scarecrow`    | `scarecrowUntil = max(scarecrowUntil, tick + amount × TICKS_PER_SECOND)`. No draws                                                                                                                                                                                                                                                                                                          |
 | `drought`      | `startEffect(…, exclude)` as for any lasting bad event; `waterSeconds` stays in the effect for `waterPlot` to read                                                                                                                                                                                                                                                                          |
 | `sellRate`     | `activeEffects = startEffect(…, { kind: "sellRate", pct: min(100, amount) }, …)`                                                                                                                                                                                                                                                                                                            |
+| `mixOrder`     | From the open orders not failing on this tick, not Giant and asking for one crop, in board order, `pick` one with `randomInt(rng.events, 0, n − 1)`; then `pick` its new crop from the other crop ids, sorted. Two draws. With no such order, or only one crop in the table, nothing happens and nothing is drawn. Reads `mixKeepPct` (Clear orders) when it starts                         |
 | `rotStorage`   | Each stored crop loses `floor(amount_held × amount / 100)`; crops that reach 0 are removed (`rotStorage(inventory, pct)`)                                                                                                                                                                                                                                                                   |
 | `tipOrder`     | From the open orders not failing on this tick, in board order, `pick` one with `randomInt(rng.events, 0, n − 1)` and add `amount` to its `tip` (`tipOrder(state, coins)`). Filling it pays the tip on top of the usual coins (see [main.md](main.md)). With no open order nothing happens and nothing is drawn                                                                              |
 | other lasting  | `activeEffects = startEffect(activeEffects, id, effect, tick, endsAt − startsAt, exclude)`; `deliverBonus` and `harvestBonus` use `amount` as their coins or crops                                                                                                                                                                                                                          |
@@ -301,7 +305,7 @@ All have `"needs": ["events"]`. `GameSystem` becomes `"powerUps" | "events"`.
 | `moleTraps`    | Mole traps    | survival, timed | tiered | 3         | `moleBlockChance` +10, +15, +20, +30, +40   | –                     | yes      |
 | `greenhouse`   | Greenhouse    | survival, timed | epic   | 2         | `shielded` +1                               | plot, `oncePerTarget` | no       |
 
-The second batch adds Pest control, Worm farm, Good neighbors, Bird net, Root cellar, Lantern, Calm nerves and Price floor, listed with their stats in [upgrades.md](upgrades.md#shipped-with-the-second-batch).
+The second batch adds Pest control, Worm farm, Good neighbors, Bird net, Root cellar, Lantern, Calm nerves, Price floor and Clear orders, listed with their stats in [upgrades.md](upgrades.md#shipped-with-the-second-batch).
 
 New stats:
 
@@ -325,7 +329,7 @@ New stats:
 - No Phaser or browser imports. Pure: never changes its inputs.
 - Draws only from `rng.events`: in `announceEvent`, and in the block roll when an event starts. No draw depends on another stream, so events never change which orders come next, which upgrades are offered, or which power-ups drop.
 - No rule reads an event id except to look up its definition. What an event does is its `effect` and its stat fields.
-- Events never change `tick`, the run timer, `score`, `lives`, `coins` or `ordersCompleted`. They can change `plots` (Rain shower, Moles, Helpful neighbor, Birds), `inventory` (Helpful neighbor, Rot) and `orders` / `nextOrderId` (Emergency order).
+- Events never change `tick`, the run timer, `score`, `lives`, `coins` or `ordersCompleted`. They can change `plots` (Rain shower, Moles, Helpful neighbor, Birds), `inventory` (Helpful neighbor, Rot), `orders` / `nextOrderId` (Emergency order) and an open order's `required`, `value` and `mixed` (Mix-up).
 - Birds and Emergency order draw from `rng.events` when they start; the number of Birds draws depends on how many plots are free, which is fixed by the state, so replays stay exact.
 
 ## Tests (`events.test.ts`)
@@ -377,6 +381,7 @@ New stats:
 - **Emergency order** adds an order past the limit with `scalePct(orderTicks, 50)` (75% with a legendary Calm nerves) and leaves `rng.orders` alone.
 - **Rot** removes `floor(30%)` of each crop (`floor(15%)` with a legendary Root cellar).
 - **Fog** starts a `fog` effect for its length, halved by a legendary Lantern.
+- **Mix-up** on a fixed seed changes one single-crop order to a different crop with the same amount, works its value out again, keeps its deadline and tip, and marks it `mixed`; draws twice from `rng.events` and never from `rng.orders`. With a legendary Clear orders (50%) an order for 5 keeps 2 of the old crop and asks for 3 of the new. Nothing happens, and nothing is drawn, with no open order, only a Giant order, or a one-crop table.
 - **Price crash** starts a `sellRate` effect at 50% for its length: selling during it pays half (rounded down), and the usual price after it ends. A legendary Price floor makes it 95%. `validateEvents` refuses a `sellRate` `pct` of 0 or 100.
 
 **Replay (`verification.test.ts`)**
@@ -406,7 +411,10 @@ New stats:
 - [ ] Tune every number (weights, warnings, lengths, gaps, stat caps) after playtesting.
 - [x] Slow day, Worms, Helpful neighbor (good); Birds, Emergency order, Rot, Fog (bad).
 - [x] Scarecrow, Lucky clover and Four-leaf (Day 10).
-- [ ] Still to come: Raccoon (a tap action), Mix-up (re-rolling an open order), Fake merchant (the shop).
+- [ ] Still to come: Raccoon (a tap action), Fake merchant (the shop).
+- [x] Mix-up and Clear orders (Day 12).
+- [ ] Should Mix-up pick its order at announcement, so the warning names it? For now it picks at the start, like Generous customer.
+- [ ] Mix-up numbers (weight 15) and Clear orders' (10% to 50% kept) are placeholders.
 - [x] Price crash and Price floor (Day 12).
 - [ ] Price crash numbers (50% for 20 s, weight 15) and Price floor's (+20 to +90) are placeholders.
 - [ ] Should Birds' seeds be the crops orders want, or random as now? (Digging a seeded plot up is built: `digUp`.)

@@ -218,14 +218,18 @@ function orderText(order: Order, state: GameState): string {
 }
 
 // First line of an order card. "GIANT x3" marks a Giant order and how many orders it merged,
-// "RUSH" a rush wave order, "SMALL" one Small order halved, and "TIP +10" the extra coins
-// Generous customer added to it.
+// "RUSH" a rush wave order, "SMALL" one Small order halved, "MIXED" one a Mix-up changed, and
+// "TIP +10" the extra coins Generous customer added to it.
 function orderTitle(order: Order): string {
     const giant = order.giant === null ? "" : `GIANT x${order.giant.orders}`
     const tip = order.tip > 0 ? `TIP +${order.tip}` : ""
-    const tags = [giant, order.rush ? "RUSH" : "", order.small ? "SMALL" : "", tip].filter(
-        (t) => t !== ""
-    )
+    const tags = [
+        giant,
+        order.rush ? "RUSH" : "",
+        order.small ? "SMALL" : "",
+        order.mixed ? "MIXED" : "",
+        tip
+    ].filter((t) => t !== "")
     return tags.length === 0 ? `Order #${order.id}` : `Order #${order.id}  ${tags.join(" ")}`
 }
 

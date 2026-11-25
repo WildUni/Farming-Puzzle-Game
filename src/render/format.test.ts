@@ -127,6 +127,7 @@ describe("orderText", () => {
             small: false,
             rush: false,
             tip: 0,
+            mixed: false,
             giant: null
         }
         const state = { ...game("timed"), tick: 100, inventory: { garlic: 2 } }
@@ -406,6 +407,7 @@ describe("orderTimeFraction and isOrderUrgent", () => {
         small: false,
         rush: false,
         tip: 0,
+        mixed: false,
         giant: null
     }
 
@@ -679,6 +681,7 @@ describe("second batch text: fog, worms, sneak peek, steady pace", () => {
             small: false,
             rush: false,
             tip: 0,
+            mixed: false,
             giant: null
         }
         expect(orderText(order, fogged(12))).toBe("Order #2\ngarlic x3  (have 0)\nvalue 6   ?:??")
@@ -694,6 +697,7 @@ describe("second batch text: fog, worms, sneak peek, steady pace", () => {
             small: true,
             rush: false,
             tip: 0,
+            mixed: false,
             giant: null
         }
         expect(orderText(order, game("survival")).split("\n")[0]).toBe("Order #4  SMALL")
@@ -710,9 +714,14 @@ describe("second batch text: fog, worms, sneak peek, steady pace", () => {
             small: true,
             rush: false,
             tip: 10,
+            mixed: false,
             giant: null
         }
         expect(orderText(order, game("survival")).split("\n")[0]).toBe("Order #4  SMALL TIP +10")
+        const mixed = { ...order, mixed: true }
+        expect(orderText(mixed, game("survival")).split("\n")[0]).toBe(
+            "Order #4  SMALL MIXED TIP +10"
+        )
         expect(orderText({ ...order, small: false, tip: 0 }, game("survival"))).not.toContain("TIP")
     })
 
@@ -726,6 +735,7 @@ describe("second batch text: fog, worms, sneak peek, steady pace", () => {
             small: false,
             rush: false,
             tip: 0,
+            mixed: false,
             giant: null
         }
         expect(nextOrderText(order)).toBe("Next order\ncarrot x2\nvalue 16")
@@ -767,6 +777,7 @@ describe("rush wave text", () => {
         small: false,
         rush: true,
         tip: 0,
+        mixed: false,
         giant: null
     })
 

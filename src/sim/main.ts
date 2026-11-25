@@ -654,6 +654,7 @@ function giantOrder(state: GameState, coinsPct: number, timePct: number): Order 
         small: false,
         rush: false,
         tip: state.orders.reduce((sum, o) => sum + o.tip, 0),
+        mixed: false,
         giant: { orders: state.orders.length, coinsPct }
     }
 }

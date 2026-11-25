@@ -185,6 +185,15 @@
             "effect": { "kind": "sellRate", "pct": 50 },
             "amountStat": "crashPricePct",
             "news": { "seconds": 10, "headline": "Market prices wobbling" }
+        },
+        {
+            "id": "mixUp",
+            "name": "Mix-up",
+            "kind": "bad",
+            "modes": ["survival", "timed"],
+            "weight": 15,
+            "warnSeconds": 5,
+            "effect": { "kind": "mixOrder" }
         }
     ]
 }
