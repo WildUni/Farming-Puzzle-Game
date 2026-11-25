@@ -3,6 +3,7 @@
 import type { Crop, GameState, Plot } from "./types"
 import { MODES } from "./modes"
 import { modifiersFor } from "./upgrades"
+import { sellRateAt } from "./effects"
 import { ECONOMY, fertilizerLocked, validateEconomy } from "./economy_config"
 import type { EconomyConfig } from "./economy_config"
 
@@ -30,19 +31,28 @@ function storageFree(state: GameState): number {
 }
 
 // Coins for selling `amount` of `crop`, with `bonusPct` (Premium produce's sellPricePct; 100 =
-// normal) on top of the config's price. The total is rounded down once, not each crop.
+// normal) and `ratePct` (a Price crash's rate; 100 = none) on top of the config's price. The
+// total is rounded down once, not each crop.
 function sellValue(
     crop: Crop,
     amount: number,
     config: EconomyConfig = ECONOMY,
-    bonusPct = 100
+    bonusPct = 100,
+    ratePct = 100
 ): number {
-    return Math.floor((amount * crop.value * config.sellPricePct * bonusPct) / 10_000)
+    return Math.floor((amount * crop.value * config.sellPricePct * bonusPct * ratePct) / 1_000_000)
 }
 
-// sellValue with the run's Premium produce bonus. The sell action and its button use this.
+// sellValue with the run's Premium produce bonus and any Price crash working now. The sell
+// action and its button use this.
 function sellValueFor(state: GameState, crop: Crop, amount: number): number {
-    return sellValue(crop, amount, ECONOMY, modifiersFor(state.upgrades).sellPricePct)
+    return sellValue(
+        crop,
+        amount,
+        ECONOMY,
+        modifiersFor(state.upgrades).sellPricePct,
+        sellRateAt(state.activeEffects, state.tick)
+    )
 }
 
 // True when fertilizer can be made and used in this run.

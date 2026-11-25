@@ -43,7 +43,8 @@ const LASTING_KINDS: readonly string[] = [
     "deliverBonus",
     "harvestBonus",
     "fog",
-    "drought"
+    "drought",
+    "sellRate"
 ]
 const AMOUNT_KINDS: readonly string[] = [
     "cutGrowth",
@@ -55,7 +56,8 @@ const AMOUNT_KINDS: readonly string[] = [
     "rotStorage",
     "tipOrder",
     "luckyClover",
-    "scarecrow"
+    "scarecrow",
+    "sellRate"
 ]
 
 // ---------------------------------------------------------------------------------------------
@@ -133,6 +135,8 @@ function validateEffect(raw: unknown, at: string): Effect {
                 kind: "scarecrow",
                 seconds: wholeAtLeast(raw.seconds, 1, `${at}.seconds`)
             }
+        case "sellRate":
+            return { kind: "sellRate", pct: wholeBetween(raw.pct, 1, 99, `${at}.pct`) }
         case "drought":
             return {
                 kind: "drought",
@@ -291,6 +295,8 @@ function baseAmount(effect: Effect): number | null {
             return effect.plots
         case "scarecrow":
             return effect.seconds
+        case "sellRate":
+            return effect.pct
         default:
             return null
     }
@@ -666,6 +672,19 @@ function startEvent(
             }
         case "blockHarvest":
             return landCrows(next, def.id, event.amount!, length, exclude)
+        case "sellRate":
+            // Price floor softens the crash, but never past the usual price.
+            return {
+                ...next,
+                activeEffects: startEffect(
+                    next.activeEffects,
+                    def.id,
+                    { kind: "sellRate", pct: Math.min(100, event.amount!) },
+                    now,
+                    length,
+                    exclude
+                )
+            }
         case "growthRate":
         case "orderRate":
         case "fog":

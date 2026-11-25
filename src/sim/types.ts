@@ -141,6 +141,7 @@ type Modifiers = {
     rotPct: number // % of Rot's share of storage
     fogDurationPct: number // % of Fog's length
     emergencyTimePct: number // % of an Emergency order's time share
+    crashPricePct: number // % of a Price crash's share of the sell price (Price floor)
     storageBonus: number // crops storage holds on top of the mode's cap (Bigger barn)
     fertilizerUnlocked: number // 1: fertilizer can be made and used when economy.json locks it
     comboMissesForgiven: number // Timed: failed orders per streak that don't break the combo
@@ -262,6 +263,7 @@ type LastingEffect =
     | { kind: "autoHarvest" } // ready crops harvest themselves in step
     | { kind: "drought"; waterSeconds: number } // crops stop growing unless watered
     | { kind: "water" } // its plots ignore drought (source "water:<plot>", only: [plot])
+    | { kind: "sellRate"; pct: number } // crops sell for pct% of their price (Price crash)
 
 type InstantEffect =
     | { kind: "cutGrowth"; ticks: number } // every growing crop gets this many ticks closer

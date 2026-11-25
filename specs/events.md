@@ -91,14 +91,17 @@ All numbers are placeholders until playtesting.
 | `luckyClover`      | Lucky clover      | good | survival, timed | 15     | 5 s  | `luckyClover` 1 plot   | –     | –      | –                                |
 | `scarecrow`        | Scarecrow         | good | survival, timed | 15     | 3 s  | `scarecrow` 60 s       | –     | –      | –                                |
 | `drought`          | Drought           | bad  | survival, timed | 20     | 5 s  | `drought` 3 s a tap    | 10 s  | –      | `banStat: pestBan`               |
+| `priceCrash`       | Price crash       | bad  | survival, timed | 15     | 5 s  | `sellRate` 50%         | 20 s  | –      | `amountStat: crashPricePct`      |
 
-News (all placeholders): Frost "Cold snap on the way", Fog "Fog rolling in", Rain shower "Rain in the forecast" and Sunny spell "Sunny skies ahead", each 10 s ahead. Crows and Birds have `scaredOff: true`.
+News (all placeholders): Frost "Cold snap on the way", Fog "Fog rolling in", Rain shower "Rain in the forecast", Sunny spell "Sunny skies ahead" and Price crash "Market prices wobbling", each 10 s ahead. Crows and Birds have `scaredOff: true`.
 
 **Lucky clover** marks up to `amount` plots that hold a crop (one, plus Four-leaf's `cloverExtraPlots`). The next harvest of a marked plot gives double its usual crops (`yield + yieldBonus`, doubled; Bumper harvest and Worms are added on top, not doubled), then the mark is gone. A mark stays until that plot is harvested, even if its crop is lost or replaced first. Storage still caps the harvest, and a harvest refused for full storage keeps the mark.
 
 **Drought** stops every crop growing (Greenhouse plots excepted) for its length, unless the player waters it. `waterPlot { plot }` on a growing plot under the drought waters it for `waterSeconds + waterBonusSeconds` (Irrigation): a watered plot ignores the drought and grows at its usual speed. Watering again while still watered adds the same time again. Frost is different: tapping never helps.
 
 **Birds' seeds** are marked: a plot Birds planted is `seeded` while it grows. `digUp { plot }` empties a seeded plot that is still growing. Harvesting it, or anything that empties it, clears the mark.
+
+**Price crash** makes crops sell for `pct`% of their usual price while it works (`sellRateAt`, see [effects.md](effects.md)); Premium produce still applies on top. Price floor raises `crashPricePct`, which scales the `pct`; the result is capped at 100, so a crash can be softened but never turned into a rise. `validateEvents` takes a `sellRate` `pct` from 1 to 99. It is a bad event, but it touches no plot, so Greenhouse doesn't matter to it.
 
 **Scarecrow** guards the field for `amount` seconds after it starts (`scarecrowUntil`). While it guards, events with `scaredOff` (Crows, Birds) are left out of `eligibleEvents`; other bad events still come. It is an instant event, so the next event is scheduled as usual and the guard can outlast it.
 
@@ -262,6 +265,7 @@ An instant event starts and ends on the same tick.
 | `luckyClover`  | From the `growing` or `ready` plots not already in `cloverPlots`, `pick` up to `amount` plots one at a time from those still free, all from `rng.events`; they join `cloverPlots` (ascending). With no such plot nothing happens and nothing is drawn                                                                                                                                       |
 | `scarecrow`    | `scarecrowUntil = max(scarecrowUntil, tick + amount × TICKS_PER_SECOND)`. No draws                                                                                                                                                                                                                                                                                                          |
 | `drought`      | `startEffect(…, exclude)` as for any lasting bad event; `waterSeconds` stays in the effect for `waterPlot` to read                                                                                                                                                                                                                                                                          |
+| `sellRate`     | `activeEffects = startEffect(…, { kind: "sellRate", pct: min(100, amount) }, …)`                                                                                                                                                                                                                                                                                                            |
 | `rotStorage`   | Each stored crop loses `floor(amount_held × amount / 100)`; crops that reach 0 are removed (`rotStorage(inventory, pct)`)                                                                                                                                                                                                                                                                   |
 | `tipOrder`     | From the open orders not failing on this tick, in board order, `pick` one with `randomInt(rng.events, 0, n − 1)` and add `amount` to its `tip` (`tipOrder(state, coins)`). Filling it pays the tip on top of the usual coins (see [main.md](main.md)). With no open order nothing happens and nothing is drawn                                                                              |
 | other lasting  | `activeEffects = startEffect(activeEffects, id, effect, tick, endsAt − startsAt, exclude)`; `deliverBonus` and `harvestBonus` use `amount` as their coins or crops                                                                                                                                                                                                                          |
@@ -297,7 +301,7 @@ All have `"needs": ["events"]`. `GameSystem` becomes `"powerUps" | "events"`.
 | `moleTraps`    | Mole traps    | survival, timed | tiered | 3         | `moleBlockChance` +10, +15, +20, +30, +40   | –                     | yes      |
 | `greenhouse`   | Greenhouse    | survival, timed | epic   | 2         | `shielded` +1                               | plot, `oncePerTarget` | no       |
 
-The second batch adds Pest control, Worm farm, Good neighbors, Bird net, Root cellar, Lantern and Calm nerves, listed with their stats in [upgrades.md](upgrades.md#shipped-with-the-second-batch).
+The second batch adds Pest control, Worm farm, Good neighbors, Bird net, Root cellar, Lantern, Calm nerves and Price floor, listed with their stats in [upgrades.md](upgrades.md#shipped-with-the-second-batch).
 
 New stats:
 
@@ -373,6 +377,7 @@ New stats:
 - **Emergency order** adds an order past the limit with `scalePct(orderTicks, 50)` (75% with a legendary Calm nerves) and leaves `rng.orders` alone.
 - **Rot** removes `floor(30%)` of each crop (`floor(15%)` with a legendary Root cellar).
 - **Fog** starts a `fog` effect for its length, halved by a legendary Lantern.
+- **Price crash** starts a `sellRate` effect at 50% for its length: selling during it pays half (rounded down), and the usual price after it ends. A legendary Price floor makes it 95%. `validateEvents` refuses a `sellRate` `pct` of 0 or 100.
 
 **Replay (`verification.test.ts`)**
 
@@ -401,7 +406,9 @@ New stats:
 - [ ] Tune every number (weights, warnings, lengths, gaps, stat caps) after playtesting.
 - [x] Slow day, Worms, Helpful neighbor (good); Birds, Emergency order, Rot, Fog (bad).
 - [x] Scarecrow, Lucky clover and Four-leaf (Day 10).
-- [ ] Still to come: Raccoon (a tap action), Mix-up (re-rolling an open order), Fake merchant (the shop), Price crash (selling crops).
+- [ ] Still to come: Raccoon (a tap action), Mix-up (re-rolling an open order), Fake merchant (the shop).
+- [x] Price crash and Price floor (Day 12).
+- [ ] Price crash numbers (50% for 20 s, weight 15) and Price floor's (+20 to +90) are placeholders.
 - [ ] Should Birds' seeds be the crops orders want, or random as now? (Digging a seeded plot up is built: `digUp`.)
 - [ ] Tradeoff events (Bee swarm, Market day, Festival, …), which need a choice from the player.
 - [x] News broadcasts: a ticker that announces some events earlier and in words (Day 10).

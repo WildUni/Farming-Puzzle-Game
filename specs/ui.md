@@ -263,7 +263,7 @@ Three sections, top to bottom:
 - `heartsText(lives, max)` shows a full heart per life and an empty one up to the cap; `buyLifeText` says `Lives full` at the cap.
 - `plotOverlays` marks every plot Worms are working on.
 - The Level row and the game-over level follow `runLevel` (Steady pace).
-- Storage, selling, fertilizer and reroll text: see the "Screen text" tests in [economy.md](economy.md). `sellButtonText` shows Premium produce's boosted price.
+- Storage, selling, fertilizer and reroll text: see the "Screen text" tests in [economy.md](economy.md). `sellButtonText` shows Premium produce's boosted price, and a Price crash's lower one while it works.
 - `miracleGrowText` reads `ready` with no recharge left (and on `miracleReadyAt` itself), and the time left otherwise.
 - Shop: `shopItemText` for an upgrade, Promotion, a power-up and a life slot (and `Lives full`); `shopPriceText` follows `itemPrice` (with Discount card) and shows `SOLD` and `Maxed`; `sellRefundText` follows `sellRefund` and gives each refusal's label; `restockText` shows `free` with the count left while a free restock is banked, else the price; `freeRestockText` counts the orders left, and says full when the bank is; `shopButtonText` shows the banked count; `promotionTargetText` shows the tier now and after. (`shopTimerText` went with the running shop.)
 - `modeBestText`, `bestScoreText` (new best, not, debugged) and `soundButtonText`.

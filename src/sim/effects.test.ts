@@ -14,6 +14,7 @@ import {
     deliverBonusAt,
     harvestBonusAt,
     fogged,
+    sellRateAt,
     comboShiftAt,
     autoHarvestAt,
     isWatered,
@@ -439,6 +440,25 @@ describe("finishAll / clearField / harvestBonusAt / fogged", () => {
         expect(fogged([fog], 5)).toBe(true)
         expect(fogged([fog], 8)).toBe(false)
         expect(fogged([worms(0, 99)], 5)).toBe(false)
+    })
+
+    it("sellRateAt is 100 with no crash, the crash's pct while it works, and multiplies", () => {
+        const crash = (pct: number, startedAt: number, endsAt: number): ActiveEffect => ({
+            source: "priceCrash",
+            effect: { kind: "sellRate", pct },
+            startedAt,
+            endsAt,
+            exclude: [],
+            only: null
+        })
+        expect(sellRateAt([], 5)).toBe(100)
+        expect(sellRateAt([worms(0, 99)], 5)).toBe(100)
+        expect(sellRateAt([crash(50, 5, 8)], 4)).toBe(100)
+        expect(sellRateAt([crash(50, 5, 8)], 5)).toBe(50)
+        expect(sellRateAt([crash(50, 5, 8)], 7)).toBe(50)
+        expect(sellRateAt([crash(50, 5, 8)], 8)).toBe(100)
+        // 100 × 50% = 50, × 33% = 16.5, rounded down.
+        expect(sellRateAt([crash(50, 0, 9), crash(33, 0, 9)], 1)).toBe(16)
     })
 
     it("tickEffects moves nothing for harvestBonus and fog, and drops them once ended", () => {

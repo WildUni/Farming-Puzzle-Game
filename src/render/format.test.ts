@@ -862,6 +862,27 @@ describe("barn panel and reroll text", () => {
         )
         expect(boosted).toBeGreaterThan(sellValue(crops.carrot, 8))
         expect(sellButtonText(premium, crops.carrot, 8)).toBe(`Sell 8\n+${boosted} coins`)
+        // A Price crash working now lowers the price shown, and it comes back when it ends.
+        const crashed = {
+            ...s,
+            tick: 10,
+            activeEffects: [
+                {
+                    source: "priceCrash",
+                    effect: { kind: "sellRate" as const, pct: 50 },
+                    startedAt: 5,
+                    endsAt: 20,
+                    exclude: [],
+                    only: null
+                }
+            ]
+        }
+        const halved = sellValue(crops.carrot, 8, ECONOMY, 100, 50)
+        expect(halved).toBeLessThan(sellValue(crops.carrot, 8))
+        expect(sellButtonText(crashed, crops.carrot, 8)).toBe(`Sell 8\n+${halved} coins`)
+        expect(sellButtonText({ ...crashed, tick: 20 }, crops.carrot, 8)).toBe(
+            `Sell 8\n+${sellValue(crops.carrot, 8)} coins`
+        )
         expect(makeFertilizerText(crops.garlic)).toBe(
             `Make fertilizer\nuses ${crops.garlic.fertilizerCost} garlic`
         )

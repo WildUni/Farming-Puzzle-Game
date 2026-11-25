@@ -119,6 +119,14 @@ describe("sellValue", () => {
         expect(sellValue(garlic, 4, config, 150)).toBe(3)
         expect(sellValue(pumpkin, 3, config, 200)).toBe(18)
     })
+
+    it("applies a rate percent (Price crash) with the bonus, rounding down once", () => {
+        const config: EconomyConfig = { ...ECONOMY, sellPricePct: 25 }
+        expect(sellValue(pumpkin, 3, config, 100, 100)).toBe(9)
+        expect(sellValue(pumpkin, 3, config, 100, 50)).toBe(4) // 4.5 rounds down
+        expect(sellValue(pumpkin, 3, config, 200, 50)).toBe(9)
+        expect(sellValue(garlic, 2, config, 100, 50)).toBe(0)
+    })
 })
 
 describe("fertilizer rules", () => {

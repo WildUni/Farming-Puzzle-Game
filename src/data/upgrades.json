@@ -190,6 +190,11 @@
             "min": 100,
             "max": 200
         },
+        "crashPricePct": {
+            "base": 100,
+            "min": 100,
+            "max": 190
+        },
         "storageBonus": {
             "base": 0,
             "min": 0,
@@ -887,6 +892,21 @@
                 {
                     "stat": "emergencyTimePct",
                     "perTier": [10, 15, 25, 35, 50]
+                }
+            ],
+            "needs": ["events"]
+        },
+        {
+            "id": "priceFloor",
+            "name": "Price floor",
+            "text": "Crashed crop prices are {0}% higher",
+            "pools": ["survival", "timed"],
+            "maxCopies": 3,
+            "sellable": true,
+            "effects": [
+                {
+                    "stat": "crashPricePct",
+                    "perTier": [20, 30, 50, 70, 90]
                 }
             ],
             "needs": ["events"]

@@ -12,7 +12,7 @@ import {
 } from "./events"
 import { debugEvent } from "./debug"
 import { replay } from "./verification"
-import { harvestBlocked } from "./effects"
+import { harvestBlocked, sellRateAt } from "./effects"
 import { createGame, applyAction, step, orderRules } from "./main"
 import { buildCropTable } from "./plot"
 import { nextValue } from "./mulberry"
@@ -20,7 +20,7 @@ import { TICKS_PER_SECOND } from "./game_constants"
 import { DIFFICULTY } from "./difficulty"
 import { MODES } from "./modes"
 import { UPGRADES, modifiersFor, scalePct } from "./upgrades"
-import { storageCap } from "./economy"
+import { ECONOMY, sellValue, storageCap } from "./economy"
 import rawEvents from "../data/events.json"
 import type {
     Action,
@@ -154,6 +154,7 @@ describe("validateEvents", () => {
             "helpfulNeighbor",
             "luckyClover",
             "moles",
+            "priceCrash",
             "rainShower",
             "rot",
             "scarecrow",
@@ -252,7 +253,16 @@ describe("shieldedPlots / eventTargets / eligibleEvents", () => {
     it("Generous customer is in both modes; Moles needs a plot with a crop", () => {
         expect(eligibleEvents(game(), "good")).toContain("generousCustomer")
         expect(eligibleEvents(createGame(1, timedOn), "good")).toContain("generousCustomer")
-        const always = ["birds", "crows", "drought", "emergencyOrder", "fog", "frost", "rot"]
+        const always = [
+            "birds",
+            "crows",
+            "drought",
+            "emergencyOrder",
+            "fog",
+            "frost",
+            "priceCrash",
+            "rot"
+        ]
         expect(eligibleEvents(game(), "bad")).toEqual(always)
         expect(eligibleEvents(game({ plots: [ready, empty, empty, empty] }), "bad")).toEqual(
             [...always, "moles"].sort()
@@ -606,7 +616,8 @@ describe("validateEvents: new effect kinds and banStat", () => {
             { effect: { kind: "addOrder", timePct: 50 }, amountStat: "emergencyTimePct" },
             { effect: { kind: "rotStorage", pct: 30 }, amountStat: "rotPct" },
             { effect: { kind: "tipOrder", coins: 5 }, amountStat: "deliverBonusPct" },
-            { effect: { kind: "blockHarvest", plots: 2 }, seconds: 2, banStat: "pestBan" }
+            { effect: { kind: "blockHarvest", plots: 2 }, seconds: 2, banStat: "pestBan" },
+            { effect: { kind: "sellRate", pct: 50 }, seconds: 2, amountStat: "crashPricePct" }
         ]
         for (const k of kinds) expect(() => validateEvents(withEvent(k))).not.toThrow()
     })
@@ -621,6 +632,9 @@ describe("validateEvents: new effect kinds and banStat", () => {
         ["tipOrder of 0 coins", { effect: { kind: "tipOrder", coins: 0 } }],
         ["tipOrder with seconds", { effect: { kind: "tipOrder", coins: 5 }, seconds: 3 }],
         ["a power-up-only kind", { effect: { kind: "fillOrder" } }],
+        ["sellRate of 0%", { effect: { kind: "sellRate", pct: 0 }, seconds: 2 }],
+        ["sellRate of 100%", { effect: { kind: "sellRate", pct: 100 }, seconds: 2 }],
+        ["sellRate without seconds", { effect: { kind: "sellRate", pct: 50 } }],
         ["fog without seconds", { effect: { kind: "fog" } }],
         ["an amountStat on fog", { effect: { kind: "fog" }, seconds: 2, amountStat: "rotPct" }],
         ["a banStat not ending in Ban", { effect: { kind: "fog" }, seconds: 2, banStat: "rotPct" }],
@@ -804,6 +818,79 @@ describe("new events in step", () => {
             "rot"
         )
         expect(step(cellar, crops).inventory).toEqual({ garlic: 9 })
+    })
+
+    it("Price crash halves sell prices for its length; Price floor softens it", () => {
+        const length = EVENTS.events.priceCrash.durationTicks!
+        const pumpkin = crops.pumpkin
+        const held = { inventory: { pumpkin: 4 } }
+        const s = step(builtNext(game(held), "priceCrash"), crops)
+        expect(s.activeEffects.map((a) => a.effect)).toEqual([{ kind: "sellRate", pct: 50 }])
+        expect(s.activeEffects[0].endsAt - s.tick).toBe(length)
+        const sell = { type: "sellCrop", cropId: "pumpkin", amount: 4 } as const
+        const usual = sellValue(pumpkin, 4)
+        expect(applyAction(s, sell, crops)!.coins - s.coins).toBe(
+            sellValue(pumpkin, 4, ECONOMY, 100, 50)
+        )
+        expect(sellValue(pumpkin, 4, ECONOMY, 100, 50)).toBeLessThan(usual)
+
+        // Back to the usual price on the tick the crash ends.
+        let after = s
+        while (after.tick < s.activeEffects[0].endsAt) after = step(after, crops)
+        expect(applyAction(after, sell, crops)!.coins - after.coins).toBe(usual)
+
+        const floored = step(
+            builtNext(game({ ...held, upgrades: [own("priceFloor", "legendary")] }), "priceCrash"),
+            crops
+        )
+        expect(floored.activeEffects[0].effect).toEqual({ kind: "sellRate", pct: 95 })
+    })
+
+    it("Price floor can't turn a crash into a rise", () => {
+        const twice = [own("priceFloor", "legendary"), own("priceFloor", "legendary")]
+        expect(modifiersFor(twice).crashPricePct).toBe(190)
+        const s = step(builtNext(game({ upgrades: twice }), "priceCrash"), crops)
+        expect(s.activeEffects[0].effect).toEqual({ kind: "sellRate", pct: 95 })
+    })
+
+    it("a run that sells during a Price crash replays equal", () => {
+        let found = false
+        for (let seed = 1; seed <= 60 && !found; seed++) {
+            let s = createGame(seed, on)
+            const log: LogEntry[] = []
+            const act = (action: LogEntry["action"]) => {
+                const next = applyAction(s, action, crops)
+                if (next !== null) {
+                    s = next
+                    log.push({ tick: s.tick, action })
+                }
+                return next !== null
+            }
+            let soldInCrash = false
+            while (s.tick < 4000 && s.status === "running") {
+                if (s.upgradeOffer !== null) {
+                    act({ type: "chooseUpgrade", upgradeId: s.upgradeOffer[0].id })
+                }
+                for (let plot = 0; plot < s.plots.length; plot++) {
+                    if (s.plots[plot].state === "ready") act({ type: "harvest", plot })
+                    if (s.plots[plot].state === "empty") {
+                        act({ type: "plant", plot, cropId: "garlic" })
+                    }
+                }
+                for (const o of [...s.orders]) act({ type: "deliver", orderId: o.id })
+                if (sellRateAt(s.activeEffects, s.tick) < 100) {
+                    if (act({ type: "sellCrop", cropId: "garlic", amount: 1 })) soldInCrash = true
+                }
+                if (soldInCrash || s.status !== "running" || s.upgradeOffer !== null) break
+                s = step(s, crops)
+            }
+            if (!soldInCrash) continue
+            found = true
+            const result = replay(seed, on, log, s.tick, crops)
+            expect(result.ok).toBe(true)
+            if (result.ok) expect(result.state).toEqual(s)
+        }
+        expect(found).toBe(true)
     })
 
     it("Fog works for its length, shortened by Lantern", () => {

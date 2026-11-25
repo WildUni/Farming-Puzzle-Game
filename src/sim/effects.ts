@@ -252,6 +252,18 @@ function droughtOn(active: ActiveEffect[], plot: number, now: number): ActiveEff
     )
 }
 
+// % of the usual sell price crops fetch on tick `now`: 100, times each working sellRate effect's
+// pct, rounding down after each (Price crash).
+function sellRateAt(active: ActiveEffect[], now: number): number {
+    return active.reduce(
+        (pct, a) =>
+            a.effect.kind === "sellRate" && working(a, now)
+                ? Math.floor((pct * a.effect.pct) / 100)
+                : pct,
+        100
+    )
+}
+
 // True while a fog effect works: the screen hides growth and order timers.
 function fogged(active: ActiveEffect[], now: number): boolean {
     return active.some((a) => a.effect.kind === "fog" && working(a, now))
@@ -272,6 +284,7 @@ export {
     deliverBonusAt,
     harvestBonusAt,
     fogged,
+    sellRateAt,
     comboShiftAt,
     autoHarvestAt,
     isWatered,

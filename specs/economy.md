@@ -64,13 +64,13 @@ Checks a parsed JSON value and returns it typed. Throws an `Error` naming the ba
 
 The total of every crop in `inventory`, and `max(0, cap − used)`. Held fertilizer does not count.
 
-### `sellValue(crop: Crop, amount: number, config?, bonusPct = 100): number`
+### `sellValue(crop: Crop, amount: number, config?, bonusPct = 100, ratePct = 100): number`
 
-`floor(amount × crop.value × sellPricePct × bonusPct / 10000)`, where `bonusPct` is Premium produce's `sellPricePct` modifier (100 = no bonus). The total is rounded down once, not each crop, so selling one Garlic (value 2) at 25% pays 0 but selling two pays 1.
+`floor(amount × crop.value × sellPricePct × bonusPct × ratePct / 1000000)`, where `bonusPct` is Premium produce's `sellPricePct` modifier (100 = no bonus) and `ratePct` is a Price crash's rate (100 = none). The total is rounded down once, not each crop, so selling one Garlic (value 2) at 25% pays 0 but selling two pays 1.
 
 ### `sellValueFor(state, crop, amount): number`
 
-`sellValue` with the run's `sellPricePct` modifier. `sellCrop` pays this and the Sell button shows it.
+`sellValue` with the run's `sellPricePct` modifier and `sellRateAt(activeEffects, tick)` (Price crash, see [events.md](events.md)). `sellCrop` pays this and the Sell button shows it, so the button's price drops for the crash and comes back when it ends.
 
 ### `fertilizerAllowed(state, config?): boolean`
 
@@ -135,6 +135,7 @@ No action here reads the clock or moves the tick, so replays work as before: a r
 
 - `sellCrop` removes the crops and pays `sellValue` (and more with Premium produce); refused for more than is held, 0, a fraction, or an unknown crop.
 - `sellValue` rounds the total down.
+- `sellValueFor` during a Price crash pays the crash's share, with Premium produce on top; after the crash ends it pays the usual price again.
 - Refused while an upgrade offer is open.
 
 **Fertilizer**

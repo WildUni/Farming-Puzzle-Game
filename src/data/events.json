@@ -173,6 +173,18 @@
             "seconds": 10,
             "effect": { "kind": "drought", "waterSeconds": 3 },
             "banStat": "pestBan"
+        },
+        {
+            "id": "priceCrash",
+            "name": "Price crash",
+            "kind": "bad",
+            "modes": ["survival", "timed"],
+            "weight": 15,
+            "warnSeconds": 5,
+            "seconds": 20,
+            "effect": { "kind": "sellRate", "pct": 50 },
+            "amountStat": "crashPricePct",
+            "news": { "seconds": 10, "headline": "Market prices wobbling" }
         }
     ]
 }
