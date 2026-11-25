@@ -1002,6 +1002,27 @@ describe("shop text", () => {
         expect(ownedUpgradeText(own("richSoil", "rare", 1))).toBe("Rich soil (Rare) · Plot 2")
     })
 
+    it("marks Fake merchant cards only with Keen eye, and fake copies once bought", () => {
+        const base = shopState()
+        const stock = base.shop.stock!.map((it, i) =>
+            i === 0 && it.kind === "upgrade" ? { ...it, fakeOrders: 5 } : it
+        )
+        const faked = { ...base, shop: { ...base.shop, stock } }
+        const plain = upgradeCardText(UPGRADES.upgrades.bigTips, "rare", [])
+        expect(shopItemText(faked, 0)).toBe(plain)
+        const keen = { ...faked, upgrades: [own("keenEye", "uncommon")] }
+        expect(shopItemText(keen, 0)).toBe(
+            `${upgradeCardText(UPGRADES.upgrades.bigTips, "rare", keen.upgrades)}\nFAKE`
+        )
+
+        const fake = { ...own("bigTips", "rare"), fakeOrdersLeft: 3 }
+        expect(ownedUpgradeText(fake)).toBe("Big tips (Rare) FAKE")
+        const owning = shopState({ upgrades: [fake] })
+        expect(sellRefundText(owning, 0)).toBe("Fake: 3 orders left")
+        const last = shopState({ upgrades: [{ ...fake, fakeOrdersLeft: 1 }] })
+        expect(sellRefundText(last, 0)).toBe("Fake: 1 order left")
+    })
+
     it("restockText, freeRestockText, shopButtonText, promotionTargetText, shopTitleText", () => {
         const bank = (freeRestocks: number, restockProgress = 0) =>
             shopState({ shop: { ...shopState().shop, freeRestocks, restockProgress } })

@@ -94,6 +94,7 @@ All numbers are placeholders until playtesting.
 | `priceCrash`       | Price crash       | bad  | survival, timed | 15     | 5 s  | `sellRate` 50%         | 20 s  | –      | `amountStat: crashPricePct`        |
 | `mixUp`            | Mix-up            | bad  | survival, timed | 15     | 5 s  | `mixOrder`             | –     | –      | –                                  |
 | `raccoon`          | Raccoon           | bad  | survival, timed | 15     | 3 s  | `raccoon` 40%          | 6 s   | –      | `durationStat: raccoonDurationPct` |
+| `fakeMerchant`     | Fake merchant     | bad  | survival, timed | 10     | 5 s  | `fakeStock` 5 orders   | –     | –      | –                                  |
 
 News (all placeholders): Frost "Cold snap on the way", Fog "Fog rolling in", Rain shower "Rain in the forecast", Sunny spell "Sunny skies ahead" and Price crash "Market prices wobbling", each 10 s ahead. Crows and Birds have `scaredOff: true`.
 
@@ -104,6 +105,10 @@ News (all placeholders): Frost "Cold snap on the way", Fog "Fog rolling in", Rai
 **Birds' seeds** are marked: a plot Birds planted is `seeded` while it grows. `digUp { plot }` empties a seeded plot that is still growing. Harvesting it, or anything that empties it, clears the mark.
 
 **Price crash** makes crops sell for `pct`% of their usual price while it works (`sellRateAt`, see [effects.md](effects.md)); Premium produce still applies on top. Price floor raises `crashPricePct`, which scales the `pct`; the result is capped at 100, so a crash can be softened but never turned into a rise. `validateEvents` takes a `sellRate` `pct` from 1 to 99. It is a bad event, but it touches no plot, so Greenhouse doesn't matter to it.
+
+**Fake merchant** slips a fake into the shop (`fakeStock(state, orders)`). When it starts, it picks one card from the current stock with `randomInt(rng.events, 0, n − 1)` over the candidates in stock order: unsold upgrade cards, not already fake, whose upgrade is **fakeable** (`isFakeable(def)`: a lasting upgrade with no target that is `sellable`; plot and crop upgrades, Promotion, and the structural ones like Extra plot and Extra heart are left out). The card gets `fakeOrders: orders` (5 for now, from `events.json`). With no stock yet (the shop never opened) or no candidate, nothing happens and nothing is drawn. A fake card looks the same as a real one and costs the same, unless the run has Keen eye (`fakeReveal` above 0), which labels it `FAKE`. It stays until bought or until the stock is replaced by a restock.
+
+Buying a fake card adds a **fake copy**: `{ id, tier, target: null, fakeOrdersLeft: fakeOrders }`. A fake copy works as the negative of the upgrade: each of its effects is subtracted from its stat instead of added. The stat's `min` still holds, so a fake can only take away what the run has above that (a fake Patient customers can't push order timers below their usual length). Each filled order takes 1 from every fake copy's `fakeOrdersLeft`; at 0 the copy is removed (`wearFakes`). Fake copies don't count as copies (`copyCount`), can't be sold or promoted, and are shown as fake in Your upgrades once bought. The news warns of it: "Shady trader spotted".
 
 **Raccoon** gets into the barn when it starts and stays for its length (a `raccoon` effect). The player taps it away with `shooRaccoon` (see [main.md](main.md)), which removes the effect and ends the event at once (`event = null`, `nextEventAt = tick + gapTicks(state)`), so nothing is taken. If it is still there when the event ends, it takes `pct`% of each stored crop, rounded down (the `rotStorage` rule), through `endEvent`. Guard dog raises `raccoonDurationPct`, so the raccoon stays longer and is easier to tap away. It comes even when storage is empty; then it takes nothing. It touches no plot, so Greenhouse doesn't matter to it. `validateEvents` takes a `raccoon` `pct` from 1 to 100.
 
@@ -271,6 +276,7 @@ An instant event starts and ends on the same tick.
 | `luckyClover`  | From the `growing` or `ready` plots not already in `cloverPlots`, `pick` up to `amount` plots one at a time from those still free, all from `rng.events`; they join `cloverPlots` (ascending). With no such plot nothing happens and nothing is drawn                                                                                                                                       |
 | `scarecrow`    | `scarecrowUntil = max(scarecrowUntil, tick + amount × TICKS_PER_SECOND)`. No draws                                                                                                                                                                                                                                                                                                          |
 | `drought`      | `startEffect(…, exclude)` as for any lasting bad event; `waterSeconds` stays in the effect for `waterPlot` to read                                                                                                                                                                                                                                                                          |
+| `fakeStock`    | `fakeStock(state, orders)`: from the unsold, fakeable, not-yet-fake upgrade cards in stock, in stock order, `pick` one with `randomInt(rng.events, 0, n − 1)` and set its `fakeOrders`. One draw. With no stock or no candidate nothing happens and nothing is drawn                                                                                                                        |
 | `raccoon`      | `activeEffects = startEffect(…, { kind: "raccoon", pct }, …)` with the definition's `pct`, for the event's length (scaled by `raccoonDurationPct`)                                                                                                                                                                                                                                          |
 | `sellRate`     | `activeEffects = startEffect(…, { kind: "sellRate", pct: min(100, amount) }, …)`                                                                                                                                                                                                                                                                                                            |
 | `mixOrder`     | From the open orders not failing on this tick, not Giant and asking for one crop, in board order, `pick` one with `randomInt(rng.events, 0, n − 1)`; then `pick` its new crop from the other crop ids, sorted. Two draws. With no such order, or only one crop in the table, nothing happens and nothing is drawn. Reads `mixKeepPct` (Clear orders) when it starts                         |
@@ -313,7 +319,7 @@ All have `"needs": ["events"]`. `GameSystem` becomes `"powerUps" | "events"`.
 | `moleTraps`    | Mole traps    | survival, timed | tiered | 3         | `moleBlockChance` +10, +15, +20, +30, +40   | –                     | yes      |
 | `greenhouse`   | Greenhouse    | survival, timed | epic   | 2         | `shielded` +1                               | plot, `oncePerTarget` | no       |
 
-The second batch adds Pest control, Worm farm, Good neighbors, Bird net, Root cellar, Lantern, Calm nerves, Price floor, Clear orders and Guard dog, listed with their stats in [upgrades.md](upgrades.md#shipped-with-the-second-batch).
+The second batch adds Pest control, Worm farm, Good neighbors, Bird net, Root cellar, Lantern, Calm nerves, Price floor, Clear orders, Guard dog and Keen eye, listed with their stats in [upgrades.md](upgrades.md#shipped-with-the-second-batch).
 
 New stats:
 
@@ -337,7 +343,7 @@ New stats:
 - No Phaser or browser imports. Pure: never changes its inputs.
 - Draws only from `rng.events`: in `announceEvent`, and in the block roll when an event starts. No draw depends on another stream, so events never change which orders come next, which upgrades are offered, or which power-ups drop.
 - No rule reads an event id except to look up its definition. What an event does is its `effect` and its stat fields.
-- Events never change `tick`, the run timer, `score`, `lives`, `coins` or `ordersCompleted`. They can change `plots` (Rain shower, Moles, Helpful neighbor, Birds), `inventory` (Helpful neighbor, Rot, Raccoon), `orders` / `nextOrderId` (Emergency order) and an open order's `required`, `value` and `mixed` (Mix-up).
+- Events never change `tick`, the run timer, `score`, `lives`, `coins` or `ordersCompleted`. They can change `plots` (Rain shower, Moles, Helpful neighbor, Birds), `inventory` (Helpful neighbor, Rot, Raccoon), `shop.stock` (Fake merchant marks a card), `orders` / `nextOrderId` (Emergency order) and an open order's `required`, `value` and `mixed` (Mix-up).
 - Birds and Emergency order draw from `rng.events` when they start; the number of Birds draws depends on how many plots are free, which is fixed by the state, so replays stay exact.
 
 ## Tests (`events.test.ts`)
@@ -389,6 +395,7 @@ New stats:
 - **Emergency order** adds an order past the limit with `scalePct(orderTicks, 50)` (75% with a legendary Calm nerves) and leaves `rng.orders` alone.
 - **Rot** removes `floor(30%)` of each crop (`floor(15%)` with a legendary Root cellar).
 - **Fog** starts a `fog` effect for its length, halved by a legendary Lantern.
+- **Fake merchant** on a fixed seed marks one fakeable unsold upgrade card with `fakeOrders: 5`, drawing once from `rng.events` and never from `rng.shop`; it leaves sold cards, power-ups, lives, targeted and unsellable upgrades alone, and does nothing, drawing nothing, with no stock or no candidate. A run that buys a fake replays equal.
 - **Raccoon** starts a `raccoon` effect for its length; left alone, on its `endsAt` tick it takes `floor(40%)` of each stored crop, and the event clears. Shooed, nothing is taken, the event clears on the tick of the tap and the next one is scheduled a gap later. With a legendary Guard dog it stays twice as long. `shooRaccoon` is refused with no raccoon working (during the warning, after it leaves). A run that shoos a raccoon replays equal.
 - **Mix-up** on a fixed seed changes one single-crop order to a different crop with the same amount, works its value out again, keeps its deadline and tip, and marks it `mixed`; draws twice from `rng.events` and never from `rng.orders`. With a legendary Clear orders (50%) an order for 5 keeps 2 of the old crop and asks for 3 of the new. Nothing happens, and nothing is drawn, with no open order, only a Giant order, or a one-crop table.
 - **Price crash** starts a `sellRate` effect at 50% for its length: selling during it pays half (rounded down), and the usual price after it ends. A legendary Price floor makes it 95%. `validateEvents` refuses a `sellRate` `pct` of 0 or 100.
@@ -420,7 +427,8 @@ New stats:
 - [ ] Tune every number (weights, warnings, lengths, gaps, stat caps) after playtesting.
 - [x] Slow day, Worms, Helpful neighbor (good); Birds, Emergency order, Rot, Fog (bad).
 - [x] Scarecrow, Lucky clover and Four-leaf (Day 10).
-- [ ] Still to come: Fake merchant (the shop).
+- [x] Fake merchant and Keen eye (Day 12): a fake card in the shop gives a negative copy that wears off after 5 filled orders; Keen eye labels fake cards.
+- [ ] Fake merchant numbers (5 orders, weight 10) are placeholders. Should Keen eye refuse the buy instead of only labelling the card? Should the fake also be marked when the stock is first drawn, if the shop hasn't been opened yet?
 - [x] Raccoon and Guard dog (Day 12): the raccoon stays for a few seconds and takes crops when it leaves unless tapped away; Guard dog makes it stay longer.
 - [ ] Raccoon numbers (40%, 6 s, 3 s warning, weight 15) and Guard dog's (+15% to +100%) are placeholders. Should the raccoon take a share, or a fixed number of crops?
 - [x] Mix-up and Clear orders (Day 12).

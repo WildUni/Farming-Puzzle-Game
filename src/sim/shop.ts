@@ -408,13 +408,14 @@ function canBuyAny(state: GameState, slot: number, crops: CropTable): boolean {
     return buyTargets(state, slot, crops).some((t) => canBuy(state, slot, t, crops))
 }
 
-type SellBlock = "closed" | "notSellable" | "required" | "storage"
+type SellBlock = "closed" | "fake" | "notSellable" | "required" | "storage"
 
 // Why sellUpgrade { index } would be refused, or null when it would succeed.
 function sellBlock(state: GameState, index: number): SellBlock | null {
     if (!shopUsable(state)) return "closed"
     if (!Number.isInteger(index) || index < 0 || index >= state.upgrades.length) return "closed"
     const copy = state.upgrades[index]
+    if (copy.fakeOrdersLeft !== undefined) return "fake"
     const def = UPGRADES.upgrades[copy.id]
     if (!def.sellable) return "notSellable"
     const rest = state.upgrades.filter((_, i) => i !== index)
@@ -424,6 +425,12 @@ function sellBlock(state: GameState, index: number): SellBlock | null {
     }
     if (storageUsed(state) > storageCap({ ...state, upgrades: rest })) return "storage"
     return null
+}
+
+// True for an upgrade card the Fake merchant marked. The screen labels it only with Keen eye.
+function isFakeCard(state: GameState, slot: number): boolean {
+    const item = stockItem(state, slot)
+    return item !== null && item.kind === "upgrade" && item.fakeOrders !== undefined
 }
 
 // True when sellUpgrade { index } would succeed.
@@ -438,6 +445,7 @@ function canRestock(state: GameState, config: ShopConfig = SHOP): boolean {
 
 export {
     validateShop,
+    isFakeCard,
     SHOP,
     isShopOpen,
     canOpenShop,

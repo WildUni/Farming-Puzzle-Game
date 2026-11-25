@@ -20,7 +20,7 @@ import { timeLeft } from "../sim/orders"
 import { runLevel } from "../sim/difficulty"
 import { lifePriceFor, maxLivesFor, rerollPriceFor } from "../sim/main"
 import { sellValueFor, storageCap, storageUsed } from "../sim/economy"
-import { UPGRADES, copyCount, effectAmount } from "../sim/upgrades"
+import { UPGRADES, copyCount, effectAmount, modifiersFor } from "../sim/upgrades"
 import {
     isMaxed,
     itemPrice,
@@ -550,7 +550,11 @@ function shopItemText(state: GameState, slot: number): string {
             if (def.kind === "instant") {
                 return `${def.name}\n${tierName(item.tier)}\n${upgradeDescription(def, item.tier)}`
             }
-            return upgradeCardText(def, item.tier, state.upgrades)
+            const text = upgradeCardText(def, item.tier, state.upgrades)
+            // Keen eye reveals the Fake merchant's cards; without it they look real.
+            const revealed =
+                item.fakeOrders !== undefined && modifiersFor(state.upgrades).fakeReveal > 0
+            return revealed ? `${text}\nFAKE` : text
         }
         case "powerUp":
             return `${powerUpButtonText(POWER_UPS.powerUps[item.id], state.upgrades)}\nPower-up`
@@ -572,9 +576,11 @@ function shopPriceText(state: GameState, slot: number, crops: CropTable): string
     return `Buy ${itemPrice(state, slot)}`
 }
 
-// One owned copy in the shop's list: name, tier, and its plot or crop when targeted.
+// One owned copy in the shop's list: name, tier, and its plot or crop when targeted. A fake copy
+// (Fake merchant) adds FAKE.
 function ownedUpgradeText(copy: OwnedUpgrade): string {
     const name = `${UPGRADES.upgrades[copy.id].name} (${tierName(copy.tier)})`
+    if (copy.fakeOrdersLeft !== undefined) return `${name} FAKE`
     return copy.target === null ? name : `${name} · ${targetText(copy.target)}`
 }
 
@@ -590,6 +596,10 @@ function sellRefundText(state: GameState, index: number): string {
         }
         case "storage":
             return "Barn too full"
+        case "fake": {
+            const left = state.upgrades[index].fakeOrdersLeft!
+            return `Fake: ${left} ${left === 1 ? "order" : "orders"} left`
+        }
         default:
             return "Can't sell"
     }

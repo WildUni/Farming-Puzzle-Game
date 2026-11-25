@@ -67,6 +67,7 @@ const MODIFIER_STATS: readonly ModifierStat[] = [
     "crashPricePct",
     "mixKeepPct",
     "raccoonDurationPct",
+    "fakeReveal",
     "storageBonus",
     "fertilizerUnlocked",
     "comboMissesForgiven",
@@ -408,8 +409,10 @@ function sumCopies(
     for (const copy of upgrades) {
         const def = defFor(copy.id, config)
         if (!counts(copy, def)) continue
+        // A fake copy (Fake merchant) works as the negative of the upgrade.
+        const sign = copy.fakeOrdersLeft === undefined ? 1 : -1
         def.effects.forEach((e, i) => {
-            m[e.stat] += effectAmount(def, i, copy.tier)
+            m[e.stat] += sign * effectAmount(def, i, copy.tier)
         })
     }
     for (const stat of MODIFIER_STATS) {
@@ -477,8 +480,25 @@ function plantCutTicks(state: GameState, plot: number, cropId: string): number {
 // ---------------------------------------------------------------------------------------------
 // Eligibility
 
+// Fake copies (Fake merchant) don't count.
 function copyCount(upgrades: readonly OwnedUpgrade[], id: string): number {
-    return upgrades.filter((u) => u.id === id).length
+    return upgrades.filter((u) => u.id === id && u.fakeOrdersLeft === undefined).length
+}
+
+// True for an upgrade the Fake merchant can fake: lasting, untargeted and sellable.
+function isFakeable(def: UpgradeDef): boolean {
+    return def.kind === "lasting" && def.target === null && def.sellable
+}
+
+// One filled order: every fake copy has one order fewer left, and the ones at 0 are removed.
+// Returns `upgrades` itself with no fake copy, so modifiersFor's cache still holds.
+function wearFakes(upgrades: readonly OwnedUpgrade[]): OwnedUpgrade[] {
+    if (!upgrades.some((u) => u.fakeOrdersLeft !== undefined)) return upgrades as OwnedUpgrade[]
+    return upgrades.flatMap((u) => {
+        if (u.fakeOrdersLeft === undefined) return [u]
+        const left = u.fakeOrdersLeft - 1
+        return left > 0 ? [{ ...u, fakeOrdersLeft: left }] : []
+    })
 }
 
 // True when at least one effect of `def` can still move its stat in `m`. The sign of an effect
@@ -542,6 +562,7 @@ function promotionTargets(
     config: UpgradeConfig = UPGRADES
 ): number[] {
     return upgrades.flatMap((copy, index) => {
+        if (copy.fakeOrdersLeft !== undefined) return []
         const def = defFor(copy.id, config)
         const i = TIERS.indexOf(copy.tier)
         if (def.kind !== "lasting" || def.tier !== null || i >= TIERS.length - 1) return []
@@ -692,6 +713,8 @@ export {
     plantGrowthPct,
     plantCutTicks,
     copyCount,
+    isFakeable,
+    wearFakes,
     promotionTargets,
     validTargets,
     eligibleUpgrades,

@@ -65,7 +65,7 @@ type ShopConfig = {
     interest: { everyTicks: number; maxCoins: number }
 }
 type ShopItem =
-    | { kind: "upgrade"; id: string; tier: Tier; sold: boolean }
+    | { kind: "upgrade"; id: string; tier: Tier; sold: boolean; fakeOrders?: number }
     | { kind: "powerUp"; id: string; sold: boolean }
     | { kind: "life"; sold: boolean }
 type ShopState = {
@@ -158,7 +158,8 @@ Interest's clock, run by `step` (step 4b). With `tick >= nextInterestAt`, adds `
 - `buyTargets(state, slot, crops)`: `[null]` for an untargeted upgrade, `validTargets` for a targeted one, `promotionTargets` for Promotion, `[]` when the card is no longer in the shop pool.
 - `isMaxed(state, slot, crops)`: an unsold upgrade card whose `buyTargets` is empty.
 - `canBuyAny(state, slot, crops)`: `canBuy` with some target; the Buy button uses it.
-- `sellBlock(state, index)`: `null`, `"closed"`, `"notSellable"`, `"required"` or `"storage"`: why `sellUpgrade { index }` would be refused. `canSell` is `sellBlock(…) === null`.
+- `sellBlock(state, index)`: `null`, `"closed"`, `"fake"`, `"notSellable"`, `"required"` or `"storage"`: why `sellUpgrade { index }` would be refused. `canSell` is `sellBlock(…) === null`. A fake copy is never sellable (`"fake"`).
+- `isFakeCard(state, slot)`: true for an upgrade card the Fake merchant marked (it has `fakeOrders`). The screen only labels it when `fakeReveal` (Keen eye) is above 0.
 
 ### `promotionTargets(upgrades, config?): number[]` (in `upgrades.ts`)
 
@@ -183,7 +184,7 @@ On top of the rules in [main.md](main.md):
 
 ### Filled orders
 
-`completeOrder` (used by `deliver`, Finish one and Finish all) ends with `withFilledOrder`, so every filled order counts toward the next free restock, including each order Finish all fills.
+`completeOrder` (used by `deliver`, Finish one and Finish all) ends with `withFilledOrder`, so every filled order counts toward the next free restock, including each order Finish all fills. It also wears fake copies down (`wearFakes`): every filled order takes 1 from each fake copy's `fakeOrdersLeft`, and a copy at 0 is removed.
 
 ### `openShop`
 
@@ -193,7 +194,7 @@ Refused unless the run is running, the mode has a shop, no upgrade offer is open
 
 Refused unless the shop is open, `slot` is a whole number pointing at an unsold item, `coins >= itemPrice(state, slot)`, and the item's own rule passes:
 
-- **Lasting upgrade:** the id is still in `shopPool` (it isn't Maxed), and `target` follows the same rules as `chooseUpgrade`: left out for an untargeted upgrade, one of `validTargets` for a targeted one. Adds `{ id, tier, target }` with `withUpgrade`, so extra plots and lives arrive as for a free pick.
+- **Lasting upgrade:** the id is still in `shopPool` (it isn't Maxed), and `target` follows the same rules as `chooseUpgrade`: left out for an untargeted upgrade, one of `validTargets` for a targeted one. Adds `{ id, tier, target }` with `withUpgrade`, so extra plots and lives arrive as for a free pick. A fake card (Fake merchant, see [events.md](events.md)) adds `{ id, tier, target: null, fakeOrdersLeft: fakeOrders }` instead: a fake copy.
 - **Promotion:** `target` is in `promotionTargets`. Raises that copy one tier (below).
 - **Power-up:** `allowPowerUps`, and `powerUps.length < powerUpSlots`. Appends the id to `powerUps`.
 - **Life:** Survival, and `lives < maxLivesFor(state)`. `lives + 1`, `livesBought + 1`.

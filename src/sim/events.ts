@@ -19,6 +19,8 @@ import type {
 import { TICKS_PER_SECOND } from "./game_constants"
 import { pick, randomInt } from "./mulberry"
 import {
+    UPGRADES,
+    isFakeable,
     MODIFIER_STATS,
     modifiersAt,
     modifiersFor,
@@ -142,6 +144,8 @@ function validateEffect(raw: unknown, at: string): Effect {
             return { kind: "mixOrder" }
         case "raccoon":
             return { kind: "raccoon", pct: wholeBetween(raw.pct, 1, 100, `${at}.pct`) }
+        case "fakeStock":
+            return { kind: "fakeStock", orders: wholeAtLeast(raw.orders, 1, `${at}.orders`) }
         case "drought":
             return {
                 kind: "drought",
@@ -596,6 +600,36 @@ function mixOrder(state: GameState, crops: CropTable): GameState {
     }
 }
 
+// Fake merchant: one card in the shop's stock becomes a fake lasting `orders` filled orders. It
+// is picked from rng.events (one draw, in stock order) among the unsold upgrade cards, not yet
+// fake, whose upgrade isFakeable. With no stock yet or no such card nothing happens and nothing
+// is drawn.
+function fakeStock(state: GameState, orders: number): GameState {
+    const stock = state.shop.stock
+    if (stock === null) return state
+    const slots = stock.flatMap((item, slot) =>
+        item.kind === "upgrade" &&
+        !item.sold &&
+        item.fakeOrders === undefined &&
+        isFakeable(UPGRADES.upgrades[item.id])
+            ? [slot]
+            : []
+    )
+    if (slots.length === 0) return state
+    const [roll, events] = randomInt(state.rng.events, 0, slots.length - 1)
+    const chosen = slots[roll]
+    return {
+        ...state,
+        rng: { ...state.rng, events },
+        shop: {
+            ...state.shop,
+            stock: stock.map((item, slot) =>
+                slot === chosen ? { ...item, fakeOrders: orders } : item
+            )
+        }
+    }
+}
+
 // Rot: each stored crop loses `pct`% of its amount, rounded down. Crops that reach 0 are removed.
 function rotStorage(inventory: Inventory, pct: number): Inventory {
     const out: Inventory = {}
@@ -677,6 +711,8 @@ function startEvent(
             return tipOrder(next, event.amount!)
         case "mixOrder":
             return mixOrder(next, crops)
+        case "fakeStock":
+            return fakeStock(next, effect.orders)
         case "luckyClover":
             return markClover(next, event.amount!)
         case "scarecrow":
@@ -765,5 +801,6 @@ export {
     endEvent,
     rotStorage,
     tipOrder,
-    mixOrder
+    mixOrder,
+    fakeStock
 }

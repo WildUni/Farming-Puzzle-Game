@@ -205,6 +205,16 @@
             "seconds": 6,
             "effect": { "kind": "raccoon", "pct": 40 },
             "durationStat": "raccoonDurationPct"
+        },
+        {
+            "id": "fakeMerchant",
+            "name": "Fake merchant",
+            "kind": "bad",
+            "modes": ["survival", "timed"],
+            "weight": 10,
+            "warnSeconds": 5,
+            "effect": { "kind": "fakeStock", "orders": 5 },
+            "news": { "seconds": 10, "headline": "Shady trader spotted" }
         }
     ]
 }

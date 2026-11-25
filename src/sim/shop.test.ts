@@ -19,7 +19,8 @@ import {
     restockBankCap,
     restocksPerCycle,
     ordersToFreeRestock,
-    withFilledOrder
+    withFilledOrder,
+    isFakeCard
 } from "./shop"
 import { createGame, applyAction, step } from "./main"
 import { buildCropTable } from "./plot"
@@ -78,6 +79,43 @@ function apply(state: GameState, action: Action): GameState {
 function refused(state: GameState, action: Action) {
     expect(applyAction(state, action, crops)).toBeNull()
 }
+
+describe("Fake merchant cards", () => {
+    const fakeCard = (id: string, tier: Tier = "common"): ShopItem => ({
+        kind: "upgrade",
+        id,
+        tier,
+        sold: false,
+        fakeOrders: 2
+    })
+
+    it("cost the same as the real card and are only marked by isFakeCard", () => {
+        const s = inShop([card("bigTips", "rare"), fakeCard("bigTips", "rare")])
+        expect(itemPrice(s, 1)).toBe(itemPrice(s, 0))
+        expect(isFakeCard(s, 0)).toBe(false)
+        expect(isFakeCard(s, 1)).toBe(true)
+        expect(isFakeCard(s, 9)).toBe(false)
+    })
+
+    it("buying one adds a fake copy that can't be sold and wears off after its orders", () => {
+        const s = inShop([fakeCard("bigTips", "rare")], { upgrades: [own("bigTips", "rare")] })
+        const bought = apply(s, { type: "buyItem", slot: 0 })
+        expect(bought.coins).toBe(s.coins - itemPrice(s, 0)!)
+        expect(bought.upgrades).toEqual([
+            own("bigTips", "rare"),
+            { id: "bigTips", tier: "rare", target: null, fakeOrdersLeft: 2 }
+        ])
+        expect(modifiersFor(bought.upgrades).coinsPerOrder).toBe(0)
+        expect(sellBlock(bought, 1)).toBe("fake")
+        refused(bought, { type: "sellUpgrade", index: 1 })
+
+        let s2 = apply(bought, { type: "closeShop" })
+        s2 = deliverOne(s2)
+        expect(s2.upgrades[1].fakeOrdersLeft).toBe(1)
+        s2 = deliverOne(s2)
+        expect(s2.upgrades).toEqual([own("bigTips", "rare")])
+    })
+})
 
 // Steps once so an order is open, then delivers the first open order. offersMade is high so no
 // free pick gets in the way; lives are high so the run never ends.

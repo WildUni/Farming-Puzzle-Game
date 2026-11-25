@@ -33,7 +33,8 @@ import {
     plantCutTicks,
     scalePct,
     rollOffer,
-    validTargets
+    validTargets,
+    wearFakes
 } from "./upgrades"
 import {
     tickEffects,
@@ -507,6 +508,15 @@ function applyAction(state: GameState, action: Action, crops: CropTable): GameSt
                         )
                         return { ...paid, upgrades }
                     }
+                    // A Fake merchant card gives a fake copy, which wears off after fakeOrders.
+                    if (item.fakeOrders !== undefined) {
+                        return withUpgrade(paid, {
+                            id: item.id,
+                            tier: item.tier,
+                            target: null,
+                            fakeOrdersLeft: item.fakeOrders
+                        })
+                    }
                     return withUpgrade(paid, { id: item.id, tier: item.tier, target })
                 }
                 case "powerUp":
@@ -693,6 +703,7 @@ function completeOrder(state: GameState, order: Order, scored: boolean): GameSta
     const pay = base + order.tip
     const filled: GameState = {
         ...state,
+        upgrades: wearFakes(state.upgrades),
         orders: state.orders.filter((o) => o.id !== order.id),
         score: scored ? state.score + points : state.score,
         ordersCompleted: state.ordersCompleted + 1,

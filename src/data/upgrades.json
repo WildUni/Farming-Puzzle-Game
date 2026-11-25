@@ -205,6 +205,11 @@
             "min": 100,
             "max": 200
         },
+        "fakeReveal": {
+            "base": 0,
+            "min": 0,
+            "max": 1
+        },
         "storageBonus": {
             "base": 0,
             "min": 0,
@@ -950,6 +955,22 @@
                 }
             ],
             "needs": ["events"]
+        },
+        {
+            "id": "keenEye",
+            "name": "Keen eye",
+            "text": "The shop marks the Fake merchant's cards",
+            "pools": ["survival", "timed"],
+            "tier": "uncommon",
+            "maxCopies": 1,
+            "sellable": true,
+            "needs": ["events"],
+            "effects": [
+                {
+                    "stat": "fakeReveal",
+                    "amount": 1
+                }
+            ]
         },
         {
             "id": "comboKeeper",

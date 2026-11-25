@@ -465,12 +465,12 @@ Add the last bad events, then tune the whole game with everything turned on.
 - [x] Storage: Raccoon (takes stored crops unless tapped away in time), Rot (removes a share of storage)
 - [x] Orders: Emergency order (forced, with a shorter timer), Mix-up (an order changes what it wants)
 - [x] Prices: Price crash (crops sell for less for a while)
-- [ ] Fake merchant: the shop sells fake upgrades with negative effects that wear off after a few orders (count in config, since the design hasn't set it)
+- [x] Fake merchant: the shop sells fake upgrades with negative effects that wear off after a few orders (count in config, since the design hasn't set it)
 
 ### Counter upgrades (about 1.5 hours)
 
-- [ ] Guard dog, Root cellar, Calm nerves, Clear orders, Price floor, Keen eye (all but Keen eye done)
-- [ ] Test: one fixed-seed test per event
+- [x] Guard dog, Root cellar, Calm nerves, Clear orders, Price floor, Keen eye
+- [x] Test: one fixed-seed test per event
 
 ### Balance pass (about 3 hours)
 

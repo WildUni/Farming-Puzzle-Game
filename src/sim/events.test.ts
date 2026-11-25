@@ -9,7 +9,8 @@ import {
     announceEvent,
     buildEvent,
     rotStorage,
-    mixOrder
+    mixOrder,
+    fakeStock
 } from "./events"
 import { debugEvent } from "./debug"
 import { replay } from "./verification"
@@ -32,6 +33,7 @@ import type {
     LogEntry,
     Order,
     Plot,
+    ShopItem,
     RunEvent,
     Tier
 } from "./types"
@@ -150,6 +152,7 @@ describe("validateEvents", () => {
             "crows",
             "drought",
             "emergencyOrder",
+            "fakeMerchant",
             "fog",
             "frost",
             "generousCustomer",
@@ -262,6 +265,7 @@ describe("shieldedPlots / eventTargets / eligibleEvents", () => {
             "crows",
             "drought",
             "emergencyOrder",
+            "fakeMerchant",
             "fog",
             "frost",
             "mixUp",
@@ -625,7 +629,8 @@ describe("validateEvents: new effect kinds and banStat", () => {
             { effect: { kind: "blockHarvest", plots: 2 }, seconds: 2, banStat: "pestBan" },
             { effect: { kind: "sellRate", pct: 50 }, seconds: 2, amountStat: "crashPricePct" },
             { effect: { kind: "mixOrder" } },
-            { effect: { kind: "raccoon", pct: 40 }, seconds: 2, durationStat: "fogDurationPct" }
+            { effect: { kind: "raccoon", pct: 40 }, seconds: 2, durationStat: "fogDurationPct" },
+            { effect: { kind: "fakeStock", orders: 5 } }
         ]
         for (const k of kinds) expect(() => validateEvents(withEvent(k))).not.toThrow()
     })
@@ -645,6 +650,7 @@ describe("validateEvents: new effect kinds and banStat", () => {
         ["sellRate without seconds", { effect: { kind: "sellRate", pct: 50 } }],
         ["mixOrder with seconds", { effect: { kind: "mixOrder" }, seconds: 2 }],
         ["raccoon of 0%", { effect: { kind: "raccoon", pct: 0 }, seconds: 2 }],
+        ["fakeStock of 0 orders", { effect: { kind: "fakeStock", orders: 0 } }],
         ["raccoon over 100%", { effect: { kind: "raccoon", pct: 101 }, seconds: 2 }],
         ["raccoon without seconds", { effect: { kind: "raccoon", pct: 40 } }],
         ["an amountStat on mixOrder", { effect: { kind: "mixOrder" }, amountStat: "rotPct" }],
@@ -857,6 +863,104 @@ describe("new events in step", () => {
             crops
         )
         expect(floored.activeEffects[0].effect).toEqual({ kind: "sellRate", pct: 95 })
+    })
+
+    describe("Fake merchant", () => {
+        const upgradeCard = (id: string, sold = false): Extract<ShopItem, { kind: "upgrade" }> => ({
+            kind: "upgrade",
+            id,
+            tier: "rare",
+            sold
+        })
+        const withStock = (stock: ShopItem[] | null): GameState => {
+            const s = game()
+            return { ...s, shop: { ...s.shop, stock } }
+        }
+
+        it("marks one fakeable, unsold upgrade card, drawing once from rng.events", () => {
+            const stock: ShopItem[] = [
+                upgradeCard("bigTips", true), // sold
+                upgradeCard("favoriteCrop"), // targeted
+                upgradeCard("bigTips"),
+                { kind: "powerUp", id: "coinBag", sold: false },
+                { kind: "life", sold: false }
+            ]
+            const s = builtNext(withStock(stock), "fakeMerchant")
+            const next = step(s, crops)
+            expect(next.shop.stock).toEqual([
+                stock[0],
+                stock[1],
+                { ...stock[2], fakeOrders: 5 },
+                stock[3],
+                stock[4]
+            ])
+            const [, events] = randomInt(s.rng.events, 0, 0)
+            expect(next.rng.events).toBe(events)
+            expect(next.rng.shop).toBe(s.rng.shop)
+        })
+
+        it("does nothing, and draws nothing, with no stock or no candidate", () => {
+            for (const stock of [
+                null,
+                [upgradeCard("extraPlot")],
+                [upgradeCard("bigTips", true)]
+            ]) {
+                const s = builtNext(withStock(stock), "fakeMerchant")
+                const next = step(s, crops)
+                expect(next.shop.stock).toEqual(stock)
+                expect(next.rng.events).toBe(s.rng.events)
+            }
+        })
+
+        it("doesn't mark a card twice", () => {
+            const marked: ShopItem = { ...upgradeCard("bigTips"), fakeOrders: 5 }
+            expect(fakeStock(withStock([marked]), 5).shop.stock).toEqual([marked])
+        })
+
+        it("a run that buys a fake replays equal", () => {
+            let found = false
+            for (let seed = 1; seed <= 80 && !found; seed++) {
+                let s = createGame(seed, on)
+                const log: LogEntry[] = []
+                const act = (action: LogEntry["action"]) => {
+                    const next = applyAction(s, action, crops)
+                    if (next === null) return false
+                    s = next
+                    log.push({ tick: s.tick, action })
+                    return true
+                }
+                act({ type: "openShop" })
+                act({ type: "closeShop" })
+                while (s.tick < 8000 && s.status === "running") {
+                    if (s.upgradeOffer !== null) {
+                        act({ type: "chooseUpgrade", upgradeId: s.upgradeOffer[0].id })
+                    }
+                    for (let plot = 0; plot < s.plots.length; plot++) {
+                        if (s.plots[plot].state === "ready") act({ type: "harvest", plot })
+                        if (s.plots[plot].state === "empty") {
+                            act({ type: "plant", plot, cropId: "garlic" })
+                        }
+                    }
+                    for (const o of [...s.orders]) act({ type: "deliver", orderId: o.id })
+                    const slot = (s.shop.stock ?? []).findIndex(
+                        (it) => it.kind === "upgrade" && it.fakeOrders !== undefined && !it.sold
+                    )
+                    if (slot >= 0) {
+                        act({ type: "openShop" })
+                        if (act({ type: "buyItem", slot })) found = true
+                        act({ type: "closeShop" })
+                    }
+                    if (found || s.upgradeOffer !== null) break
+                    s = step(s, crops)
+                }
+                if (!found) continue
+                expect(s.upgrades.some((u) => u.fakeOrdersLeft !== undefined)).toBe(true)
+                const result = replay(seed, on, log, s.tick, crops)
+                expect(result.ok).toBe(true)
+                if (result.ok) expect(result.state).toEqual(s)
+            }
+            expect(found).toBe(true)
+        })
     })
 
     describe("Raccoon", () => {

@@ -9,6 +9,9 @@ import {
     modifiersAt,
     scalePct,
     copyCount,
+    isFakeable,
+    wearFakes,
+    promotionTargets,
     validTargets,
     eligibleUpgrades,
     unlocksNothing,
@@ -72,6 +75,7 @@ function rawConfig(): Record<string, unknown> {
             crashPricePct: { base: 100, min: 100, max: 190 },
             mixKeepPct: { base: 0, min: 0, max: 75 },
             raccoonDurationPct: { base: 100, min: 100, max: 200 },
+            fakeReveal: { base: 0, min: 0, max: 1 },
             storageBonus: { base: 0, min: 0, max: 30 },
             fertilizerUnlocked: { base: 0, min: 0, max: 1 },
             comboMissesForgiven: { base: 0, min: 0, max: 3 },
@@ -420,6 +424,7 @@ describe("modifiersFor", () => {
             crashPricePct: 100,
             mixKeepPct: 0,
             raccoonDurationPct: 100,
+            fakeReveal: 0,
             storageBonus: 0,
             fertilizerUnlocked: 0,
             comboMissesForgiven: 0,
@@ -537,6 +542,46 @@ describe("scalePct", () => {
     })
 })
 
+describe("fake copies (Fake merchant)", () => {
+    const fake = (id: string, tier: Tier, left = 5): OwnedUpgrade => ({
+        id,
+        tier,
+        target: null,
+        fakeOrdersLeft: left
+    })
+
+    it("work as the negative of the upgrade, and the stat's min still holds", () => {
+        // Fast growth legendary is -20 growthPct; a fake one adds 20 back.
+        const real = [own("fastGrowth", "legendary"), own("fastGrowth", "legendary")]
+        expect(modifiersFor(real).growthPct).toBe(60)
+        expect(modifiersFor([...real, fake("fastGrowth", "legendary")]).growthPct).toBe(80)
+        // With nothing above the base to take away, a fake changes nothing.
+        expect(modifiersFor([fake("fastGrowth", "legendary")]).growthPct).toBe(100)
+        expect(modifiersFor([fake("bigTips", "legendary")]).coinsPerOrder).toBe(0)
+    })
+
+    it("don't count as copies, and can't be promoted", () => {
+        const owned = [own("fastGrowth", "common"), fake("fastGrowth", "common")]
+        expect(copyCount(owned, "fastGrowth")).toBe(1)
+        expect(promotionTargets(owned)).toEqual([0])
+    })
+
+    it("wearFakes takes one order off each fake and drops the ones at 0", () => {
+        const real = own("bigTips", "rare")
+        const owned = [real, fake("fastGrowth", "common", 2), fake("bigTips", "common", 1)]
+        expect(wearFakes(owned)).toEqual([real, fake("fastGrowth", "common", 1)])
+        const plain = [real]
+        expect(wearFakes(plain)).toBe(plain)
+    })
+
+    it("isFakeable is true for lasting, untargeted, sellable upgrades only", () => {
+        expect(isFakeable(UPGRADES.upgrades.fastGrowth)).toBe(true)
+        expect(isFakeable(UPGRADES.upgrades.favoriteCrop)).toBe(false) // targeted
+        expect(isFakeable(UPGRADES.upgrades.extraPlot)).toBe(false) // not sellable
+        expect(isFakeable(UPGRADES.upgrades.promotion)).toBe(false) // instant
+    })
+})
+
 describe("copyCount", () => {
     it("counts copies at any tier and on any target", () => {
         const picks = [own("grow", "rare"), own("fav", "common", "carrot"), own("grow", "epic")]
@@ -628,7 +673,7 @@ describe("eligibleUpgrades", () => {
         const ids = Object.values(UPGRADES.upgrades)
             .filter((d) => d.needs.includes("events"))
             .map((d) => d.id)
-        expect(ids).toHaveLength(22)
+        expect(ids).toHaveLength(23)
         for (const id of ids) {
             expect(off).not.toContain(id)
             expect(on).toContain(id)

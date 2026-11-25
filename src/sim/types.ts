@@ -145,6 +145,7 @@ type Modifiers = {
     crashPricePct: number // % of a Price crash's share of the sell price (Price floor)
     mixKeepPct: number // % of a mixed order's amount that stays the original crop (Clear orders)
     raccoonDurationPct: number // % of how long a Raccoon stays before it takes crops (Guard dog)
+    fakeReveal: number // 1: the shop labels the Fake merchant's cards (Keen eye)
     storageBonus: number // crops storage holds on top of the mode's cap (Bigger barn)
     fertilizerUnlocked: number // 1: fertilizer can be made and used when economy.json locks it
     comboMissesForgiven: number // Timed: failed orders per streak that don't break the combo
@@ -205,7 +206,9 @@ type UpgradeConfig = {
 }
 
 type UpgradeTarget = number | string | null // plot index, crop id, or null when untargeted
-type OwnedUpgrade = { id: string; tier: Tier; target: UpgradeTarget }
+// fakeOrdersLeft is set only on a fake copy (Fake merchant): it works as the negative of the
+// upgrade and is removed after that many more filled orders.
+type OwnedUpgrade = { id: string; tier: Tier; target: UpgradeTarget; fakeOrdersLeft?: number }
 type OfferCard = { id: string; tier: Tier }
 
 type Action =
@@ -244,7 +247,7 @@ type ShopConfig = {
 }
 
 type ShopItem =
-    | { kind: "upgrade"; id: string; tier: Tier; sold: boolean }
+    | { kind: "upgrade"; id: string; tier: Tier; sold: boolean; fakeOrders?: number } // fakeOrders: a Fake merchant card
     | { kind: "powerUp"; id: string; sold: boolean }
     | { kind: "life"; sold: boolean }
 
@@ -290,6 +293,7 @@ type InstantEffect =
     | { kind: "luckyClover"; plots: number } // up to this many crop plots harvest double next
     | { kind: "scarecrow"; seconds: number } // scaredOff events stay away this long
     | { kind: "mixOrder" } // one open order switches to a different crop (Mix-up)
+    | { kind: "fakeStock"; orders: number } // one shop card becomes a fake lasting this many orders
 
 type Effect = LastingEffect | InstantEffect
 
