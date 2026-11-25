@@ -159,6 +159,22 @@ function modeButtonText(mode: GameMode): string {
     }
 }
 
+// Under a mode button on the mode select: the saved high score, if there is one.
+function modeBestText(best: number | undefined): string {
+    return best === undefined ? "No best yet" : `Best ${best}`
+}
+
+// Last line of the end-of-run summary. A debugged run is not saved, so it shows nothing.
+function bestScoreText(best: number, newBest: boolean, debugged: boolean): string {
+    if (debugged) return "Not saved (debugged run)"
+    return newBest ? "New best!" : `Best ${best}`
+}
+
+// The sound toggle on the mode select.
+function soundButtonText(soundOn: boolean): string {
+    return soundOn ? "Sound: on" : "Sound: off"
+}
+
 // Whole ticks as m:ss, rounding partial seconds up so 0:00 only shows at the very end.
 function formatClock(ticks: number): string {
     const seconds = Math.max(0, Math.ceil(ticks / TICKS_PER_SECOND))
@@ -307,7 +323,7 @@ function debugText(state: GameState, seed: number, paused: boolean, debugged = f
 export { orderTimeFraction, isOrderUrgent, parseSeed, debugText, MAX_SEED }
 export { heartsText, buyLifeText, gameOverText, gameOverTitle }
 export { tierName, upgradeDescription, upgradeCardText, targetTitle, targetText }
-export { PLAYABLE_MODES, modeName, modeButtonText }
+export { PLAYABLE_MODES, modeName, modeButtonText, modeBestText, bestScoreText, soundButtonText }
 
 // Text on a power-up slot button: the name, then what it does with {seconds} filled in from
 // durationFor, so Long-lasting shows the longer time.

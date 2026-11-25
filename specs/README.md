@@ -24,6 +24,8 @@ One spec per module in `src/sim/`. Each spec says what the module is for, what i
 
 Screens are specified in [ui.md](ui.md): mode select, the stats each mode shows, and the end-of-run panel.
 
+Local saves (`src/app/saves.ts`: high scores and the sound setting) are specified in [saves.md](saves.md). `src/app/` follows the same no-Phaser rule as `src/sim/`, but may use browser APIs such as `localStorage`.
+
 ## Rules for every sim module
 
 - **No Phaser or browser imports.** `src/sim/` must run in plain Node so the tests and a server-side replay can use it.

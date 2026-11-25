@@ -1,4 +1,4 @@
-// End-of-run panel: a shade over the board, a title and summary for the mode,
+// End-of-run panel: a shade over the board, a title and summary for the mode, the high-score line,
 // and Restart / Menu buttons. The shade swallows clicks so the finished board can't be used.
 import { GameObjects, Scene } from "phaser"
 import type { GameState } from "../../sim/types"
@@ -6,7 +6,7 @@ import { gameOverText, gameOverTitle } from "../format"
 import { COLORS, TEXT } from "../theme"
 
 const PANEL_W = 480
-const PANEL_H = 520 // room for the score breakdown plus the run's stats (up to 8 lines)
+const PANEL_H = 570 // room for the score breakdown, the run's stats and the best line (up to 9)
 const BUTTON_W = 190
 const BUTTON_H = 72
 const BUTTON_GAP = 24
@@ -51,15 +51,21 @@ export class GameOverView {
         this.update(null)
     }
 
-    // Shows the panel for an ended run; hides it otherwise.
-    update(state: GameState | null): void {
+    // Shows the panel for an ended run, with `bestLine` (bestScoreText) under the summary;
+    // hides it otherwise.
+    update(state: GameState | null, bestLine = ""): void {
         const visible = state !== null && state.status === "ended"
         this.root.setVisible(visible)
         this.shade.setVisible(visible)
         this.shade.input!.enabled = visible
         if (!visible) return
         this.title.setText(gameOverTitle(state))
-        this.summary.setText(gameOverText(state))
+        this.summary.setText(
+            bestLine === ""
+                ? gameOverText(state)
+                : `${gameOverText(state)}
+${bestLine}`
+        )
     }
 
     private makeButton(

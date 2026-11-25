@@ -1,9 +1,19 @@
 // Landing page: logo, a seed field, a mode picker and a Play button.
-// A blank seed picks one at random. See specs/ui.md.
+// A blank seed picks one at random. Each mode shows its saved high score, and a corner
+// button turns sound on or off. See specs/ui.md.
 import { Scene, GameObjects } from "phaser"
 import type { GameMode } from "../../sim/types"
-import { parseSeed, MAX_SEED, PLAYABLE_MODES, modeButtonText } from "../format"
-import { COLORS, TEXT, addBackground } from "../theme"
+import {
+    parseSeed,
+    MAX_SEED,
+    PLAYABLE_MODES,
+    modeButtonText,
+    modeBestText,
+    soundButtonText
+} from "../format"
+import { setSoundOn } from "../../app/saves"
+import { getSave, putSave } from "../saves"
+import { COLORS, MARGIN, TEXT, addBackground } from "../theme"
 
 const FIELD_W = 360
 const FIELD_H = 64
@@ -12,6 +22,8 @@ const BUTTON_H = 80
 const MODE_W = 280
 const MODE_H = 110
 const MODE_GAP = 24
+const SOUND_W = 170
+const SOUND_H = 56
 
 type MenuData = { mode: GameMode }
 type ModeButton = { mode: GameMode; box: GameObjects.Rectangle }
@@ -86,6 +98,12 @@ export class MainMenu extends Scene {
             this.add
                 .text(x, y, modeButtonText(mode), { ...TEXT.label, fontSize: 22 })
                 .setOrigin(0.5)
+            this.add
+                .text(x, y + MODE_H / 2 + 22, modeBestText(getSave(this).highScores[mode]), {
+                    ...TEXT.title,
+                    fontSize: 22
+                })
+                .setOrigin(0.5)
             return { mode, box }
         })
         this.selectMode(this.mode)
@@ -99,6 +117,28 @@ export class MainMenu extends Scene {
             .on("pointerout", () => button.setFillStyle(COLORS.button))
             .on("pointerdown", () => this.play())
         this.add.text(centerX, playY, "Play", { ...TEXT.label, fontSize: 36 }).setOrigin(0.5)
+
+        this.addSoundToggle()
+    }
+
+    // Top-right corner: flips the saved sound setting, which also mutes or unmutes the game.
+    private addSoundToggle(): void {
+        const x = this.scale.width - MARGIN - SOUND_W / 2
+        const y = MARGIN + SOUND_H / 2
+        const box = this.add
+            .rectangle(x, y, SOUND_W, SOUND_H, COLORS.button)
+            .setStrokeStyle(3, COLORS.cardStroke)
+            .setInteractive({ useHandCursor: true })
+        const label = this.add
+            .text(x, y, soundButtonText(getSave(this).soundOn), { ...TEXT.label, fontSize: 22 })
+            .setOrigin(0.5)
+        box.on("pointerover", () => box.setFillStyle(COLORS.buttonHover))
+            .on("pointerout", () => box.setFillStyle(COLORS.button))
+            .on("pointerdown", () => {
+                const save = setSoundOn(getSave(this), !getSave(this).soundOn)
+                putSave(this, save)
+                label.setText(soundButtonText(save.soundOn))
+            })
     }
 
     // Selecting a mode only highlights it; Play starts the run.

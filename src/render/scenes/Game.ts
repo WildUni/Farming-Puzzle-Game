@@ -2,7 +2,10 @@ import { Scene, GameObjects } from "phaser"
 import type { Action, CropTable, GameMode, GameState, LogEntry } from "../../sim/types"
 import { createGame, applyAction, step, nextOrderPreview, miracleTargets } from "../../sim/main"
 import { TICKS_PER_SECOND } from "../../sim/game_constants"
-import { debugText, MAX_SEED } from "../format"
+import { bestScoreText, debugText, MAX_SEED } from "../format"
+import { recordScore } from "../../app/saves"
+import { finalScore } from "../../sim/scoring"
+import { getSave, putSave } from "../saves"
 import { COLORS, MARGIN, TEXT } from "../theme"
 import { OrdersView } from "../views/OrdersView"
 import { StatsView } from "../views/StatsView"
@@ -61,6 +64,7 @@ export class Game extends Scene {
     private shopButton: ShopButtonView
     private debugPanel: DebugPanel | null // dev builds only
     private debugged: boolean // the debug menu changed this run, so its log won't replay
+    private bestLine: string | null // the summary's high-score line, set once when the run ends
     private debug: GameObjects.Text
 
     constructor() {
@@ -89,6 +93,7 @@ export class Game extends Scene {
         this.fertilizing = false
         this.miracling = false
         this.debugged = false
+        this.bestLine = null
 
         this.orders = new OrdersView(this, (id) => this.onOrderClick(id))
         this.stats = new StatsView(this, this.crops)
@@ -226,9 +231,18 @@ export class Game extends Scene {
         this.pause.update(this.paused)
         this.buyLife.update(this.state)
         this.upgradePick.update(this.state)
-        this.gameOver.update(this.state)
+        if (this.state.status === "ended" && this.bestLine === null) this.saveScore()
+        this.gameOver.update(this.state, this.bestLine ?? "")
         this.debug.setText(debugText(this.state, this.seed, this.paused, this.debugged))
         this.debugPanel?.update(this.state)
+    }
+
+    // Once per run, when it ends: saves the final score if it beats the mode's best. A run
+    // changed by the debug menu is never saved.
+    private saveScore(): void {
+        const result = recordScore(getSave(this), this.mode, finalScore(this.state))
+        if (!this.debugged && result.newBest) putSave(this, result.save)
+        this.bestLine = bestScoreText(result.best, result.newBest, this.debugged)
     }
 
     // The game-over panel's Restart: a fresh run on a new random seed.

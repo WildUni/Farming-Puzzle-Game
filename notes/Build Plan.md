@@ -235,19 +235,20 @@ Add the second mode on the same simulation, then finish scoring and local saves.
 ### Scoring and summary (about 2 hours)
 
 - [x] Final score formula for each mode, kept in one file
-- [ ] Run summary screen
+- [x] Run summary screen
   - [x] Score
   - [x] Orders filled and failed
   - [x] Time survived (Survival) or best combo (Timed)
   - [x] Play again and menu buttons
+  - [x] "New best" line
 
 ### Saves (about 1.5 hours)
 
-- [ ] Storage wrapper around `localStorage` with try/catch
-- [ ] High score per mode
-  - [ ] Shown on the mode select screen
-  - [ ] "New best" message on the summary screen
-- [ ] Sound on/off setting
+- [x] Storage wrapper around `localStorage` with try/catch (`src/app/saves.ts`)
+- [x] High score per mode
+  - [x] Shown on the mode select screen
+  - [x] "New best" message on the summary screen
+- [x] Sound on/off setting (a toggle on the mode select; Day 13 adds the sounds it mutes)
 - [x] Test: a Timed run replays exactly
 
 **Gate:** both modes can be played to the end, and high scores are still there after a page reload.

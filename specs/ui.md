@@ -12,6 +12,16 @@ The landing page has, top to bottom: the logo, the seed field, a **mode picker**
 - Survival is selected when the menu opens. Coming back from a run selects the mode that was just played.
 - **Play** (or Enter in the seed field) starts the selected mode with the typed seed, or a random one if the field is blank. A bad seed shows the error and starts nothing, as before.
 - The Game scene receives `{ seed, mode }` and passes `mode` to `createGame`.
+- Under each mode button, the mode's saved high score (`modeBestText`): `Best 465`, or `No best yet`. See [saves.md](saves.md).
+- A **Sound** toggle in the top-right corner (`soundButtonText`: `Sound: on` / `Sound: off`) flips the saved setting and mutes or unmutes the game at once.
+
+### `modeBestText(best): string`
+
+`Best {best}`, or `No best yet` when the mode has no saved score.
+
+### `soundButtonText(soundOn): string`
+
+`Sound: on` or `Sound: off`.
 
 ### `PLAYABLE_MODES: GameMode[]`
 
@@ -200,6 +210,7 @@ Shown over the board as soon as `status` is `'ended'`.
     - The score, from `scoreBreakdown` (see [scoring.md](scoring.md)): `Order points 340`, then one line per end-of-run line whose points aren't 0 (`Best combo bonus +140`, `Failed orders -15`, `Coins left +6`), then `Final score 465`.
     - Survival: `Orders filled`, `Orders failed`, `Time survived`, `Level reached`.
     - Timed: `Orders filled`, `Orders failed`, `Best combo` (the longest streak).
+    - Last, the high-score line (`bestScoreText(best, newBest, debugged)`): `New best!` when the final score beat the mode's saved best (and was saved), else `Best 465`. A run changed by the debug menu is never saved and shows `Not saved (debugged run)`. The score is recorded once, when the run ends (see [saves.md](saves.md)).
 - The HUD's `Score` row shows `GameState.score` (the order points) during the run; the end-of-run lines only appear on the summary.
 - Two buttons:
     - **Restart:** a new run of the same mode on a new random seed.
@@ -255,6 +266,7 @@ Three sections, top to bottom:
 - Storage, selling, fertilizer and reroll text: see the "Screen text" tests in [economy.md](economy.md). `sellButtonText` shows Premium produce's boosted price.
 - `miracleGrowText` reads `ready` with no recharge left (and on `miracleReadyAt` itself), and the time left otherwise.
 - Shop: `shopItemText` for an upgrade, Promotion, a power-up and a life slot (and `Lives full`); `shopPriceText` follows `itemPrice` (with Discount card) and shows `SOLD` and `Maxed`; `sellRefundText` follows `sellRefund` and gives each refusal's label; `restockText` shows `free` with the count left while a free restock is banked, else the price; `freeRestockText` counts the orders left, and says full when the bank is; `shopButtonText` shows the banked count; `promotionTargetText` shows the tier now and after. (`shopTimerText` went with the running shop.)
+- `modeBestText`, `bestScoreText` (new best, not, debugged) and `soundButtonText`.
 
 ## Open items
 
@@ -265,5 +277,5 @@ Three sections, top to bottom:
 
 - [x] Combo multiplier in Timed, with a Combo row in the HUD and best combo on the summary.
 - [x] Rush waves in Timed (Day 5), with a warning banner.
-- [ ] High score per mode on the mode select (Day 5 saves).
+- [x] High score per mode on the mode select (Day 5 saves).
 - [ ] Puzzle in the picker once puzzle levels exist.

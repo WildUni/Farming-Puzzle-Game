@@ -34,6 +34,9 @@ import {
     gameOverTitle,
     modeName,
     modeButtonText,
+    modeBestText,
+    bestScoreText,
+    soundButtonText,
     PLAYABLE_MODES,
     MAX_SEED,
     storageText,
@@ -148,6 +151,25 @@ describe("PLAYABLE_MODES, modeName and modeButtonText", () => {
             `Timed\nBest score in ${formatClock(MODES.timed.runTicks)}`
         )
         expect(modeButtonText("timed")).toBe("Timed\nBest score in 5:00")
+    })
+})
+
+describe("save text", () => {
+    it("modeBestText shows the saved best, or that there is none", () => {
+        expect(modeBestText(undefined)).toBe("No best yet")
+        expect(modeBestText(0)).toBe("Best 0")
+        expect(modeBestText(465)).toBe("Best 465")
+    })
+
+    it("bestScoreText says New best, the best to beat, or that a debugged run isn't saved", () => {
+        expect(bestScoreText(465, true, false)).toBe("New best!")
+        expect(bestScoreText(465, false, false)).toBe("Best 465")
+        expect(bestScoreText(465, true, true)).toBe("Not saved (debugged run)")
+    })
+
+    it("soundButtonText shows the setting", () => {
+        expect(soundButtonText(true)).toBe("Sound: on")
+        expect(soundButtonText(false)).toBe("Sound: off")
     })
 })
 
