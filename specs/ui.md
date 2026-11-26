@@ -2,9 +2,9 @@
 
 What the player sees for each mode. Phaser code lives in `src/render/scenes` and `src/render/views`. Every piece of text comes from `src/render/format.ts`, which has no Phaser imports so it can be unit tested (`format.test.ts`).
 
-## Mode select (MainMenu)
+## Title screen and mode select (MainMenu)
 
-The landing page has, top to bottom: the logo, the seed field, a **mode picker** and a **Play** button.
+The landing page is also the title screen. Top to bottom: the logo, the seed field, a **mode picker**, a **Play** button and a **How to play** button.
 
 - The mode picker has one button per playable mode, in this order: **Survival**, **Timed**. Puzzle is not offered yet.
 - Each button shows the mode's name and a one-line description (`modeButtonText`).
@@ -14,6 +14,7 @@ The landing page has, top to bottom: the logo, the seed field, a **mode picker**
 - The Game scene receives `{ seed, mode }` and passes `mode` to `createGame`.
 - Under each mode button, the mode's saved high score (`modeBestText`): `Best 465`, or `No best yet`. See [saves.md](saves.md).
 - A **Sound** toggle in the top-right corner (`soundButtonText`: `Sound: on` / `Sound: off`) flips the saved setting and mutes or unmutes the game at once.
+- **How to play** opens the How to play screen. Coming back keeps the selected mode.
 
 ### `modeBestText(best): string`
 
@@ -41,6 +42,48 @@ Name on the first line, description on the second:
 | timed    | `Timed\nBest score in 5:00`         |
 
 The Timed length comes from `MODES.timed.runTicks` (`modes.json`), so it stays right if the config changes.
+
+## How to play (HowTo scene)
+
+Four panels, one at a time, from `HOW_TO_PANELS` (`{ title, body }[]`, in `format.ts`): **Orders**, **Storage**, **Upgrades and the shop**, **Events**.
+
+- Each panel shows its title, its body on a card, and the page count (`howToPageText(i)`: `1 / 4`).
+- **Back** goes to the previous panel and is disabled on the first. **Next** goes to the next; on the last panel it reads **Done** and returns to the title screen.
+- **Close** (top-right corner) returns to the title screen from any panel.
+- Keys: Left and Right arrows page, Esc closes.
+- It receives `{ mode }` from the title screen and hands it back, so the selected mode stays selected.
+
+## Pause menu (PauseView)
+
+- The **Pause** button (top right, under the stats) or P / Esc pauses. The board is shaded and swallows clicks, as before, and the clock stops.
+- Under the `Paused` banner, three buttons, top to bottom:
+    - **Resume:** unpauses (the same as the corner button, which reads `Resume` while paused).
+    - **Restart:** a new run of the same mode on a new random seed, the same as the end-of-run Restart.
+    - **Quit:** back to the title screen with this mode selected. The run is dropped and its score is not saved, since it never ended.
+- The buttons only show, and only take clicks, while paused.
+
+## Juice
+
+Small animations that follow the state. They never change it: every one is worked out from the state before and after (`src/render/cues.ts`, Phaser-free so it can be unit tested) and only drawn by the views.
+
+`cues(prev, next): Cue[]` compares two states and lists what happened:
+
+| Cue                       | When                                                                                           | Drawn as                                                                           |
+| ------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `harvest` (plot)          | a plot that was `ready` is `empty` (the player, Auto harvest or Helpful neighbor harvested it) | the plot square punches up in size and a white ring bursts out of it               |
+| `score` (points, orderId) | `score` went up; `orderId` is the filled order that left, or `null` when none or several did   | `+N` floats up from that order's card and fades, or from the Score row when `null` |
+| `lifeLost`                | Survival and `lives` went down                                                                 | the camera shakes briefly                                                          |
+
+Orders slide (`orderChanges(prev, next)`, in `cues.ts`, gives `added` ids and `removed` `{ id, failed }`; an order is failed when it left after its `expiresAt` tick):
+
+- A new order's card slides in from the left edge.
+- An order that left slides out to the left and fades: green-tinted when filled, red-tinted when failed.
+- Cards that move up the stack because one above them left glide to their new place.
+
+Timer pulse (`lowTimePulse(state)`): in Timed, during the last `LOW_TIME_SECONDS` (10) of the run, the `Time left` value turns red and swells at the start of each second, shrinking back over the second. It gives a number from 1 (just ticked) down to 0, or `null` when the time is not low (Survival, before the last 10 seconds, or the run is over). It follows the sim's ticks, so it holds still while paused.
+
+- A cue is only worked out between two states of the same run; a restart starts with no cues.
+- Nothing is shown for a `harvest` on a plot that no longer exists (the plot count changed).
 
 ## Heads-up display (stats table)
 
@@ -276,6 +319,13 @@ Three sections, top to bottom:
 - `shopItemText` adds `FAKE` to a fake card only with Keen eye; `ownedUpgradeText` adds `FAKE` to a fake copy; `sellRefundText` shows the orders left on a fake copy.
 - `raccoonText` gives the text and seconds left, rounding up, while a raccoon works, and `null` before it starts and on its `endsAt`.
 - `modeBestText`, `bestScoreText` (new best, not, debugged) and `soundButtonText`.
+- `HOW_TO_PANELS` has the four panels in order, each with a title and body; `howToPageText` counts from 1.
+
+## Tests (`cues.test.ts`)
+
+- `cues`: a harvested plot gives `harvest`; a plot that went from `ready` to `growing` (Moles) does not; a score rise gives `score` with the one filled order's id, or `null` when two orders were filled; a lost life in Survival gives `lifeLost`; two equal states give no cues.
+- `orderChanges`: a new id is `added`; an order that left before its `expiresAt` is removed and not failed; one that left after it is failed.
+- `lowTimePulse`: `null` in Survival and before the last 10 seconds of a Timed run; 1 on the tick a second starts in the last 10 seconds, falling towards 0 through the second; `null` once the run has ended.
 
 ## Open items
 

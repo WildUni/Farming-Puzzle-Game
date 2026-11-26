@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest"
 import {
+    HOW_TO_PANELS,
+    howToPageText,
     formatClock,
     powerUpButtonText,
     activeEffectText,
@@ -1035,5 +1037,22 @@ describe("shop text", () => {
         expect(shopButtonText(bank(2))).toBe("Shop\n2 free")
         expect(promotionTargetText(own("fastGrowth", "rare"))).toBe("Fast growth\nRare → Epic")
         expect(shopTitleText(shopState())).toBe("Shop  ·  200 coins")
+    })
+})
+
+describe("how to play", () => {
+    it("has the four panels in order, each with a title and body", () => {
+        expect(HOW_TO_PANELS.map((p) => p.title)).toEqual([
+            "Orders",
+            "Storage",
+            "Upgrades and the shop",
+            "Events"
+        ])
+        for (const panel of HOW_TO_PANELS) expect(panel.body.length).toBeGreaterThan(0)
+    })
+
+    it("counts pages from 1", () => {
+        expect(howToPageText(0)).toBe("1 / 4")
+        expect(howToPageText(3)).toBe("4 / 4")
     })
 })

@@ -329,6 +329,51 @@ export { heartsText, buyLifeText, gameOverText, gameOverTitle }
 export { tierName, upgradeDescription, upgradeCardText, targetTitle, targetText }
 export { PLAYABLE_MODES, modeName, modeButtonText, modeBestText, bestScoreText, soundButtonText }
 
+type HowToPanel = { title: string; body: string }
+
+// The How to play screen's panels, in order.
+const HOW_TO_PANELS: HowToPanel[] = [
+    {
+        title: "Orders",
+        body: [
+            "Pick a crop in the crop bar, then tap an empty plot to plant it. Tap a ready plot to harvest it.",
+            "Order cards list the crops a customer wants. When you hold enough, the card is outlined: tap it to fill the order for points and coins.",
+            "Each order has a timer. In Survival a missed order costs a life; in Timed it breaks your combo."
+        ].join("\n\n")
+    },
+    {
+        title: "Storage",
+        body: [
+            "Harvested crops go into storage, and storage has a limit. Crops past the limit are lost, so don't harvest more than you can use.",
+            "The storage bar along the bottom shows how full it is. In the shop's Storage section, sell crops you don't need for coins, or turn them into fertilizer once you have the upgrade. Then tap Fertilize to speed up a plot."
+        ].join("\n\n")
+    },
+    {
+        title: "Upgrades and the shop",
+        body: [
+            "Every few filled orders you pick one of three upgrades. Rarer tiers are stronger; you can reroll the offer for coins.",
+            "Spend coins in the shop on more upgrades, power-ups and lives. You can sell an upgrade back for part of its price.",
+            "Power-ups wait in their slots until you tap them."
+        ].join("\n\n")
+    },
+    {
+        title: "Events",
+        body: [
+            "Now and then an event hits the farm. A banner warns you before it starts, and the news ticker gives you an early hint.",
+            "Good events speed growth or bring generous customers. Bad ones bring crows, frost, raccoons and price crashes: tap crows and raccoons away.",
+            "Upgrades can soften or block the bad ones."
+        ].join("\n\n")
+    }
+]
+
+// Page count under a How to play panel, counted from 1.
+function howToPageText(index: number): string {
+    return `${index + 1} / ${HOW_TO_PANELS.length}`
+}
+
+export { HOW_TO_PANELS, howToPageText }
+export type { HowToPanel }
+
 // Text on a power-up slot button: the name, then what it does with {seconds} filled in from
 // durationFor, so Long-lasting shows the longer time.
 function powerUpButtonText(def: PowerUpDef, upgrades: readonly OwnedUpgrade[]): string {

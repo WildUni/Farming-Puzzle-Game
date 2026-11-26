@@ -1,4 +1,4 @@
-// Landing page: logo, a seed field, a mode picker and a Play button.
+// Title screen: logo, a seed field, a mode picker, Play and How to play.
 // A blank seed picks one at random. Each mode shows its saved high score, and a corner
 // button turns sound on or off. See specs/ui.md.
 import { Scene, GameObjects } from "phaser"
@@ -14,6 +14,7 @@ import {
 import { setSoundOn } from "../../app/saves"
 import { getSave, putSave } from "../saves"
 import { COLORS, MARGIN, TEXT, addBackground } from "../theme"
+import { Button } from "../views/Button"
 
 const FIELD_W = 360
 const FIELD_H = 64
@@ -22,6 +23,7 @@ const BUTTON_H = 80
 const MODE_W = 280
 const MODE_H = 110
 const MODE_GAP = 24
+const HOW_TO_H = 64
 const SOUND_W = 170
 const SOUND_H = 56
 
@@ -117,6 +119,17 @@ export class MainMenu extends Scene {
             .on("pointerout", () => button.setFillStyle(COLORS.button))
             .on("pointerdown", () => this.play())
         this.add.text(centerX, playY, "Play", { ...TEXT.label, fontSize: 36 }).setOrigin(0.5)
+
+        new Button(
+            this,
+            centerX,
+            playY + BUTTON_H + 24,
+            BUTTON_W,
+            HOW_TO_H,
+            "How to play",
+            () => this.scene.start("HowTo", { mode: this.mode }),
+            { fontSize: 26 }
+        )
 
         this.addSoundToggle()
     }

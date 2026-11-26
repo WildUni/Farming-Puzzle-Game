@@ -27,10 +27,14 @@ import type { ShopData } from "./Shop"
 import { POWER_UPS, powerUpTargets } from "../../sim/powerups"
 import { fertilizerTargets } from "../../sim/economy"
 import { isShopOpen } from "../../sim/shop"
+import { cues } from "../cues"
+import type { Cue } from "../cues"
 
 const MS_PER_TICK = 1000 / TICKS_PER_SECOND
 const MAX_CATCH_UP_TICKS = 5 // a background tab doesn't jump ahead when it comes back
 const GAP = 12
+const SHAKE_MS = 280
+const SHAKE_STRENGTH = 0.012
 
 type GameData = { seed: number; mode: GameMode }
 
@@ -41,6 +45,7 @@ export class Game extends Scene {
     private seed: number
     private mode: GameMode
     private state: GameState
+    private shown: GameState | null // the state last drawn, for working out the juice cues
     private log: LogEntry[]
     private elapsed: number
     private paused: boolean
@@ -88,6 +93,7 @@ export class Game extends Scene {
             allowPowerUps: true,
             allowEvents: true
         })
+        this.shown = null
         this.log = []
         this.elapsed = 0
         this.paused = false
@@ -103,9 +109,11 @@ export class Game extends Scene {
         this.cropBar = new CropBar(this, this.crops, (cropId) => this.onCropPick(cropId))
         this.selectedCrop = this.cropBar.first
         this.stats.update(this.state) // builds the table so its height is known
-        this.pause = new PauseView(this, this.scale.width - MARGIN, this.stats.bottom + GAP, () =>
-            this.togglePause()
-        )
+        this.pause = new PauseView(this, this.scale.width - MARGIN, this.stats.bottom + GAP, {
+            onToggle: () => this.togglePause(),
+            onRestart: () => this.restartNewSeed(),
+            onQuit: () => this.scene.start("MainMenu", { mode: this.mode })
+        })
         this.buyLife = new BuyLifeView(
             this,
             this.scale.width - MARGIN,
@@ -237,8 +245,48 @@ export class Game extends Scene {
         this.upgradePick.update(this.state)
         if (this.state.status === "ended" && this.bestLine === null) this.saveScore()
         this.gameOver.update(this.state, this.bestLine ?? "")
+        if (this.shown !== null) this.playCues(cues(this.shown, this.state))
+        this.shown = this.state
         this.debug.setText(debugText(this.state, this.seed, this.paused, this.debugged))
         this.debugPanel?.update(this.state)
+    }
+
+    // Juice for what changed since the last render. See specs/ui.md, "Juice".
+    private playCues(list: Cue[]): void {
+        for (const cue of list) {
+            switch (cue.kind) {
+                case "harvest":
+                    this.plots.pop(cue.plot)
+                    break
+                case "score":
+                    this.floatScore(cue.points, cue.orderId)
+                    break
+                case "lifeLost":
+                    this.cameras.main.shake(SHAKE_MS, SHAKE_STRENGTH)
+                    break
+            }
+        }
+    }
+
+    // "+N" floats up from the filled order's card (or the Score row) and fades.
+    private floatScore(points: number, orderId: number | null): void {
+        const card = orderId === null ? undefined : this.orders.leftCard(orderId)
+        const at =
+            card === undefined
+                ? this.stats.scorePoint
+                : { x: card.x + card.w / 2, y: card.y + card.h / 2 }
+        const text = this.add
+            .text(at.x, at.y, `+${points}`, { ...TEXT.label, fontSize: 40, color: "#ffe14d" })
+            .setOrigin(0.5)
+            .setDepth(140) // above the board, below the upgrade pick
+        this.tweens.add({
+            targets: text,
+            y: at.y - 70,
+            alpha: 0,
+            duration: 900,
+            ease: "Cubic.Out",
+            onComplete: () => text.destroy()
+        })
     }
 
     // Once per run, when it ends: saves the final score if it beats the mode's best. A run
@@ -249,7 +297,7 @@ export class Game extends Scene {
         this.bestLine = bestScoreText(result.best, result.newBest, this.debugged)
     }
 
-    // The game-over panel's Restart: a fresh run on a new random seed.
+    // Restart on the game-over panel and the pause menu: a fresh run on a new random seed.
     private restartNewSeed(): void {
         const seed = Math.floor(Math.random() * (MAX_SEED + 1))
         this.scene.restart({ seed, mode: this.mode })

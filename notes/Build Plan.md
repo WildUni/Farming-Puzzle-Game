@@ -500,11 +500,11 @@ Replace the gray boxes so the game looks and sounds finished. Only `render/` and
 
 ### Juice (about 1 hour)
 
-- [ ] Pop animation on harvest
-- [ ] Floating score text on a filled order
-- [ ] Order cards slide in and out
-- [ ] Screen shake on a lost life
-- [ ] Timer pulses when time is low
+- [x] Pop animation on harvest
+- [x] Floating score text on a filled order
+- [x] Order cards slide in and out
+- [x] Screen shake on a lost life
+- [x] Timer pulses when time is low
 
 ### Sound (about 1 hour)
 
@@ -514,9 +514,9 @@ Replace the gray boxes so the game looks and sounds finished. Only `render/` and
 
 ### Menus (about 1.5 hours)
 
-- [ ] Title screen: play, how to play, sound
-- [ ] How to play: 4 short panels (orders, storage, upgrades and the shop, events)
-- [ ] Pause menu: resume, restart, quit
+- [x] Title screen: play, how to play, sound
+- [x] How to play: 4 short panels (orders, storage, upgrades and the shop, events)
+- [x] Pause menu: resume, restart, quit
 
 **Gate:** a full session, from title to run to summary and back, shows no placeholder art.
 

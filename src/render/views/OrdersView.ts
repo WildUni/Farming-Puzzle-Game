@@ -7,7 +7,9 @@
 // first orders keep their place and the extra ones start a new column. A card grows past CARD_H
 // when its text needs more room (a Giant order lists a line per crop); the cards under it in its
 // column move down.
-import { GameObjects, Scene } from "phaser"
+// Cards slide: a new order's card comes in from the left, one that left slides out to the left
+// (green when filled, red when failed), and cards that move up the stack glide there.
+import { GameObjects, Scene, Tweens } from "phaser"
 import type { GameState, Order } from "../../sim/types"
 import { canFulfill } from "../../sim/orders"
 import {
@@ -18,6 +20,7 @@ import {
     isOrderUrgent,
     ordersFrozen
 } from "../format"
+import { orderChanges } from "../cues"
 import { MARGIN, COLORS, TEXT } from "../theme"
 
 const CARD_W = 300
@@ -29,6 +32,8 @@ const BAR_PAD = 10
 const BAR_H = 10
 const TEXT_TOP = 8 // label's offset from the card's top
 const TEXT_GAP = 6 // least room between the label and the countdown bar
+const SLIDE_MS = 260
+const GLIDE_MS = 180
 
 // Rows in one column for `count` cards.
 function rowsFor(count: number): number {
@@ -64,7 +69,13 @@ function stackBottom(heights: number[]): number {
     return bottom
 }
 
+type Rect = { x: number; y: number; w: number; h: number }
+
 type Card = {
+    layout: Rect // where update placed the card; offset by dx, dy while it slides
+    dx: number
+    dy: number
+    slide: Tweens.Tween | null
     box: GameObjects.Rectangle
     label: GameObjects.Text
     track: GameObjects.Rectangle // countdown bar background
@@ -76,6 +87,8 @@ export class OrdersView {
     private onClick: (orderId: number) => void
     private cards: Card[] = []
     private shownIds: number[] = [] // order id on each visible card, by card index
+    private shownOrders: Order[] = [] // the orders the cards showed last update
+    private left = new Map<number, Rect>() // cards of orders that left on the last update
     private peekBox: GameObjects.Rectangle
     private peekLabel: GameObjects.Text
 
@@ -96,6 +109,17 @@ export class OrdersView {
         // Cards are kept and hidden rather than destroyed, so the count only ever grows.
         while (this.cards.length < state.orders.length) this.cards.push(this.makeCard())
 
+        // Where each order's card was, before the cards are reused for the new list.
+        const before = new Map<number, Rect>()
+        this.shownIds.forEach((id, i) => before.set(id, this.cards[i].layout))
+        const changes = orderChanges(this.shownOrders, state.orders, state.tick)
+        this.left = new Map()
+        for (const { id, failed } of changes.removed) {
+            this.left.set(id, before.get(id)!)
+            this.slideOut(this.cards[this.shownIds.indexOf(id)], failed)
+        }
+        const added = new Set(changes.added)
+        this.shownOrders = state.orders
         this.shownIds = state.orders.map((o) => o.id)
         const frozen = ordersFrozen(state)
         const fog = isFogged(state)
@@ -114,12 +138,15 @@ export class OrdersView {
             const { x, y, w } = cardSlot(i, heights)
             const h = heights[i]
             const barW = w - BAR_PAD * 2
-            const barY = y + h - BAR_PAD - BAR_H
-            card.box.setPosition(x, y).setSize(w, h)
+            const from = before.get(order.id)
+            card.layout = { x, y, w, h }
+            card.box.setSize(w, h)
             card.box.input?.hitArea.setSize(w, h)
-            card.label.setPosition(x + 10, y + TEXT_TOP)
-            card.track.setPosition(x + BAR_PAD, barY).setSize(barW, BAR_H)
-            card.bar.setPosition(x + BAR_PAD, barY)
+            card.track.setSize(barW, BAR_H)
+            if (added.has(order.id)) this.slideFrom(card, -(x + w), 0, SLIDE_MS)
+            else if (from !== undefined && (from.x !== x || from.y !== y))
+                this.slideFrom(card, from.x - x, from.y - y, GLIDE_MS)
+            this.place(card)
             card.track.setVisible(!fog)
             card.bar.setVisible(!fog)
             const isTarget = targets !== null && targets.includes(order.id)
@@ -150,6 +177,67 @@ export class OrdersView {
         }
     }
 
+    // Where the card of an order that left on the last update was, or undefined. The floating
+    // score starts there.
+    leftCard(orderId: number): Rect | undefined {
+        return this.left.get(orderId)
+    }
+
+    // Starts the card offset by (dx, dy) and eases it back to its layout spot.
+    private slideFrom(card: Card, dx: number, dy: number, ms: number): void {
+        card.slide?.stop()
+        card.dx = dx
+        card.dy = dy
+        card.slide = this.scene.tweens.add({
+            targets: card,
+            dx: 0,
+            dy: 0,
+            duration: ms,
+            ease: "Cubic.Out",
+            onUpdate: () => this.place(card),
+            onComplete: () => {
+                card.slide = null
+                this.place(card)
+            }
+        })
+    }
+
+    // Puts the card's parts at its layout spot plus the slide offset.
+    private place(card: Card): void {
+        const { h } = card.layout
+        const x = card.layout.x + card.dx
+        const y = card.layout.y + card.dy
+        const barY = y + h - BAR_PAD - BAR_H
+        card.box.setPosition(x, y)
+        card.label.setPosition(x + 10, y + TEXT_TOP)
+        card.track.setPosition(x + BAR_PAD, barY)
+        card.bar.setPosition(x + BAR_PAD, barY)
+    }
+
+    // A copy of the card as it was slides off to the left and fades, so the card itself can
+    // show another order at once.
+    private slideOut(card: Card, failed: boolean): void {
+        const { w, h } = card.layout
+        const x = card.layout.x + card.dx
+        const y = card.layout.y + card.dy
+        const box = this.scene.add
+            .rectangle(x, y, w, h, card.box.fillColor)
+            .setOrigin(0)
+            .setStrokeStyle(4, failed ? COLORS.barUrgent : COLORS.ready)
+        const label = this.scene.add.text(x + 10, y + TEXT_TOP, card.label.text, TEXT.body)
+        this.scene.tweens.add({
+            targets: [box, label],
+            x: `-=${x + w + MARGIN}`,
+            alpha: 0,
+            duration: SLIDE_MS,
+            ease: "Cubic.In",
+            onComplete: () => {
+                box.destroy()
+                label.destroy()
+            }
+        })
+    }
+
     // Cards are placed by update (cardSlot), since their spot depends on how many are open.
     private makeCard(): Card {
         const i = this.cards.length
@@ -175,6 +263,6 @@ export class OrdersView {
         const bar = this.scene.add
             .rectangle(x + BAR_PAD, barY, barW, BAR_H, COLORS.barFill)
             .setOrigin(0)
-        return { box, label, track, bar }
+        return { layout: { x, y, w, h: CARD_H }, dx: 0, dy: 0, slide: null, box, label, track, bar }
     }
 }

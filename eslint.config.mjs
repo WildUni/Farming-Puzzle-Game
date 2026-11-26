@@ -13,7 +13,7 @@ export default tseslint.config(
     },
     {
         // Only src/render may use Phaser. src/sim must run in plain Node, and
-        // src/render/format.ts stays Phaser-free so it can be unit tested.
+        // src/render/format.ts and cues.ts stay Phaser-free so they can be unit tested.
         files: ["src/**/*.ts"],
         ignores: ["src/render/**"],
         rules: {
@@ -24,11 +24,18 @@ export default tseslint.config(
         }
     },
     {
-        files: ["src/render/format.ts"],
+        files: ["src/render/format.ts", "src/render/cues.ts"],
         rules: {
             "no-restricted-imports": [
                 "error",
-                { paths: [{ name: "phaser", message: "format.ts must stay Phaser-free." }] }
+                {
+                    paths: [
+                        {
+                            name: "phaser",
+                            message: "format.ts and cues.ts must stay Phaser-free."
+                        }
+                    ]
+                }
             ]
         }
     }

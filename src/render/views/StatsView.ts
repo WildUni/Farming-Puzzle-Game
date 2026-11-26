@@ -2,11 +2,16 @@
 import { GameObjects, Scene } from "phaser"
 import type { GameState, CropTable } from "../../sim/types"
 import { statRows } from "../format"
+import { lowTimePulse } from "../cues"
 import { MARGIN, COLORS, TEXT } from "../theme"
 
 const LABEL_W = 110
 const VALUE_W = 90
 const ROW_H = 30
+const TIME_ROW = 1 // statRows: Mode, Time, Score, ...
+const SCORE_ROW = 2
+const TEXT_COLOR = TEXT.body.color as string
+const URGENT_COLOR = "#d8342c"
 
 type Row = { label: GameObjects.Text; value: GameObjects.Text }
 
@@ -34,6 +39,17 @@ export class StatsView {
             this.rows[i].label.setText(label)
             this.rows[i].value.setText(value)
         })
+        // Low time in Timed: the time value turns red and swells as each second starts.
+        const time = this.rows[TIME_ROW].value
+        const pulse = lowTimePulse(state)
+        time.setColor(pulse === null ? TEXT_COLOR : URGENT_COLOR)
+        time.setScale(pulse === null ? 1 : 1 + 0.35 * pulse * pulse)
+    }
+
+    // Centre of the Score value, where a floating score with no order card starts.
+    get scorePoint(): { x: number; y: number } {
+        const value = this.rows[SCORE_ROW].value
+        return { x: value.x - value.width / 2, y: value.y }
     }
 
     // Draws the table lines and creates one label/value pair per row.

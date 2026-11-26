@@ -74,6 +74,34 @@ export class PlotsView {
         })
     }
 
+    // Harvest pop: the square punches up in size and a white ring bursts out of it.
+    pop(plot: number): void {
+        const square = this.squares[plot]
+        if (square === undefined) return
+        const { box } = square
+        this.scene.tweens.killTweensOf(box)
+        box.setScale(1)
+        this.scene.tweens.add({
+            targets: box,
+            scale: 1.12,
+            duration: 90,
+            yoyo: true,
+            ease: "Quad.Out"
+        })
+        const ring = this.scene.add
+            .circle(box.x, box.y, SIZE * 0.35)
+            .setStrokeStyle(6, COLORS.highlight)
+            .setDepth(10)
+        this.scene.tweens.add({
+            targets: ring,
+            scale: 1.8,
+            alpha: 0,
+            duration: 320,
+            ease: "Cubic.Out",
+            onComplete: () => ring.destroy()
+        })
+    }
+
     // Lays out `count` squares. Rebuilt whenever the plot count changes.
     private build(count: number): void {
         this.squares.forEach((s) => {

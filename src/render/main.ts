@@ -1,6 +1,7 @@
 import { Boot } from "./scenes/Boot"
 import { GameOver } from "./scenes/GameOver"
 import { Game as MainGame } from "./scenes/Game"
+import { HowTo } from "./scenes/HowTo"
 import { MainMenu } from "./scenes/MainMenu"
 import { AUTO, Game, Scale } from "phaser"
 import { Preloader } from "./scenes/Preloader"
@@ -19,7 +20,7 @@ const config: Phaser.Types.Core.GameConfig = {
         autoCenter: Scale.CENTER_BOTH
     },
     dom: { createContainer: true },
-    scene: [Boot, Preloader, MainMenu, MainGame, Shop, GameOver]
+    scene: [Boot, Preloader, MainMenu, HowTo, MainGame, Shop, GameOver]
 }
 
 const StartGame = (parent: string) => {
