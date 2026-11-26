@@ -2,19 +2,28 @@
 
 What the player sees for each mode. Phaser code lives in `src/render/scenes` and `src/render/views`. Every piece of text comes from `src/render/format.ts`, which has no Phaser imports so it can be unit tested (`format.test.ts`).
 
-## Title screen and mode select (MainMenu)
+## Game hub / title screen (MainMenu)
 
-The landing page is also the title screen. Top to bottom: the logo, the seed field, a **mode picker**, a **Play** button and a **How to play** button.
+The landing page is the game hub, styled after `src/assets/.../references/gamehub_reference.png`. Art is loaded in Preloader and cut from its sprite sheets by `render/hubArt.ts`. Top to bottom:
 
-- The mode picker has one button per playable mode, in this order: **Survival**, **Timed**. Puzzle is not offered yet.
-- Each button shows the mode's name and a one-line description (`modeButtonText`).
-- Exactly one mode is selected at a time and is drawn highlighted. Clicking a mode selects it; it does not start the run.
-- Survival is selected when the menu opens. Coming back from a run selects the mode that was just played.
-- **Play** (or Enter in the seed field) starts the selected mode with the typed seed, or a random one if the field is blank. A bad seed shows the error and starts nothing, as before.
-- The Game scene receives `{ seed, mode }` and passes `mode` to `createGame`.
-- Under each mode button, the mode's saved high score (`modeBestText`): `Best 465`, or `No best yet`. See [saves.md](saves.md).
-- A **Sound** toggle in the top-right corner (`soundButtonText`: `Sound: on` / `Sound: off`) flips the saved setting and mutes or unmutes the game at once.
-- **How to play** opens the How to play screen. Coming back keeps the selected mode.
+- **Top bar** (wooden plank): the **seed field** on the left (placeholder `SEED_PLACEHOLDER`, `Seed: random`), and on the right the **Sound** toggle (`soundButtonText`: `Sound: on` / `Sound: off`) with a gear icon. Tapping either flips the saved setting and mutes or unmutes the game at once.
+- **Banner:** the farm banner with the Plot Rush logo.
+- **Mode cards**, one per playable mode, in this order: **Survival**, **Timed**. Each shows the mode's icon, name (`modeName`), description (`modeDescription`), saved high score (`modeBestText`: `Best 465` or `No best yet`, see [saves.md](saves.md)) and its own **Play** button.
+    - Exactly one mode is selected at a time and has the gold frame. Tapping a card selects it; it does not start the run.
+    - Survival is selected when the menu opens. Coming back from a run selects the mode that was just played.
+    - A card's **Play** starts that mode; Enter in the seed field starts the selected mode. Either uses the typed seed, or a random one if the field is blank. A bad seed shows the error under the banner and starts nothing.
+    - The Game scene receives `{ seed, mode }` and passes `mode` to `createGame`.
+- **Locked rows** (`LOCKED_HUB_ROWS`): **Puzzle** and **Daily Challenge**, greyed out with a lock. Tapping one shows `Coming soon` (`COMING_SOON_TEXT`).
+- A round **?** button opens the How to play screen. Coming back keeps the selected mode.
+- **Bottom tabs** (`HUB_TABS`): **Hub**, **Inventory**, **Store**, **Profile**. Hub is this page and is drawn selected; the others show `Coming soon` until their pages exist.
+
+### `modeDescription(mode): string`
+
+The second line of `modeButtonText(mode)`: `Last as long as you can`, `Best score in 5:00`.
+
+### `LOCKED_HUB_ROWS`, `HUB_TABS`, `COMING_SOON_TEXT`, `SEED_PLACEHOLDER`
+
+`["Puzzle", "Daily Challenge"]`, `["Hub", "Inventory", "Store", "Profile"]`, `"Coming soon"`, `"Seed: random"`.
 
 ### `modeBestText(best): string`
 

@@ -159,6 +159,22 @@ function modeButtonText(mode: GameMode): string {
     }
 }
 
+// A mode card's description: the second line of its mode-picker text.
+function modeDescription(mode: GameMode): string {
+    return modeButtonText(mode).split("\n")[1]
+}
+
+// Rows on the hub that are shown locked until they exist.
+const LOCKED_HUB_ROWS = ["Puzzle", "Daily Challenge"] as const
+
+// The hub's bottom tabs, in order. Only Hub has a page so far.
+const HUB_TABS = ["Hub", "Inventory", "Store", "Profile"] as const
+
+const COMING_SOON_TEXT = "Coming soon"
+
+// Placeholder in the seed field: a blank seed picks one at random.
+const SEED_PLACEHOLDER = "Seed: random"
+
 // Under a mode button on the mode select: the saved high score, if there is one.
 function modeBestText(best: number | undefined): string {
     return best === undefined ? "No best yet" : `Best ${best}`
@@ -328,6 +344,7 @@ export { orderTimeFraction, isOrderUrgent, parseSeed, debugText, MAX_SEED }
 export { heartsText, buyLifeText, gameOverText, gameOverTitle }
 export { tierName, upgradeDescription, upgradeCardText, targetTitle, targetText }
 export { PLAYABLE_MODES, modeName, modeButtonText, modeBestText, bestScoreText, soundButtonText }
+export { modeDescription, LOCKED_HUB_ROWS, HUB_TABS, COMING_SOON_TEXT, SEED_PLACEHOLDER }
 
 type HowToPanel = { title: string; body: string }
 

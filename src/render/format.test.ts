@@ -37,6 +37,9 @@ import {
     gameOverTitle,
     modeName,
     modeButtonText,
+    modeDescription,
+    LOCKED_HUB_ROWS,
+    HUB_TABS,
     modeBestText,
     bestScoreText,
     soundButtonText,
@@ -155,6 +158,16 @@ describe("PLAYABLE_MODES, modeName and modeButtonText", () => {
             `Timed\nBest score in ${formatClock(MODES.timed.runTicks)}`
         )
         expect(modeButtonText("timed")).toBe("Timed\nBest score in 5:00")
+    })
+
+    it("modeDescription is the second line of the mode-picker text", () => {
+        expect(modeDescription("survival")).toBe("Last as long as you can")
+        expect(modeDescription("timed")).toBe("Best score in 5:00")
+    })
+
+    it("lists the hub's locked rows and tabs in order", () => {
+        expect(LOCKED_HUB_ROWS).toEqual(["Puzzle", "Daily Challenge"])
+        expect(HUB_TABS).toEqual(["Hub", "Inventory", "Store", "Profile"])
     })
 })
 

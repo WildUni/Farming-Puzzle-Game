@@ -1,4 +1,5 @@
 import { GameObjects, Scene } from "phaser"
+import { loadHubArt, sliceHubArt } from "../hubArt"
 
 const VERSION = "v0.1.0"
 const TIP = "Harvest crops to fill orders."
@@ -76,9 +77,12 @@ export class Preloader extends Scene {
     preload() {
         this.load.setPath("assets")
         this.load.image("logo", "logo.png")
+        this.load.setPath("")
+        loadHubArt(this)
     }
 
     create() {
+        sliceHubArt(this)
         this.loaded = 1
     }
 
